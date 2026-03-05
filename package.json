@@ -1,0 +1,30 @@
+{
+  "name": "deepseek-w",
+  "version": "1.0.0",
+  "description": "To make it easy for you to get started with GitLab, here's a list of recommended next steps.",
+  "homepage": "https://gitlab.com/yakov.norev/deepseek-w#readme",
+  "bugs": {
+    "url": "https://gitlab.com/yakov.norev/deepseek-w/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@gitlab.com/yakov.norev/deepseek-w.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "build-watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "debug": "ts-node --inspect src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
