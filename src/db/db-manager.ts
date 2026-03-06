@@ -121,9 +121,6 @@ function generateComposeFileSync() {
 
 // ========== Примитивы: запуск контейнера (без ожидания) ==========
 export function startContainerSync() {
-  console.log("Ensuring docker-compose.json exists...");
-  generateFilesSync();
-
   console.log("Starting PostgreSQL container (sync, no wait)...");
   try {
     execSync(`docker-compose -f ${COMPOSE_FILE} up -d`, { stdio: "inherit" });
@@ -135,9 +132,6 @@ export function startContainerSync() {
 }
 
 export async function startContainerAsync() {
-  console.log("Ensuring docker-compose.json exists...");
-  await generateFilesAsync();
-
   console.log("Starting PostgreSQL container (async, no wait)...");
   try {
     await execAsync(`docker-compose -f ${COMPOSE_FILE} up -d`);
@@ -187,11 +181,13 @@ export async function waitForDatabaseReadyAsync(maxRetries = 30, delayMs = 2000)
 
 // ========== Примитивы: запуск + ожидание (комбинированные) ==========
 export function startAndWaitSync() {
+  generateFilesSync();
   startContainerSync();
   waitForDatabaseReadySync();
 }
 
 export async function startAndWaitAsync() {
+  await generateFilesAsync();
   await startContainerAsync();
   await waitForDatabaseReadyAsync();
 }
