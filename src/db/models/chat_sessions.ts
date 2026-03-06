@@ -92,18 +92,26 @@ export interface ChatSessionFull extends ChatSessionBase {
 export type ChatSession = ChatSessionBase;
 
 // ========================
-// Типы для ответов API
+// Типы для файлов сообщений (новые)
 // ========================
 
-/**
- * Ответ со списком сессий (использует краткую версию)
- */
-export type SessionsBizData = {
-  chat_sessions: ChatSession[]; // краткие сессии
-  has_more: boolean;
-};
+export type ChatMessageFileStatus = "SUCCESS" | "PENDING" | "ERROR" | string;
 
-export type SessionsResponse = ApiResponse<SessionsBizData>;
+export interface ChatMessageFile {
+  id: string; // UUID
+  status: ChatMessageFileStatus;
+  file_name: string;
+  previewable: boolean;
+  file_size: number; // в байтах
+  token_usage: number; // использовано токенов
+  error_code: number | null; // код ошибки, если статус ERROR
+  inserted_at: number; // timestamp создания
+  updated_at: number; // timestamp обновления
+}
+
+// ========================
+// Типы для сообщений (обновлённые)
+// ========================
 
 /**
  * Ответ с сообщениями конкретной сессии (использует полную версию)
@@ -118,7 +126,7 @@ export interface ChatMessage {
   ban_regenerate: boolean;
   status: MessageStatus;
   accumulated_token_usage: number;
-  files: unknown[];
+  files: ChatMessageFile[]; // теперь типизировано
   feedback: unknown | null;
   inserted_at: number;
   search_enabled: boolean;
@@ -141,9 +149,19 @@ export interface Fragment {
 
 export type FragmentType = "REQUEST" | "THINK" | "RESPONSE";
 
+// ========================
+// Ответы API
+// ========================
+
+export type SessionsBizData = {
+  chat_sessions: ChatSession[];
+  has_more: boolean;
+};
+
 export type MessagesBizData = {
-  chat_session: ChatSessionFull; // здесь полная сессия
+  chat_session: ChatSessionFull;
   chat_messages: ChatMessage[];
 };
 
+export type SessionsResponse = ApiResponse<SessionsBizData>;
 export type MessagesResponse = ApiResponse<MessagesBizData>;
