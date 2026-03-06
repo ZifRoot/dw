@@ -20,9 +20,18 @@ export class PrismaItemRepository implements IItemRepository {
 
   async create(data: Ichat_sessions): Promise<chat_sessions> {
     const created = await this.prisma.chat_sessions.create({
-      data: new chat_sessions(data),
+      data: new chat_sessions(data) as any,
     });
 
     return new chat_sessions(created);
+  }
+
+  async createMany(data: Ichat_sessions[]): Promise<number> {
+    const created = await this.prisma.chat_sessions.createMany({
+      data: data.map((ch) => new chat_sessions(ch)) as any,
+      skipDuplicates: true,
+    });
+
+    return created.count;
   }
 }

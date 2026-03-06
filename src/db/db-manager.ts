@@ -90,7 +90,7 @@ async function generateComposeFileAsync() {
   };
   // Записываем JSON-файл с красивым форматированием
   await fs.writeFile(`${COMPOSE_FILE_EXT}.yaml`, yaml.stringify(composeConfig));
-  await fs.writeFile(`${COMPOSE_FILE_EXT}.json`, JSON.stringify(composeConfig, null, 2));
+  // await fs.writeFile(`${COMPOSE_FILE_EXT}.json`, JSON.stringify(composeConfig, null, 2));
 
   console.log(`Generated ${COMPOSE_FILE}`);
 }
@@ -115,7 +115,7 @@ function generateComposeFileSync() {
     },
   };
   fsSync.writeFileSync(`${COMPOSE_FILE_EXT}.yaml`, yaml.stringify(composeConfig));
-  fsSync.writeFileSync(`${COMPOSE_FILE_EXT}.json`, JSON.stringify(composeConfig, null, 2));
+  // fsSync.writeFileSync(`${COMPOSE_FILE_EXT}.json`, JSON.stringify(composeConfig, null, 2));
   console.log(`Generated ${COMPOSE_FILE}`);
 }
 

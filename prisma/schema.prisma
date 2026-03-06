@@ -14,7 +14,7 @@ datasource db {
 }
 
 model chat_sessions {
-  id         String   @id @default(uuid()) @db.Uuid  // <-- Вот это правильно!
+  id         String   @id @default(uuid()) @db.Uuid
   title      String
   title_type String
   pinned     Boolean  @default(false)
