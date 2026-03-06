@@ -22,7 +22,8 @@ const CONFIG = {
 };
 
 const COMPOSE_DIR = path.join(process.cwd(), "db");
-const COMPOSE_FILE = path.join(COMPOSE_DIR, "docker-compose");
+const COMPOSE_FILE_EXT = path.join(COMPOSE_DIR, "docker-compose");
+const COMPOSE_FILE = `${COMPOSE_FILE_EXT}.yaml`;
 
 // ========== Вспомогательная генерация compose-файла ==========
 async function generateComposeFile() {
@@ -45,8 +46,8 @@ async function generateComposeFile() {
     },
   };
   // Записываем JSON-файл с красивым форматированием
-  await fs.writeFile(`${COMPOSE_FILE}.yaml`, yaml.stringify(composeConfig));
-  await fs.writeFile(`${COMPOSE_FILE}.json`, JSON.stringify(composeConfig, null, 2));
+  await fs.writeFile(`${COMPOSE_FILE_EXT}.yaml`, yaml.stringify(composeConfig));
+  await fs.writeFile(`${COMPOSE_FILE_EXT}.json`, JSON.stringify(composeConfig, null, 2));
 
   console.log(`Generated ${COMPOSE_FILE}`);
 }
@@ -70,8 +71,8 @@ function generateComposeFileSync() {
       },
     },
   };
-  fsSync.writeFileSync(`${COMPOSE_FILE}.yaml`, yaml.stringify(composeConfig));
-  fsSync.writeFileSync(`${COMPOSE_FILE}.json`, JSON.stringify(composeConfig, null, 2));
+  fsSync.writeFileSync(`${COMPOSE_FILE_EXT}.yaml`, yaml.stringify(composeConfig));
+  fsSync.writeFileSync(`${COMPOSE_FILE_EXT}.json`, JSON.stringify(composeConfig, null, 2));
   console.log(`Generated ${COMPOSE_FILE}`);
 }
 

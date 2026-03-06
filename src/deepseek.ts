@@ -1,4 +1,5 @@
-export class X {
+import * as fs from "fs";
+export class Deepseek {
   async start() {
     await this.main();
   }
@@ -7,6 +8,8 @@ export class X {
     let resp = await this.fetch_page();
 
     let fetchpage = await resp.json();
+
+    fs.writeFileSync("./fetch_page.json", JSON.stringify(fetchpage));
 
     console.log(fetchpage);
   }
