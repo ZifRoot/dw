@@ -13,15 +13,24 @@ export class Deepseek {
     console.log(fetchpage);
   }
 
-  async fetch_page() {
-    let resp = await this.fetch_page_resp();
+  async fetch_page(updated_at?: number | null) {
+    let resp = await this.fetch_page_resp(updated_at);
 
     let fetchpage = (await resp.json()) as ApiResponse;
     return fetchpage;
   }
 
-  async fetch_page_resp() {
-    return await fetch("https://chat.deepseek.com/api/v0/chat_session/fetch_page", {
+  async fetch_page_resp(updated_at?: number | null) {
+    //https://chat.deepseek.com/api/v0/chat_session/fetch_page?lte_cursor.pinned=false&lte_cursor.updated_at=1770623753.319
+
+    let url = new URL("https://chat.deepseek.com/api/v0/chat_session/fetch_page");
+    if (updated_at != null) {
+      url.searchParams.append("lte_cursor.updated_at", updated_at.toString());
+      url.searchParams.append("lte_cursor.pinned", "false");
+    }
+    let str = url.toString();
+
+    return await fetch(str, {
       headers: {
         accept: "*/*",
         "accept-language": "ru,en-US;q=0.9,en;q=0.8",
