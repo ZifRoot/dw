@@ -1,3 +1,4 @@
+import { testDb1 } from "./db/app";
 import { runWithAppLifecycleAsync } from "./db/db-manager";
 import { Deepseek } from "./deepseek";
 
@@ -5,8 +6,11 @@ class Program {
   deepseek: Deepseek;
 
   async start() {
-    //await this.deepseek.start();
     await runWithAppLifecycleAsync();
+
+    await testDb1();
+
+    //await this.deepseek.start();
   }
 
   main() {

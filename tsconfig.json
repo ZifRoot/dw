@@ -12,6 +12,6 @@
     "types": ["node"],
     "sourceMap": true
   },
-  "include": ["src/**/*", "drizzle.config.ts"],
+  "include": ["src/**/*", "src/drizzle.config.ts"],
   "exclude": ["node_modules"]
 }
