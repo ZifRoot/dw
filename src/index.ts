@@ -10,25 +10,27 @@ class Program {
   repository?: IItemRepository;
 
   async start() {
-    await runWithAppLifecycleAsync();
-    this.repository = InitDb();
+    await this.deepseek.start();
+    if (false) {
+      await runWithAppLifecycleAsync();
+      this.repository = InitDb();
 
-    // await this.repository.create({ id: '46086758-631f-4413-8e27-c1392c0954db', title: "---3463456---456", title_type: "fg", updated_at: 5, pinned: false });
-    let updated_at: number | null = null;
-    while (true) {
-      let fetchpage = await this.deepseek.fetch_page(updated_at);
-      let ud0 = fetchpage.data.biz_data.chat_sessions[0].updated_at;
-      let ude = fetchpage.data.biz_data.chat_sessions.at(-1)?.updated_at;
-      let has_more = fetchpage.data.biz_data.has_more;
-      console.log(`0:updated_at = ${ud0} | END:updated_at = ${ude} | has_more = ${has_more}`);
+      // await this.repository.create({ id: '46086758-631f-4413-8e27-c1392c0954db', title: "---3463456---456", title_type: "fg", updated_at: 5, pinned: false });
+      let updated_at: number | null = null;
+      while (true) {
+        let fetchpage = await this.deepseek.fetch_page(updated_at);
+        let ud0 = fetchpage.data.biz_data.chat_sessions[0].updated_at;
+        let ude = fetchpage.data.biz_data.chat_sessions.at(-1)?.updated_at;
+        let has_more = fetchpage.data.biz_data.has_more;
+        console.log(`0:updated_at = ${ud0} | END:updated_at = ${ude} | has_more = ${has_more}`);
 
-      let num = await this.repository.createMany(fetchpage.data.biz_data.chat_sessions);
-      console.log(`Created ${num}`);
+        let num = await this.repository!.createMany(fetchpage.data.biz_data.chat_sessions);
+        console.log(`Created ${num}`);
 
-      if (!has_more) break;
-      updated_at = ude!;
+        if (!has_more) break;
+        updated_at = ude!;
+      }
     }
-    //await this.deepseek.start();
   }
 
   main() {
