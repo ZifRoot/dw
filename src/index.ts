@@ -20,11 +20,15 @@ class Program {
       var sessions = sessions.filter((s) => s.version == null);
       sessions.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
 
-      var session = sessions[0];
+      try {
+        for (const session of sessions) {
+          var his = await this.deepseek.history_messages(session.id!);
 
-      var his = await this.deepseek.history_messages(session.id!);
-
-      await this.deepseek.saveMessagesBizData(this.repository, his.data.biz_data);
+          await this.deepseek.saveMessagesBizData(this.repository, his.data.biz_data);
+        }
+      } catch (error) {
+        console.error(error);
+      }
 
       return;
 

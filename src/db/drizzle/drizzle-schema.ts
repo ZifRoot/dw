@@ -1,16 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  text,
-  boolean,
-  timestamp,
-  integer,
-  doublePrecision,
-  jsonb,
-  primaryKey,
-  foreignKey,
-  index,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, boolean, timestamp, integer, doublePrecision, jsonb, primaryKey, foreignKey, index } from "drizzle-orm/pg-core";
 
 // Enums реализованы как text (согласно вашему пожеланию)
 export const roleEnum = text("role");
@@ -64,12 +52,9 @@ export const chatMessagesTable = pgTable(
       columns: [table.sessionId, table.parentMessageId],
       foreignColumns: [table.sessionId, table.messageId],
     }),
-    parentIdx: index("chat_messages_parent_idx").on(
-      table.sessionId,
-      table.parentMessageId
-    ),
+    parentIdx: index("chat_messages_parent_idx").on(table.sessionId, table.parentMessageId),
     sessionIdx: index("chat_messages_session_id_idx").on(table.sessionId),
-  })
+  }),
 );
 
 // ========================
@@ -107,12 +92,9 @@ export const messageFilesTable = pgTable(
       columns: [table.sessionId, table.messageId],
       foreignColumns: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
     }),
-    messageIdx: index("message_files_message_idx").on(
-      table.sessionId,
-      table.messageId
-    ),
+    messageIdx: index("message_files_message_idx").on(table.sessionId, table.messageId),
     fileIdx: index("message_files_file_idx").on(table.fileId),
-  })
+  }),
 );
 
 // ========================
@@ -134,9 +116,6 @@ export const messageFragmentsTable = pgTable(
     pk: primaryKey({
       columns: [table.sessionId, table.messageId, table.fragmentOrder],
     }),
-    messageIdx: index("message_fragments_message_idx").on(
-      table.sessionId,
-      table.messageId
-    ),
-  })
+    messageIdx: index("message_fragments_message_idx").on(table.sessionId, table.messageId),
+  }),
 );

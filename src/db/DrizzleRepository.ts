@@ -269,6 +269,12 @@ export class DrizzleRepository implements IRepository {
           title_type: sql`excluded.title_type`,
           pinned: sql`excluded.pinned`,
           updated_at: sql`excluded.updated_at`,
+          // дополнительные поля для полной версии (опциональны)          
+          seq_id: sql`excluded.seq_id`,          
+          agent: sql`excluded.agent`,
+          version: sql`excluded.version`,
+          current_message_id: sql`excluded.current_message_id`,
+          inserted_at: sql`excluded.inserted_at`,
         },
       })
       .returning();
@@ -299,6 +305,12 @@ export class DrizzleRepository implements IRepository {
           title_type: sql`excluded.title_type`,
           pinned: sql`excluded.pinned`,
           updated_at: sql`excluded.updated_at`,
+          // дополнительные поля для полной версии (опциональны)          
+          seq_id: sql`excluded.inserted_at`,          
+          agent: sql`excluded.agent`,
+          version: sql`excluded.version`,
+          current_message_id: sql`excluded.current_message_id`,
+          inserted_at: sql`excluded.inserted_at`,
         },
       });
     return result.rowCount ?? 0;

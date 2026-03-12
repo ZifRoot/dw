@@ -1,3 +1,4 @@
+import { normalizeUUID } from "../../utils/data-utils";
 import { MessageFileCreate } from "./MessageFileCreate";
 
 export class MessageFile {
@@ -14,7 +15,7 @@ export class MessageFile {
   public updatedAt: Date;
 
   constructor(data: MessageFileCreate) {
-    this.id = data.id ?? crypto.randomUUID();
+    this.id = normalizeUUID(data.id) ?? crypto.randomUUID();
     this.sessionId = data.sessionId;
     this.messageId = data.messageId;
     this.status = data.status;
