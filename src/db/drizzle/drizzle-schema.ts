@@ -1,0 +1,121 @@
+import { pgTable, uuid, text, boolean, timestamp, integer, doublePrecision, jsonb, primaryKey, foreignKey, index } from "drizzle-orm/pg-core";
+
+// Enums реализованы как text (согласно вашему пожеланию)
+export const roleEnum = text("role");
+export const fragmentTypeEnum = text("fragment_type");
+export const fileStatusEnum = text("file_status");
+
+// ========================
+// Таблица сессий (уже существовала)
+// ========================
+export const chatSessionsTable = pgTable("chat_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  title_type: text("title_type").notNull(),
+  pinned: boolean("pinned").default(false).notNull(),
+  updated_at: timestamp("updated_at").notNull(),
+  // дополнительные поля для полной версии (опциональны)
+  seq_id: integer("seq_id"),
+  agent: text("agent"),
+  version: integer("version"),
+  current_message_id: integer("current_message_id"),
+  inserted_at: timestamp("inserted_at"),
+});
+
+// ========================
+// Таблица сообщений с составным ключом (session_id, message_id)
+// ========================
+export const chatMessagesTable = pgTable(
+  "chat_messages",
+  {
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => chatSessionsTable.id),
+    messageId: integer("message_id").notNull(),
+    parentMessageId: integer("parent_message_id"),
+    model: text("model"),
+    role: text("role").notNull(),
+    thinkingEnabled: boolean("thinking_enabled").notNull(),
+    banEdit: boolean("ban_edit").notNull(),
+    banRegenerate: boolean("ban_regenerate").notNull(),
+    status: text("status").notNull(),
+    accumulatedTokenUsage: integer("accumulated_token_usage").notNull(),
+    feedback: jsonb("feedback"),
+    insertedAt: timestamp("inserted_at").notNull(),
+    searchEnabled: boolean("search_enabled").notNull(),
+    hasPendingFragment: boolean("has_pending_fragment").notNull(),
+    autoContinue: boolean("auto_continue").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.sessionId, table.messageId] }),
+    parentFk: foreignKey({
+      columns: [table.sessionId, table.parentMessageId],
+      foreignColumns: [table.sessionId, table.messageId],
+    }),
+    parentIdx: index("chat_messages_parent_idx").on(table.sessionId, table.parentMessageId),
+    sessionIdx: index("chat_messages_session_id_idx").on(table.sessionId),
+  }),
+);
+
+// ========================
+// Таблица файлов (независимая)
+// ========================
+export const filesTable = pgTable("files", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  status: text("status").notNull(),
+  fileName: text("file_name").notNull(),
+  previewable: boolean("previewable").notNull(),
+  fileSize: integer("file_size").notNull(),
+  tokenUsage: integer("token_usage").notNull(),
+  errorCode: integer("error_code"),
+  insertedAt: timestamp("inserted_at").notNull(),
+  updatedAt: timestamp("updated_at").notNull(),
+});
+
+// ========================
+// Связь сообщений и файлов (многие-ко-многим)
+// ========================
+export const messageFilesTable = pgTable(
+  "message_files",
+  {
+    sessionId: uuid("session_id").notNull(),
+    messageId: integer("message_id").notNull(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => filesTable.id),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.sessionId, table.messageId, table.fileId],
+    }),
+    messageFk: foreignKey({
+      columns: [table.sessionId, table.messageId],
+      foreignColumns: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
+    }),
+    messageIdx: index("message_files_message_idx").on(table.sessionId, table.messageId),
+    fileIdx: index("message_files_file_idx").on(table.fileId),
+  }),
+);
+
+// ========================
+// Таблица фрагментов сообщений
+// ========================
+export const messageFragmentsTable = pgTable(
+  "message_fragments",
+  {
+    sessionId: uuid("session_id").notNull(),
+    messageId: integer("message_id").notNull(),
+    fragmentOrder: integer("fragment_order").notNull(),
+    type: text("type").notNull(),
+    content: text("content").notNull(),
+    elapsedSecs: doublePrecision("elapsed_secs"),
+    references: jsonb("references"),
+    stageId: integer("stage_id"),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.sessionId, table.messageId, table.fragmentOrder],
+    }),
+    messageIdx: index("message_fragments_message_idx").on(table.sessionId, table.messageId),
+  }),
+);
