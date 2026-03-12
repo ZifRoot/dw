@@ -1,5 +1,8 @@
 import * as fs from "fs";
-import { MessagesResponse, SessionsResponse } from "./db/models/chat_sessions";
+import { MessagesBizData, MessagesResponse, SessionsResponse } from "./db/resp";
+import { ChatSessionsCreate } from "./db/models/ChatSessionsCreate";
+import { IRepository } from "./db/IRepository";
+
 export class Deepseek {
   async start() {
     await this.main();
@@ -10,9 +13,39 @@ export class Deepseek {
 
     fs.writeFileSync("./history_messages-crypto.json", JSON.stringify(fetchpage));
 
-    fetchpage.data.biz_data.chat_session
+    fetchpage.data.biz_data.chat_session;
 
     console.log(fetchpage);
+  }
+
+  /**
+   * Сохраняет полные данные сессии и всех её сообщений в репозиторий.
+   * @param repo - экземпляр DrizzleRepository
+   * @param data - объект MessagesBizData из API
+   */
+  async saveMessagesBizData(repo: IRepository, data: MessagesBizData): Promise<void> {
+    const { chat_session, chat_messages } = data;
+
+    // Сохраняем сессию (полная версия)
+    const sessionData: ChatSessionsCreate = {
+      id: chat_session.id,
+      title: chat_session.title,
+      title_type: chat_session.title_type,
+      pinned: chat_session.pinned,
+      updated_at: chat_session.updated_at,
+      seq_id: chat_session.seq_id,
+      agent: chat_session.agent,
+      version: chat_session.version,
+      current_message_id: chat_session.current_message_id,
+      inserted_at: chat_session.inserted_at,
+    };
+    await repo.createSession(sessionData);
+
+    // Сохраняем сообщения (sessionId передаётся отдельно)
+    await repo.createManyMessages(
+      chat_session.id,
+      chat_messages.map((m) => ({ ...m, sessionId: chat_session.id })),
+    );
   }
 
   async fetch_page(updated_at?: number | null) {
