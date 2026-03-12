@@ -28,11 +28,11 @@ export class DrizzleRepository implements IRepository {
           file_name: item.fileName,
           file_size: item.fileSize,
           id: item.id,
-          inserted_at: item.insertedAt?.getTime() ?? null,
+          inserted_at: (item.insertedAt && item.insertedAt.getTime() / 1000) ?? null,
           previewable: item.previewable,
           status: item.status,
           token_usage: item.tokenUsage,
-          updated_at: item.updatedAt?.getTime() ?? null,
+          updated_at: (item.updatedAt && item.updatedAt.getTime() / 1000) ?? null,
         }),
     );
   }
@@ -211,11 +211,11 @@ export class DrizzleRepository implements IRepository {
           file_name: file.fileName,
           file_size: file.fileSize,
           id: file.id,
-          inserted_at: file.insertedAt?.getTime() ?? null,
+          inserted_at: (file.insertedAt && file.insertedAt.getTime() / 1000) ?? null,
           previewable: file.previewable,
           status: file.status,
           token_usage: file.tokenUsage,
-          updated_at: file.updatedAt?.getTime() ?? null,
+          updated_at: (file.updatedAt && file.updatedAt.getTime() / 1000) ?? null,
         }),
     );
   }
@@ -228,12 +228,12 @@ export class DrizzleRepository implements IRepository {
           agent: item.agent,
           current_message_id: item.current_message_id,
           id: item.id,
-          inserted_at: item.inserted_at?.getTime() ?? null,
+          inserted_at: (item.inserted_at && item.inserted_at.getTime() / 1000) ?? null,
           pinned: item.pinned,
           seq_id: item.seq_id,
           title: item.title,
           title_type: item.title_type,
-          updated_at: item.updated_at?.getTime() ?? null,
+          updated_at: (item.updated_at && item.updated_at.getTime() / 1000) ?? null,
           version: item.version,
         }),
     );
@@ -246,12 +246,12 @@ export class DrizzleRepository implements IRepository {
           agent: item.agent,
           current_message_id: item.current_message_id,
           id: item.id,
-          inserted_at: item.inserted_at?.getTime() ?? null,
+          inserted_at: (item.inserted_at && item.inserted_at.getTime() / 1000) ?? null,
           pinned: item.pinned,
           seq_id: item.seq_id,
           title: item.title,
           title_type: item.title_type,
-          updated_at: item.updated_at?.getTime() ?? null,
+          updated_at: (item.updated_at && item.updated_at.getTime() / 1000) ?? null,
           version: item.version,
         })
       : null;
@@ -283,11 +283,11 @@ export class DrizzleRepository implements IRepository {
       title: result.title,
       agent: result.agent,
       current_message_id: result.current_message_id,
-      inserted_at: result.inserted_at?.getTime() ?? null,
+      inserted_at: (result.inserted_at && result.inserted_at.getTime() / 1000) ?? null,
       pinned: result.pinned,
       seq_id: result.seq_id,
       title_type: result.title_type,
-      updated_at: result.updated_at?.getTime() ?? null,
+      updated_at: (result.updated_at && result.updated_at.getTime() / 1000) ?? null,
       version: result.version,
     });
   }
@@ -327,11 +327,11 @@ export class DrizzleRepository implements IRepository {
           file_name: item.fileName,
           file_size: item.fileSize,
           id: item.id,
-          inserted_at: item.insertedAt?.getTime() ?? null,
+          inserted_at: (item.insertedAt && item.insertedAt.getTime() / 1000) ?? null,
           previewable: item.previewable,
           status: item.status,
           token_usage: item.tokenUsage,
-          updated_at: item.updatedAt?.getTime() ?? null,
+          updated_at: (item.updatedAt && item.updatedAt.getTime() / 1000) ?? null,
         })
       : null;
   }
@@ -362,11 +362,11 @@ export class DrizzleRepository implements IRepository {
       file_name: result.fileName,
       file_size: result.fileSize,
       id: result.id,
-      inserted_at: result.insertedAt?.getTime() ?? null,
+      inserted_at: (result.insertedAt && result.insertedAt.getTime() / 1000) ?? null,
       previewable: result.previewable,
       status: result.status,
       token_usage: result.tokenUsage,
-      updated_at: result.updatedAt?.getTime() ?? null,
+      updated_at: (result.updatedAt && result.updatedAt.getTime() / 1000) ?? null,
     });
   }
 
@@ -406,7 +406,7 @@ export class DrizzleRepository implements IRepository {
           files: [],
           fragments: [],
           has_pending_fragment: item.hasPendingFragment,
-          inserted_at: item.insertedAt?.getTime() ?? null,
+          inserted_at: (item.insertedAt && item.insertedAt.getTime() / 1000) ?? null,
           message_id: item.messageId,
           model: item.model!,
           parent_id: item.parentMessageId,
@@ -434,7 +434,7 @@ export class DrizzleRepository implements IRepository {
           files: [],
           fragments: [],
           has_pending_fragment: item.hasPendingFragment,
-          inserted_at: item.insertedAt?.getTime() ?? null,
+          inserted_at: (item.insertedAt && item.insertedAt.getTime() / 1000) ?? null,
           message_id: item.messageId,
           model: item.model!,
           parent_id: item.parentMessageId,
@@ -562,7 +562,7 @@ export class DrizzleRepository implements IRepository {
         files: [],
         fragments: [],
         has_pending_fragment: insertedMessage.hasPendingFragment,
-        inserted_at: insertedMessage.insertedAt?.getTime() ?? null,
+        inserted_at: (insertedMessage.insertedAt && insertedMessage.insertedAt.getTime() / 1000) ?? null,
         message_id: insertedMessage.messageId,
         model: insertedMessage.model!,
         parent_id: insertedMessage.parentMessageId,
