@@ -4,6 +4,8 @@ import { IRepository } from "./db/IRepository";
 
 import { Deepseek } from "./deepseek";
 import { ChatSessions } from "./db/models/ChatSessions";
+import { MessagesBizData } from "./db/resp";
+import { ChatSessionsCreate } from "./db/models/ChatSessionsCreate";
 
 class Program {
   deepseek: Deepseek;
@@ -57,11 +59,45 @@ class Program {
 
         var his = await this.deepseek.history_messages(session.id, session.version);
 
-        await this.deepseek.saveMessagesBizData(this.repository, his.data.biz_data);
+        await this.saveMessagesBizData(his.data.biz_data);
       }
     } catch (error) {
       console.error(error);
     }
+  }
+
+  /**
+   * Сохраняет полные данные сессии и всех её сообщений в репозиторий.
+   * @param repo - экземпляр DrizzleRepository
+   * @param data - объект MessagesBizData из API
+   */
+  async saveMessagesBizData(data: MessagesBizData): Promise<void> {
+    if (!this.repository) {
+      console.error("null repository");
+      return;
+    }
+    const { chat_session, chat_messages } = data;
+
+    // Сохраняем сессию (полная версия)
+    const sessionData: ChatSessionsCreate = {
+      id: chat_session.id,
+      title: chat_session.title,
+      title_type: chat_session.title_type,
+      pinned: chat_session.pinned,
+      updated_at: chat_session.updated_at,
+      seq_id: chat_session.seq_id,
+      agent: chat_session.agent,
+      version: chat_session.version,
+      current_message_id: chat_session.current_message_id,
+      inserted_at: chat_session.inserted_at,
+    };
+    await this.repository.createSession(sessionData);
+
+    // Сохраняем сообщения (sessionId передаётся отдельно)
+    await this.repository.createManyMessages(
+      chat_session.id,
+      chat_messages.map((m) => ({ ...m, sessionId: chat_session.id })),
+    );
   }
 
   main() {
@@ -77,6 +113,7 @@ class Program {
       minute: "2-digit",
     };
     this.deepseek = new Deepseek();
+    //"cosHuyThAgDzXXU0vhTX+SIVi+ByZGga/6NYpS8tu1pht4dwMnfjtOipq088NJsb"
   }
 }
 

@@ -1,4 +1,4 @@
-import { normalizeUUID } from "../../utils/data-utils";
+import { normalizeUUID, toDate } from "../../utils/data-utils";
 import { MessageFileCreate } from "./MessageFileCreate";
 
 export class MessageFile {
@@ -22,9 +22,10 @@ export class MessageFile {
     this.fileName = data.file_name;
     this.previewable = data.previewable;
     this.fileSize = data.file_size;
+
     this.tokenUsage = data.token_usage;
     this.errorCode = data.error_code ?? null;
-    this.insertedAt = new Date(data.inserted_at * 1000);
-    this.updatedAt = new Date(data.updated_at * 1000);
+    this.insertedAt = toDate(data.inserted_at)!;
+    this.updatedAt = toDate(data.updated_at)!;
   }
 }

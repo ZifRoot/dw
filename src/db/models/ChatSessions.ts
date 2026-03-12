@@ -1,3 +1,4 @@
+import { toDate } from "../../utils/data-utils";
 import { ChatSessionFull } from "../resp";
 import { ChatSessionsCreate } from "./ChatSessionsCreate";
 
@@ -24,7 +25,7 @@ export class ChatSessions {
     this.title = data.title;
     this.title_type = data.title_type;
     this.pinned = data.pinned ?? false;
-    this.updated_at = new Date(data.updated_at * 1000);
+    this.updated_at = toDate(data.updated_at)!;
 
     // Поля из Full (TS поймет тип внутри блока if)
     if (isFull(data)) {
@@ -32,7 +33,7 @@ export class ChatSessions {
       if (data.agent != null) this.agent = data.agent;
       if (data.version != null) this.version = data.version;
       if (data.current_message_id != null) this.current_message_id = data.current_message_id;
-      if (data.inserted_at != null) this.inserted_at = new Date(data.inserted_at * 1000);
+      if (data.inserted_at != null) this.inserted_at = toDate(data.inserted_at)!;
     }
   }
 }

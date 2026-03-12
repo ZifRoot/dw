@@ -14,36 +14,20 @@ import { FragmentType, Role } from "./resp";
 
 export class DrizzleRepository implements IRepository {
   constructor(private client: typeof db_drizzle) {}
-  /**
-   * Получить все файлы (без привязки к сообщениям)
-   */
-  async findAllFiles(): Promise<MessageFile[]> {
-    const items = await this.client.select().from(filesTable);
-    return items.map(
-      (item) =>
-        new MessageFile({
-          messageId: null!,
-          sessionId: null!,
-          error_code: item.errorCode,
-          file_name: item.fileName,
-          file_size: item.fileSize,
-          id: item.id,
-          inserted_at: (item.insertedAt && item.insertedAt.getTime() / 1000) ?? null,
-          previewable: item.previewable,
-          status: item.status,
-          token_usage: item.tokenUsage,
-          updated_at: (item.updatedAt && item.updatedAt.getTime() / 1000) ?? null,
-        }),
-    );
+
+  // ========== Файлы для конкретного сообщения (соответствует сигнатуре IRepository) ==========
+  async findAllFiles(sessionId: string, messageId: number): Promise<MessageFile[]> {
+    return this.getFilesForMessage(sessionId, messageId);
   }
 
-  // ========== Фрагменты (отдельно) ==========
+  // ========== Фрагменты ==========
   async findAllFragments(sessionId: string, messageId: number): Promise<MessageFragment[]> {
     const items = await this.client
       .select()
       .from(messageFragmentsTable)
       .where(and(eq(messageFragmentsTable.sessionId, sessionId), eq(messageFragmentsTable.messageId, messageId)))
       .orderBy(messageFragmentsTable.fragmentOrder);
+
     return items.map(
       (item) =>
         new MessageFragment({
@@ -114,6 +98,7 @@ export class DrizzleRepository implements IRepository {
         },
       })
       .returning();
+
     return new MessageFragment({
       content: result.content,
       id: result.fragmentOrder,
@@ -160,12 +145,8 @@ export class DrizzleRepository implements IRepository {
 
     return result.rowCount ?? 0;
   }
-  /**
-   * Прикрепить файл к сообщению
-   * @param sessionId - идентификатор сессии
-   * @param messageId - идентификатор сообщения
-   * @param fileId - идентификатор файла
-   */
+
+  // ========== Связи файлов с сообщениями ==========
   async addFileToMessage(sessionId: string, messageId: number, fileId: string): Promise<void> {
     await this.client
       .insert(messageFilesTable)
@@ -174,25 +155,15 @@ export class DrizzleRepository implements IRepository {
         messageId,
         fileId,
       })
-      .onConflictDoNothing(); // если уже существует, игнорируем
+      .onConflictDoNothing();
   }
-  /**
-   * Открепить файл от сообщения
-   * @param sessionId - идентификатор сессии
-   * @param messageId - идентификатор сообщения
-   * @param fileId - идентификатор файла
-   */
+
   async removeFileFromMessage(sessionId: string, messageId: number, fileId: string): Promise<void> {
     await this.client
       .delete(messageFilesTable)
       .where(and(eq(messageFilesTable.sessionId, sessionId), eq(messageFilesTable.messageId, messageId), eq(messageFilesTable.fileId, fileId)));
   }
 
-  /**
-   * Получить все файлы, прикреплённые к сообщению
-   * @param sessionId - идентификатор сессии
-   * @param messageId - идентификатор сообщения
-   */
   async getFilesForMessage(sessionId: string, messageId: number): Promise<MessageFile[]> {
     const items = await this.client
       .select({
@@ -205,20 +176,21 @@ export class DrizzleRepository implements IRepository {
     return items.map(
       ({ file }) =>
         new MessageFile({
-          messageId: messageId,
-          sessionId: sessionId,
+          sessionId,
+          messageId,
           error_code: file.errorCode,
           file_name: file.fileName,
           file_size: file.fileSize,
           id: file.id,
-          inserted_at: (file.insertedAt && file.insertedAt.getTime() / 1000) ?? null,
+          inserted_at: file.insertedAt, // Date → конструктор примет
           previewable: file.previewable,
           status: file.status,
           token_usage: file.tokenUsage,
-          updated_at: (file.updatedAt && file.updatedAt.getTime() / 1000) ?? null,
+          updated_at: file.updatedAt,
         }),
     );
   }
+
   // ========== Сессии ==========
   async findAllSessions(): Promise<ChatSessions[]> {
     const items = await this.client.select().from(chatSessionsTable);
@@ -228,12 +200,12 @@ export class DrizzleRepository implements IRepository {
           agent: item.agent,
           current_message_id: item.current_message_id,
           id: item.id,
-          inserted_at: (item.inserted_at && item.inserted_at.getTime() / 1000) ?? null,
+          inserted_at: item.inserted_at, // Date → конструктор примет
           pinned: item.pinned,
           seq_id: item.seq_id,
           title: item.title,
           title_type: item.title_type,
-          updated_at: (item.updated_at && item.updated_at.getTime() / 1000) ?? null,
+          updated_at: item.updated_at,
           version: item.version,
         }),
     );
@@ -246,22 +218,22 @@ export class DrizzleRepository implements IRepository {
           agent: item.agent,
           current_message_id: item.current_message_id,
           id: item.id,
-          inserted_at: (item.inserted_at && item.inserted_at.getTime() / 1000) ?? null,
+          inserted_at: item.inserted_at,
           pinned: item.pinned,
           seq_id: item.seq_id,
           title: item.title,
           title_type: item.title_type,
-          updated_at: (item.updated_at && item.updated_at.getTime() / 1000) ?? null,
+          updated_at: item.updated_at,
           version: item.version,
         })
       : null;
   }
 
   async createSession(data: ChatSessionsCreate): Promise<ChatSessions> {
-    const values = new ChatSessions(data);
+    const session = new ChatSessions(data);
     const [result] = await this.client
       .insert(chatSessionsTable)
-      .values(values)
+      .values(session) // session содержит все поля в camelCase, даты уже Date
       .onConflictDoUpdate({
         target: chatSessionsTable.id,
         set: {
@@ -269,8 +241,7 @@ export class DrizzleRepository implements IRepository {
           title_type: sql`excluded.title_type`,
           pinned: sql`excluded.pinned`,
           updated_at: sql`excluded.updated_at`,
-          // дополнительные поля для полной версии (опциональны)          
-          seq_id: sql`excluded.seq_id`,          
+          seq_id: sql`excluded.seq_id`,
           agent: sql`excluded.agent`,
           version: sql`excluded.version`,
           current_message_id: sql`excluded.current_message_id`,
@@ -278,26 +249,27 @@ export class DrizzleRepository implements IRepository {
         },
       })
       .returning();
+
     return new ChatSessions({
       id: result.id,
       title: result.title,
       agent: result.agent,
       current_message_id: result.current_message_id,
-      inserted_at: (result.inserted_at && result.inserted_at.getTime() / 1000) ?? null,
+      inserted_at: result.inserted_at,
       pinned: result.pinned,
       seq_id: result.seq_id,
       title_type: result.title_type,
-      updated_at: (result.updated_at && result.updated_at.getTime() / 1000) ?? null,
+      updated_at: result.updated_at,
       version: result.version,
     });
   }
 
   async createManySessions(data: ChatSessionsCreate[]): Promise<number> {
     if (data.length === 0) return 0;
-    const values = data.map((ch) => new ChatSessions(ch));
+    const sessions = data.map((ch) => new ChatSessions(ch));
     const result = await this.client
       .insert(chatSessionsTable)
-      .values(values)
+      .values(sessions)
       .onConflictDoUpdate({
         target: chatSessionsTable.id,
         set: {
@@ -305,91 +277,164 @@ export class DrizzleRepository implements IRepository {
           title_type: sql`excluded.title_type`,
           pinned: sql`excluded.pinned`,
           updated_at: sql`excluded.updated_at`,
-          // дополнительные поля для полной версии (опциональны)          
-          seq_id: sql`excluded.inserted_at`,          
+          seq_id: sql`excluded.seq_id`,
           agent: sql`excluded.agent`,
           version: sql`excluded.version`,
           current_message_id: sql`excluded.current_message_id`,
           inserted_at: sql`excluded.inserted_at`,
         },
       });
+
     return result.rowCount ?? 0;
   }
 
-  // ========== Файлы ==========
+  // ========== Файлы (создание и поиск) ==========
   async findFileById(id: string): Promise<MessageFile | null> {
-    const [item] = await this.client.select().from(filesTable).where(eq(filesTable.id, id));
-    return item
-      ? new MessageFile({
-          messageId: 0,
-          sessionId: null!,
-          error_code: item.errorCode,
-          file_name: item.fileName,
-          file_size: item.fileSize,
-          id: item.id,
-          inserted_at: (item.insertedAt && item.insertedAt.getTime() / 1000) ?? null,
-          previewable: item.previewable,
-          status: item.status,
-          token_usage: item.tokenUsage,
-          updated_at: (item.updatedAt && item.updatedAt.getTime() / 1000) ?? null,
-        })
-      : null;
+    const result = await this.client
+      .select({
+        file: filesTable,
+        link: messageFilesTable,
+      })
+      .from(filesTable)
+      .innerJoin(messageFilesTable, eq(filesTable.id, messageFilesTable.fileId))
+      .where(eq(filesTable.id, id))
+      .limit(1);
+
+    if (result.length === 0) return null;
+
+    const { file, link } = result[0];
+    return new MessageFile({
+      sessionId: link.sessionId,
+      messageId: link.messageId,
+      error_code: file.errorCode,
+      file_name: file.fileName,
+      file_size: file.fileSize,
+      id: file.id,
+      inserted_at: file.insertedAt,
+      previewable: file.previewable,
+      status: file.status,
+      token_usage: file.tokenUsage,
+      updated_at: file.updatedAt,
+    });
   }
 
   async createFile(data: MessageFileCreate): Promise<MessageFile> {
-    const values = new MessageFile(data);
-    const [result] = await this.client
-      .insert(filesTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: filesTable.id,
-        set: {
-          status: sql`excluded.status`,
-          fileName: sql`excluded.file_name`, // было file_name
-          previewable: sql`excluded.previewable`,
-          fileSize: sql`excluded.file_size`, // было file_size
-          tokenUsage: sql`excluded.token_usage`, // было token_usage
-          errorCode: sql`excluded.error_code`, // было error_code
-          insertedAt: sql`excluded.inserted_at`, // было inserted_at
-          updatedAt: sql`excluded.updated_at`, // было updated_at
-        },
-      })
-      .returning();
-    return new MessageFile({
-      messageId: data.messageId,
-      sessionId: data.sessionId,
-      error_code: result.errorCode,
-      file_name: result.fileName,
-      file_size: result.fileSize,
-      id: result.id,
-      inserted_at: (result.insertedAt && result.insertedAt.getTime() / 1000) ?? null,
-      previewable: result.previewable,
-      status: result.status,
-      token_usage: result.tokenUsage,
-      updated_at: (result.updatedAt && result.updatedAt.getTime() / 1000) ?? null,
+    const messageFile = new MessageFile(data); // единая точка преобразования
+
+    return await this.client.transaction(async (tx) => {
+      // 1. Вставка/обновление в filesTable
+      const [result] = await tx
+        .insert(filesTable)
+        .values({
+          id: messageFile.id,
+          status: messageFile.status,
+          fileName: messageFile.fileName,
+          previewable: messageFile.previewable,
+          fileSize: messageFile.fileSize,
+          tokenUsage: messageFile.tokenUsage,
+          errorCode: messageFile.errorCode,
+          insertedAt: messageFile.insertedAt,
+          updatedAt: messageFile.updatedAt,
+        })
+        .onConflictDoUpdate({
+          target: filesTable.id,
+          set: {
+            status: sql`excluded.status`,
+            fileName: sql`excluded.file_name`,
+            previewable: sql`excluded.previewable`,
+            fileSize: sql`excluded.file_size`,
+            tokenUsage: sql`excluded.token_usage`,
+            errorCode: sql`excluded.error_code`,
+            insertedAt: sql`excluded.inserted_at`,
+            updatedAt: sql`excluded.updated_at`,
+          },
+        })
+        .returning();
+
+      // 2. Вставка связи в messageFilesTable (если есть контекст)
+      if (messageFile.sessionId && messageFile.messageId) {
+        await tx
+          .insert(messageFilesTable)
+          .values({
+            sessionId: messageFile.sessionId,
+            messageId: messageFile.messageId,
+            fileId: messageFile.id,
+          })
+          .onConflictDoNothing();
+      }
+
+      // Возвращаем MessageFile с актуальными данными
+      return new MessageFile({
+        ...data,
+        error_code: result.errorCode,
+        file_name: result.fileName,
+        file_size: result.fileSize,
+        id: result.id,
+        inserted_at: result.insertedAt,
+        previewable: result.previewable,
+        status: result.status,
+        token_usage: result.tokenUsage,
+        updated_at: result.updatedAt,
+      });
     });
   }
 
   async createManyFiles(data: MessageFileCreate[]): Promise<number> {
     if (data.length === 0) return 0;
-    const values = data.map((f) => new MessageFile(f));
-    const result = await this.client
-      .insert(filesTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: filesTable.id,
-        set: {
-          status: sql`excluded.status`,
-          fileName: sql`excluded.file_name`, // было file_name
-          previewable: sql`excluded.previewable`,
-          fileSize: sql`excluded.file_size`, // было file_size
-          tokenUsage: sql`excluded.token_usage`, // было token_usage
-          errorCode: sql`excluded.error_code`, // было error_code
-          insertedAt: sql`excluded.inserted_at`, // было inserted_at
-          updatedAt: sql`excluded.updated_at`, // было updated_at
-        },
-      });
-    return result.rowCount ?? 0;
+
+    const messageFiles = data.map((d) => new MessageFile(d));
+
+    return await this.client.transaction(async (tx) => {
+      // 1. Массовая вставка/обновление файлов
+      const fileDbValues = messageFiles.map((mf) => ({
+        id: mf.id,
+        status: mf.status,
+        fileName: mf.fileName,
+        previewable: mf.previewable,
+        fileSize: mf.fileSize,
+        tokenUsage: mf.tokenUsage,
+        errorCode: mf.errorCode,
+        insertedAt: mf.insertedAt,
+        updatedAt: mf.updatedAt,
+      }));
+
+      await tx
+        .insert(filesTable)
+        .values(fileDbValues)
+        .onConflictDoUpdate({
+          target: filesTable.id,
+          set: {
+            status: sql`excluded.status`,
+            fileName: sql`excluded.file_name`,
+            previewable: sql`excluded.previewable`,
+            fileSize: sql`excluded.file_size`,
+            tokenUsage: sql`excluded.token_usage`,
+            errorCode: sql`excluded.error_code`,
+            insertedAt: sql`excluded.inserted_at`,
+            updatedAt: sql`excluded.updated_at`,
+          },
+        });
+
+      // 2. Массовая вставка связей
+      const linkValues = messageFiles
+        .filter((mf) => mf.sessionId && mf.messageId)
+        .map((mf) => ({
+          sessionId: mf.sessionId,
+          messageId: mf.messageId,
+          fileId: mf.id,
+        }));
+
+      if (linkValues.length > 0) {
+        await tx
+          .insert(messageFilesTable)
+          .values(linkValues)
+          .onConflictDoNothing({
+            target: [messageFilesTable.sessionId, messageFilesTable.messageId, messageFilesTable.fileId],
+          });
+      }
+
+      return data.length;
+    });
   }
 
   // ========== Сообщения ==========
@@ -403,10 +448,10 @@ export class DrizzleRepository implements IRepository {
           ban_edit: item.banEdit,
           ban_regenerate: item.banRegenerate,
           feedback: item.feedback,
-          files: [],
+          files: [], // можно до загрузить, но для простоты оставляем пустым
           fragments: [],
           has_pending_fragment: item.hasPendingFragment,
-          inserted_at: (item.insertedAt && item.insertedAt.getTime() / 1000) ?? null,
+          inserted_at: item.insertedAt,
           message_id: item.messageId,
           model: item.model!,
           parent_id: item.parentMessageId,
@@ -434,7 +479,7 @@ export class DrizzleRepository implements IRepository {
           files: [],
           fragments: [],
           has_pending_fragment: item.hasPendingFragment,
-          inserted_at: (item.insertedAt && item.insertedAt.getTime() / 1000) ?? null,
+          inserted_at: item.insertedAt,
           message_id: item.messageId,
           model: item.model!,
           parent_id: item.parentMessageId,
@@ -451,8 +496,9 @@ export class DrizzleRepository implements IRepository {
     const { sessionId, files = [], fragments, ...rest } = data;
 
     return await this.client.transaction(async (tx) => {
-      // 1. Сообщение
       const message = new ChatMessage({ ...data, sessionId });
+
+      // 1. Сообщение
       const [insertedMessage] = await tx
         .insert(chatMessagesTable)
         .values({
@@ -492,7 +538,7 @@ export class DrizzleRepository implements IRepository {
         })
         .returning();
 
-      // 2. Файлы (создаём при необходимости и связываем)
+      // 2. Файлы
       for (const fileData of files) {
         let file = await tx
           .select()
@@ -502,8 +548,23 @@ export class DrizzleRepository implements IRepository {
           .then((rows) => rows[0]);
 
         if (!file) {
-          const newFile = new MessageFile({ ...fileData, sessionId: sessionId, messageId: message.messageId });
-          [file] = await tx.insert(filesTable).values(newFile).returning();
+          const newMessageFile = new MessageFile({
+            ...fileData,
+            sessionId,
+            messageId: message.messageId,
+          });
+          const newFileData = {
+            id: newMessageFile.id,
+            status: newMessageFile.status,
+            fileName: newMessageFile.fileName,
+            previewable: newMessageFile.previewable,
+            fileSize: newMessageFile.fileSize,
+            tokenUsage: newMessageFile.tokenUsage,
+            errorCode: newMessageFile.errorCode,
+            insertedAt: newMessageFile.insertedAt,
+            updatedAt: newMessageFile.updatedAt,
+          };
+          [file] = await tx.insert(filesTable).values(newFileData).returning();
         }
 
         await tx
@@ -518,12 +579,12 @@ export class DrizzleRepository implements IRepository {
 
       // 3. Фрагменты
       if (fragments && fragments.length > 0) {
-        const fragmentInserts = fragments.map((frag, index) => {
+        const fragmentInserts = fragments.map((frag) => {
           const fragCreate: MessageFragmentCreate = {
             ...frag,
             sessionId: message.sessionId,
             messageId: message.messageId,
-            id: index,
+            id: frag.id,
           };
           const fragment = new MessageFragment(fragCreate);
           return {
@@ -562,7 +623,7 @@ export class DrizzleRepository implements IRepository {
         files: [],
         fragments: [],
         has_pending_fragment: insertedMessage.hasPendingFragment,
-        inserted_at: (insertedMessage.insertedAt && insertedMessage.insertedAt.getTime() / 1000) ?? null,
+        inserted_at: insertedMessage.insertedAt,
         message_id: insertedMessage.messageId,
         model: insertedMessage.model!,
         parent_id: insertedMessage.parentMessageId,
@@ -575,68 +636,77 @@ export class DrizzleRepository implements IRepository {
     });
   }
 
-  /**
-   * Массовое сохранение сообщений одной сессии.
-   * @param sessionId - идентификатор сессии
-   * @param messages - массив данных сообщений (без sessionId)
-   */
   async createManyMessages(sessionId: string, messages: ChatMessageCreate[]): Promise<number> {
     if (messages.length === 0) return 0;
 
-    // Вспомогательная функция для сбора уникальных файлов
-    const collectUniqueFiles = (msgs: ChatMessageCreate[]): Map<string, MessageFileCreate> => {
-      const filesMap = new Map<string, MessageFileCreate>();
+    // Вспомогательная функция для сбора уникальных файлов (только данные файла)
+    const collectUniqueFiles = (msgs: ChatMessageCreate[]): Map<string, Omit<MessageFileCreate, "sessionId" | "messageId">> => {
+      const filesMap = new Map<string, Omit<MessageFileCreate, "sessionId" | "messageId">>();
       for (const msg of msgs) {
         if (msg.files) {
           for (const file of msg.files) {
-            filesMap.set(file.id, file as MessageFileCreate);
+            filesMap.set(file.id, {
+              id: file.id,
+              status: file.status,
+              file_name: file.file_name,
+              previewable: file.previewable,
+              file_size: file.file_size,
+              token_usage: file.token_usage,
+              error_code: file.error_code,
+              inserted_at: file.inserted_at,
+              updated_at: file.updated_at,
+            });
           }
         }
       }
       return filesMap;
     };
 
-    // Собираем уникальные файлы
     const filesMap = collectUniqueFiles(messages);
     const filesList = Array.from(filesMap.values());
 
-    // Создаём объекты ChatMessage с добавленным sessionId
     const chatMessages = messages.map((msg) => new ChatMessage({ ...msg, sessionId }));
 
-    // Собираем связи message-files
     const messageFiles = messages
-      .map((msg) =>
-        msg.files.map(
-          (file) =>
-            new MessageFile({
-              ...file,
-              sessionId,
-              messageId: msg.message_id,
-            }),
-        ),
+      .flatMap((msg) =>
+        msg.files.map((file) => ({
+          sessionId,
+          messageId: msg.message_id,
+          fileId: file.id,
+        })),
       )
-      .flatMap((a) => a);
+      .filter((v, i, a) => a.findIndex((t) => t.sessionId === v.sessionId && t.messageId === v.messageId && t.fileId === v.fileId) === i);
 
-    // Собираем фрагменты
-    const fragments = messages
-      .map((msg) =>
-        msg.fragments.map(
-          (frag) =>
-            new MessageFragment({
-              ...frag,
-              sessionId,
-              messageId: msg.message_id,
-              id: frag.id,
-            }),
-        ),
-      )
-      .flatMap((a) => a);
+    const fragments = messages.flatMap((msg) =>
+      msg.fragments.map(
+        (frag) =>
+          new MessageFragment({
+            ...frag,
+            sessionId,
+            messageId: msg.message_id,
+            id: frag.id,
+          }),
+      ),
+    );
 
-    // Выполняем всё в одной транзакции
     return await this.client.transaction(async (tx) => {
       // 1. Upsert файлов
       if (filesList.length > 0) {
-        const fileValues = filesList.map((f) => new MessageFile(f));
+        const fileValues = filesList.map((f) => {
+          const mf = new MessageFile({ ...f, sessionId, messageId: 0 }); // messageId временный, но не используется для вставки в files
+          return {
+            id: mf.id,
+            status: mf.status,
+            fileName: mf.fileName,
+            previewable: mf.previewable,
+            fileSize: mf.fileSize,
+            tokenUsage: mf.tokenUsage,
+            errorCode: mf.errorCode,
+            insertedAt: mf.insertedAt,
+            updatedAt: mf.updatedAt,
+          };
+        });
+
         await tx
           .insert(filesTable)
           .values(fileValues)
@@ -674,6 +744,7 @@ export class DrizzleRepository implements IRepository {
           hasPendingFragment: m.hasPendingFragment,
           autoContinue: m.autoContinue,
         }));
+
         await tx
           .insert(chatMessagesTable)
           .values(messageValues)
@@ -697,17 +768,11 @@ export class DrizzleRepository implements IRepository {
           });
       }
 
-      const messageFileValues = messageFiles.map((f) => ({
-        sessionId: f.sessionId,
-        messageId: f.messageId,
-        fileId: f.id,
-      }));
-
       // 3. Upsert связей message-files
       if (messageFiles.length > 0) {
         await tx
           .insert(messageFilesTable)
-          .values(messageFileValues)
+          .values(messageFiles)
           .onConflictDoNothing({
             target: [messageFilesTable.sessionId, messageFilesTable.messageId, messageFilesTable.fileId],
           });
@@ -715,9 +780,20 @@ export class DrizzleRepository implements IRepository {
 
       // 4. Upsert фрагментов
       if (fragments.length > 0) {
+        const fragmentValues = fragments.map((f) => ({
+          sessionId: f.sessionId,
+          messageId: f.messageId,
+          fragmentOrder: f.fragmentOrder,
+          type: f.type,
+          content: f.content,
+          elapsedSecs: f.elapsedSecs,
+          references: f.references,
+          stageId: f.stageId,
+        }));
+
         await tx
           .insert(messageFragmentsTable)
-          .values(fragments)
+          .values(fragmentValues)
           .onConflictDoUpdate({
             target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
             set: {

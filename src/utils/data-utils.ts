@@ -77,3 +77,9 @@ export function normalizeUUID(input: string): string | null {
 
   return parts.join("-");
 }
+
+export function toDate(value: number | Date | null | undefined): Date | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value;
+  return new Date(value * 1000);
+}
