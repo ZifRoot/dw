@@ -15,6 +15,8 @@ class Program {
       await startAndWaitAsync();
       this.repository = InitDb();
 
+      var fetch_page = await this.deepseek.fetch_page();
+
       var sessions = await this.repository.findAllSessions();
 
       var sessions = sessions.filter((s) => s.version == null);
@@ -22,7 +24,7 @@ class Program {
 
       try {
         for (const session of sessions) {
-          var his = await this.deepseek.history_messages(session.id!);
+          var his = await this.deepseek.history_messages(session.id!, session.version);
 
           await this.deepseek.saveMessagesBizData(this.repository, his.data.biz_data);
         }

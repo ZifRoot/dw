@@ -55,8 +55,8 @@ export class Deepseek {
     return fetchpage;
   }
 
-  async history_messages(chat_session_id: string) {
-    let resp = await this.history_messages_resp(chat_session_id);
+  async history_messages(chat_session_id: string, version?: number) {
+    let resp = await this.history_messages_resp(chat_session_id, version ?? null);
 
     let fetchpage = (await resp.json()) as MessagesResponse;
     return fetchpage;
@@ -103,10 +103,13 @@ export class Deepseek {
     });
   }
 
-  async history_messages_resp(chat_session_id: string) {
+  async history_messages_resp(chat_session_id: string, version: number | null) {
     let url = new URL("https://chat.deepseek.com/api/v0/chat/history_messages");
     url.searchParams.append("chat_session_id", chat_session_id);
-    // url.searchParams.append("cache_version", "2");
+    if (version != null) {
+      url.searchParams.append("cache_version", `${version}`);
+    }
+
     let str = url.toString();
 
     return await fetch(str, {

@@ -20,6 +20,7 @@ export const chatSessionsTable = pgTable("chat_sessions", {
   version: integer("version"),
   current_message_id: integer("current_message_id"),
   inserted_at: timestamp("inserted_at"),
+  user_id: uuid("user_id"),
 });
 
 // ========================
