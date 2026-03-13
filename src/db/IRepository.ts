@@ -10,6 +10,7 @@ import { MessageFragment } from "./models/MessageFragment";
 import { MessageFragmentCreate } from "./models/MessageFragmentCreate";
 import { User } from "./models/User";
 import { UserCreate } from "./models/UserCreate";
+import { MessagesBizData } from "./resp";
 
 export interface IRepository {
   // ========== Chat Sessions ==========
@@ -46,4 +47,6 @@ export interface IRepository {
   findUserById(id: string): Promise<User | null>;
   createUser(data: UserCreate): Promise<User>;
   createManyUsers(data: UserCreate[]): Promise<number>;
+  // ========== BizData ==========
+  createMessagesBizData(user_id: string, data: MessagesBizData): Promise<void>;
 }

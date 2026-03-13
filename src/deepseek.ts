@@ -1,7 +1,26 @@
-import { MessagesResponse, SessionsResponse } from "./db/resp";
+import { ChatSessionBase, MessagesResponse, SessionsResponse } from "./db/resp";
 
 export class Deepseek {
   headers: Headers;
+
+  async fetch_page_all(): Promise<ChatSessionBase[]> {
+    let updated_at: number | null = null;
+    var chat_sessions_all: ChatSessionBase[] = [];
+    while (true) {
+      let fetchpage = await this.fetch_page(updated_at);
+      var biz_data = fetchpage.data.biz_data;
+      var chat_sessions = biz_data.chat_sessions;
+      let ud0 = chat_sessions[0].updated_at;
+      let ude = chat_sessions.at(-1)?.updated_at;
+      let has_more = biz_data.has_more;
+      chat_sessions_all.push(...chat_sessions);
+
+      if (!has_more) break;
+      updated_at = ude!;
+    }
+    return chat_sessions_all;
+  }
+
   async fetch_page(updated_at?: number | null) {
     let resp = await this.fetch_page_resp(updated_at);
 

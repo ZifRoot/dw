@@ -4,13 +4,13 @@ import { IRepository } from "./db/IRepository";
 
 import { credentials, Deepseek } from "./deepseek";
 import { ChatSessions } from "./db/models/ChatSessions";
-import { MessagesBizData } from "./db/resp";
+import { ChatSessionBase, MessagesBizData } from "./db/resp";
 import { ChatSessionsCreate } from "./db/models/ChatSessionsCreate";
 import { User } from "./db/models/User";
+import { dateStr } from "./utils/data-utils";
 
 class Program {
   repository?: IRepository;
-  format: Intl.DateTimeFormatOptions;
 
   async start() {
     //await this.deepseek.start();
@@ -36,13 +36,15 @@ class Program {
     console.log(`User: ${user.name}`);
 
     var deepseek = new Deepseek(user.credentials as credentials);
-    var fetch_page = await deepseek.fetch_page();
+    var fetch_page = await deepseek.fetch_page_all();
+    var first_page = fetch_page.at(-1);
+    console.log(`Page: ${first_page?.title} ${dateStr(first_page?.updated_at)}`);
 
     var sessions = await this.repository.findAllSessions(user.id);
 
     const map_sessions = new Map(sessions.map((obj) => [obj.id!, obj]));
 
-    var in_sessions = fetch_page.data.biz_data.chat_sessions.map((s) => new ChatSessions({ ...s, user_id: user.id }));
+    var in_sessions = fetch_page.map((s) => new ChatSessions({ ...s, user_id: user.id }));
 
     var sessions_for_update = in_sessions
       .map((in_session) => ({ in_session: in_session, db_session: map_sessions.get(in_session.id) }))
@@ -63,39 +65,16 @@ class Program {
       for (const s of sessions_for_update) {
         var session = s.db_session ?? s.in_session;
         console.log(
-          `Обновление: ${s.db_session == null ? "новый" : `(${s.db_session.updated_at.toLocaleString("ru-RU", this.format)})->(${s.in_session.updated_at.toLocaleString("ru-RU", this.format)}) `} [${session.title}]`,
+          `Обновление: ${s.db_session == null ? "новый" : `(${dateStr(s.db_session.updated_at)})->(${dateStr(s.in_session.updated_at)}) `} [${session.title}]`,
         );
 
         var his = await deepseek.history_messages(session.id, session.version);
 
-        await this.saveMessagesBizData(user.id, his.data.biz_data);
+        await this.repository.createMessagesBizData(user.id, his.data.biz_data);
       }
     } catch (error) {
       console.error(error);
     }
-  }
-
-  /**
-   * Сохраняет полные данные сессии и всех её сообщений в репозиторий.
-   * @param repo - экземпляр DrizzleRepository
-   * @param data - объект MessagesBizData из API
-   */
-  async saveMessagesBizData(user_id: string, data: MessagesBizData): Promise<void> {
-    if (!this.repository) {
-      console.error("null repository");
-      return;
-    }
-    const { chat_session, chat_messages } = data;
-
-    // Сохраняем сессию (полная версия)
-    const sessionData: ChatSessionsCreate = { ...chat_session, user_id };
-    await this.repository.createSession(sessionData);
-
-    // Сохраняем сообщения (sessionId передаётся отдельно)
-    await this.repository.createManyMessages(
-      chat_session.id,
-      chat_messages.map((m) => ({ ...m, sessionId: chat_session.id })),
-    );
   }
 
   main() {
@@ -103,13 +82,6 @@ class Program {
   }
 
   constructor() {
-    this.format = {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    };
     //this.deepseek = new Deepseek();
     //"cosHuyThAgDzXXU0vhTX+SIVi+ByZGga/6NYpS8tu1pht4dwMnfjtOipq088NJsb"
   }
@@ -123,3 +95,8 @@ greet("TypeScript");
 
 let program = new Program();
 program.main();
+
+// console.log(`0:updated_at = ${ud0} | END:updated_at = ${ude} | has_more = ${has_more}`);
+
+//       let num = await this.repository!.createManySessions(fetchpage.data.biz_data.chat_sessions as ChatSessionFull[]);
+//       console.log(`Created ${num}`);
