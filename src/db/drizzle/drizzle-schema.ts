@@ -5,6 +5,12 @@ export const roleEnum = text("role");
 export const fragmentTypeEnum = text("fragment_type");
 export const fileStatusEnum = text("file_status");
 
+export const userTable = pgTable("user", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  credentials: jsonb("credentials"),
+});
+
 // ========================
 // Таблица сессий (уже существовала)
 // ========================
@@ -20,6 +26,7 @@ export const chatSessionsTable = pgTable("chat_sessions", {
   version: integer("version"),
   current_message_id: integer("current_message_id"),
   inserted_at: timestamp("inserted_at"),
+  user_id: uuid("user_id").references(() => userTable.id),
 });
 
 // ========================

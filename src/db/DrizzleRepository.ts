@@ -1,6 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db_drizzle } from "./drizzle/drizzle-db";
-import { chatSessionsTable, chatMessagesTable, filesTable, messageFilesTable, messageFragmentsTable } from "./drizzle/drizzle-schema";
+import { chatSessionsTable, chatMessagesTable, filesTable, messageFilesTable, messageFragmentsTable, userTable } from "./drizzle/drizzle-schema";
 import { ChatSessions } from "./models/ChatSessions";
 import { ChatSessionsCreate } from "./models/ChatSessionsCreate";
 import { MessageFile } from "./models/MessageFile";
@@ -10,40 +10,27 @@ import { ChatMessageCreate } from "./models/ChatMessageCreate";
 import { MessageFragmentCreate } from "./models/MessageFragmentCreate";
 import { MessageFragment } from "./models/MessageFragment";
 import { IRepository } from "./IRepository";
-import { FragmentType, Role } from "./resp";
+import { FragmentType, MessagesBizData, Role } from "./resp";
+import { User } from "./models/User";
+import { UserCreate } from "./models/UserCreate";
+import { PgTransaction } from "drizzle-orm/pg-core";
 
 export class DrizzleRepository implements IRepository {
   constructor(private client: typeof db_drizzle) {}
-  /**
-   * Получить все файлы (без привязки к сообщениям)
-   */
-  async findAllFiles(): Promise<MessageFile[]> {
-    const items = await this.client.select().from(filesTable);
-    return items.map(
-      (item) =>
-        new MessageFile({
-          messageId: null!,
-          sessionId: null!,
-          error_code: item.errorCode,
-          file_name: item.fileName,
-          file_size: item.fileSize,
-          id: item.id,
-          inserted_at: item.insertedAt?.getTime() ?? null,
-          previewable: item.previewable,
-          status: item.status,
-          token_usage: item.tokenUsage,
-          updated_at: item.updatedAt?.getTime() ?? null,
-        }),
-    );
+
+  // ========== Файлы для конкретного сообщения ==========
+  async findAllFiles(sessionId: string, messageId: number): Promise<MessageFile[]> {
+    return this.getFilesForMessage(sessionId, messageId);
   }
 
-  // ========== Фрагменты (отдельно) ==========
+  // ========== Фрагменты ==========
   async findAllFragments(sessionId: string, messageId: number): Promise<MessageFragment[]> {
     const items = await this.client
       .select()
       .from(messageFragmentsTable)
       .where(and(eq(messageFragmentsTable.sessionId, sessionId), eq(messageFragmentsTable.messageId, messageId)))
       .orderBy(messageFragmentsTable.fragmentOrder);
+
     return items.map(
       (item) =>
         new MessageFragment({
@@ -58,9 +45,7 @@ export class DrizzleRepository implements IRepository {
         }),
     );
   }
-  /**
-   * Найти фрагмент по составному ключу (sessionId, messageId, fragmentOrder)
-   */
+
   async findFragmentById(sessionId: string, messageId: number, fragmentOrder: number): Promise<MessageFragment | null> {
     const [item] = await this.client
       .select()
@@ -86,50 +71,8 @@ export class DrizzleRepository implements IRepository {
       : null;
   }
 
-  /**
-   * Создать или обновить один фрагмент
-   */
-  async createFragment(data: MessageFragmentCreate): Promise<MessageFragment> {
-    const fragment = new MessageFragment(data);
-    const [result] = await this.client
-      .insert(messageFragmentsTable)
-      .values({
-        sessionId: fragment.sessionId,
-        messageId: fragment.messageId,
-        fragmentOrder: fragment.fragmentOrder,
-        type: fragment.type,
-        content: fragment.content,
-        elapsedSecs: fragment.elapsedSecs,
-        references: fragment.references,
-        stageId: fragment.stageId,
-      })
-      .onConflictDoUpdate({
-        target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
-        set: {
-          type: sql`excluded.type`,
-          content: sql`excluded.content`,
-          elapsedSecs: sql`excluded.elapsed_secs`,
-          references: sql`excluded.references`,
-          stageId: sql`excluded.stage_id`,
-        },
-      })
-      .returning();
-    return new MessageFragment({
-      content: result.content,
-      id: result.fragmentOrder,
-      messageId: result.messageId,
-      sessionId: result.sessionId,
-      type: result.type as FragmentType,
-      elapsed_secs: result.elapsedSecs,
-      references: result.references,
-      stage_id: result.stageId,
-    });
-  }
-
-  /**
-   * Массовое создание/обновление фрагментов
-   */
-  async createManyFragments(data: MessageFragmentCreate[]): Promise<number> {
+  // ========== Массовые операции с фрагментами ==========
+  async createManyFragments(data: MessageFragmentCreate[], tx?: PgTx): Promise<number> {
     if (data.length === 0) return 0;
 
     const fragments = data.map((d) => new MessageFragment(d));
@@ -144,60 +87,92 @@ export class DrizzleRepository implements IRepository {
       stageId: f.stageId,
     }));
 
-    const result = await this.client
-      .insert(messageFragmentsTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
-        set: {
-          type: sql`excluded.type`,
-          content: sql`excluded.content`,
-          elapsedSecs: sql`excluded.elapsed_secs`,
-          references: sql`excluded.references`,
-          stageId: sql`excluded.stage_id`,
-        },
-      });
+    const execute = async (db: PgTx) => {
+      const result = await db
+        .insert(messageFragmentsTable)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
+          set: {
+            type: sql`excluded.type`,
+            content: sql`excluded.content`,
+            elapsedSecs: sql`excluded.elapsed_secs`,
+            references: sql`excluded.references`,
+            stageId: sql`excluded.stage_id`,
+          },
+        });
+      return result.rowCount ?? 0;
+    };
 
-    return result.rowCount ?? 0;
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
   }
-  /**
-   * Прикрепить файл к сообщению
-   * @param sessionId - идентификатор сессии
-   * @param messageId - идентификатор сообщения
-   * @param fileId - идентификатор файла
-   */
+
+  // ========== Одиночные операции с фрагментами (через массовые) ==========
+  async createFragment(data: MessageFragmentCreate, tx?: PgTx): Promise<MessageFragment> {
+    const execute = async (db: PgTx) => {
+      // Вставляем один фрагмент и возвращаем его
+      const fragment = new MessageFragment(data);
+      const [result] = await db
+        .insert(messageFragmentsTable)
+        .values({
+          sessionId: fragment.sessionId,
+          messageId: fragment.messageId,
+          fragmentOrder: fragment.fragmentOrder,
+          type: fragment.type,
+          content: fragment.content,
+          elapsedSecs: fragment.elapsedSecs,
+          references: fragment.references,
+          stageId: fragment.stageId,
+        })
+        .onConflictDoUpdate({
+          target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
+          set: {
+            type: sql`excluded.type`,
+            content: sql`excluded.content`,
+            elapsedSecs: sql`excluded.elapsed_secs`,
+            references: sql`excluded.references`,
+            stageId: sql`excluded.stage_id`,
+          },
+        })
+        .returning();
+
+      return new MessageFragment({
+        content: result.content,
+        id: result.fragmentOrder,
+        messageId: result.messageId,
+        sessionId: result.sessionId,
+        type: result.type as FragmentType,
+        elapsed_secs: result.elapsedSecs,
+        references: result.references,
+        stage_id: result.stageId,
+      });
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
+  }
+
+  // ========== Связи файлов с сообщениями ==========
   async addFileToMessage(sessionId: string, messageId: number, fileId: string): Promise<void> {
-    await this.client
-      .insert(messageFilesTable)
-      .values({
-        sessionId,
-        messageId,
-        fileId,
-      })
-      .onConflictDoNothing(); // если уже существует, игнорируем
+    await this.client.insert(messageFilesTable).values({ sessionId, messageId, fileId }).onConflictDoNothing();
   }
-  /**
-   * Открепить файл от сообщения
-   * @param sessionId - идентификатор сессии
-   * @param messageId - идентификатор сообщения
-   * @param fileId - идентификатор файла
-   */
+
   async removeFileFromMessage(sessionId: string, messageId: number, fileId: string): Promise<void> {
     await this.client
       .delete(messageFilesTable)
       .where(and(eq(messageFilesTable.sessionId, sessionId), eq(messageFilesTable.messageId, messageId), eq(messageFilesTable.fileId, fileId)));
   }
 
-  /**
-   * Получить все файлы, прикреплённые к сообщению
-   * @param sessionId - идентификатор сессии
-   * @param messageId - идентификатор сообщения
-   */
   async getFilesForMessage(sessionId: string, messageId: number): Promise<MessageFile[]> {
     const items = await this.client
-      .select({
-        file: filesTable,
-      })
+      .select({ file: filesTable })
       .from(messageFilesTable)
       .innerJoin(filesTable, eq(messageFilesTable.fileId, filesTable.id))
       .where(and(eq(messageFilesTable.sessionId, sessionId), eq(messageFilesTable.messageId, messageId)));
@@ -205,191 +180,259 @@ export class DrizzleRepository implements IRepository {
     return items.map(
       ({ file }) =>
         new MessageFile({
-          messageId: messageId,
-          sessionId: sessionId,
+          sessionId,
+          messageId,
           error_code: file.errorCode,
           file_name: file.fileName,
           file_size: file.fileSize,
           id: file.id,
-          inserted_at: file.insertedAt?.getTime() ?? null,
+          inserted_at: file.insertedAt,
           previewable: file.previewable,
           status: file.status,
           token_usage: file.tokenUsage,
-          updated_at: file.updatedAt?.getTime() ?? null,
+          updated_at: file.updatedAt,
         }),
     );
   }
+
   // ========== Сессии ==========
-  async findAllSessions(): Promise<ChatSessions[]> {
-    const items = await this.client.select().from(chatSessionsTable);
-    return items.map(
-      (item) =>
-        new ChatSessions({
-          agent: item.agent,
-          current_message_id: item.current_message_id,
-          id: item.id,
-          inserted_at: item.inserted_at?.getTime() ?? null,
-          pinned: item.pinned,
-          seq_id: item.seq_id,
-          title: item.title,
-          title_type: item.title_type,
-          updated_at: item.updated_at?.getTime() ?? null,
-          version: item.version,
-        }),
-    );
+  async findAllSessions(userId: string): Promise<ChatSessions[]> {
+    const items = await this.client.select().from(chatSessionsTable).where(eq(chatSessionsTable.user_id, userId));
+    return items.map((item) => new ChatSessions({ ...item }));
   }
 
   async findSessionById(id: string): Promise<ChatSessions | null> {
     const [item] = await this.client.select().from(chatSessionsTable).where(eq(chatSessionsTable.id, id));
-    return item
-      ? new ChatSessions({
-          agent: item.agent,
-          current_message_id: item.current_message_id,
-          id: item.id,
-          inserted_at: item.inserted_at?.getTime() ?? null,
-          pinned: item.pinned,
-          seq_id: item.seq_id,
-          title: item.title,
-          title_type: item.title_type,
-          updated_at: item.updated_at?.getTime() ?? null,
-          version: item.version,
-        })
-      : null;
+    return item ? new ChatSessions({ ...item }) : null;
   }
 
-  async createSession(data: ChatSessionsCreate): Promise<ChatSessions> {
-    const values = new ChatSessions(data);
-    const [result] = await this.client
-      .insert(chatSessionsTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: chatSessionsTable.id,
-        set: {
-          title: sql`excluded.title`,
-          title_type: sql`excluded.title_type`,
-          pinned: sql`excluded.pinned`,
-          updated_at: sql`excluded.updated_at`,
-          // дополнительные поля для полной версии (опциональны)          
-          seq_id: sql`excluded.seq_id`,          
-          agent: sql`excluded.agent`,
-          version: sql`excluded.version`,
-          current_message_id: sql`excluded.current_message_id`,
-          inserted_at: sql`excluded.inserted_at`,
-        },
-      })
-      .returning();
-    return new ChatSessions({
-      id: result.id,
-      title: result.title,
-      agent: result.agent,
-      current_message_id: result.current_message_id,
-      inserted_at: result.inserted_at?.getTime() ?? null,
-      pinned: result.pinned,
-      seq_id: result.seq_id,
-      title_type: result.title_type,
-      updated_at: result.updated_at?.getTime() ?? null,
-      version: result.version,
-    });
-  }
-
-  async createManySessions(data: ChatSessionsCreate[]): Promise<number> {
+  // ========== Массовые операции с сессиями ==========
+  async createManySessions(data: ChatSessionsCreate[], tx?: PgTx): Promise<number> {
     if (data.length === 0) return 0;
-    const values = data.map((ch) => new ChatSessions(ch));
-    const result = await this.client
-      .insert(chatSessionsTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: chatSessionsTable.id,
-        set: {
-          title: sql`excluded.title`,
-          title_type: sql`excluded.title_type`,
-          pinned: sql`excluded.pinned`,
-          updated_at: sql`excluded.updated_at`,
-          // дополнительные поля для полной версии (опциональны)          
-          seq_id: sql`excluded.inserted_at`,          
-          agent: sql`excluded.agent`,
-          version: sql`excluded.version`,
-          current_message_id: sql`excluded.current_message_id`,
-          inserted_at: sql`excluded.inserted_at`,
-        },
-      });
-    return result.rowCount ?? 0;
+
+    const sessions = data.map((ch) => new ChatSessions(ch));
+    const values = sessions.map((s) => ({ ...s }));
+
+    const execute = async (db: PgTx) => {
+      const result = await db
+        .insert(chatSessionsTable)
+        .values(values)
+        .onConflictDoUpdate({
+          target: chatSessionsTable.id,
+          set: {
+            title: sql`excluded.title`,
+            title_type: sql`excluded.title_type`,
+            pinned: sql`excluded.pinned`,
+            updated_at: sql`excluded.updated_at`,
+            seq_id: sql`excluded.seq_id`,
+            agent: sql`excluded.agent`,
+            version: sql`excluded.version`,
+            current_message_id: sql`excluded.current_message_id`,
+            inserted_at: sql`excluded.inserted_at`,
+            user_id: sql`excluded.user_id`,
+          },
+        });
+      return result.rowCount ?? 0;
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
+  }
+
+  async createSession(data: ChatSessionsCreate, tx?: PgTx): Promise<ChatSessions> {
+    const execute = async (db: PgTx) => {
+      const session = new ChatSessions(data);
+      const [result] = await db
+        .insert(chatSessionsTable)
+        .values({ ...session })
+        .onConflictDoUpdate({
+          target: chatSessionsTable.id,
+          set: {
+            title: sql`excluded.title`,
+            title_type: sql`excluded.title_type`,
+            pinned: sql`excluded.pinned`,
+            updated_at: sql`excluded.updated_at`,
+            seq_id: sql`excluded.seq_id`,
+            agent: sql`excluded.agent`,
+            version: sql`excluded.version`,
+            current_message_id: sql`excluded.current_message_id`,
+            inserted_at: sql`excluded.inserted_at`,
+            user_id: sql`excluded.user_id`,
+          },
+        })
+        .returning();
+      return new ChatSessions({ ...result });
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
   }
 
   // ========== Файлы ==========
   async findFileById(id: string): Promise<MessageFile | null> {
-    const [item] = await this.client.select().from(filesTable).where(eq(filesTable.id, id));
-    return item
-      ? new MessageFile({
-          messageId: 0,
-          sessionId: null!,
-          error_code: item.errorCode,
-          file_name: item.fileName,
-          file_size: item.fileSize,
-          id: item.id,
-          inserted_at: item.insertedAt?.getTime() ?? null,
-          previewable: item.previewable,
-          status: item.status,
-          token_usage: item.tokenUsage,
-          updated_at: item.updatedAt?.getTime() ?? null,
-        })
-      : null;
-  }
-
-  async createFile(data: MessageFileCreate): Promise<MessageFile> {
-    const values = new MessageFile(data);
-    const [result] = await this.client
-      .insert(filesTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: filesTable.id,
-        set: {
-          status: sql`excluded.status`,
-          fileName: sql`excluded.file_name`, // было file_name
-          previewable: sql`excluded.previewable`,
-          fileSize: sql`excluded.file_size`, // было file_size
-          tokenUsage: sql`excluded.token_usage`, // было token_usage
-          errorCode: sql`excluded.error_code`, // было error_code
-          insertedAt: sql`excluded.inserted_at`, // было inserted_at
-          updatedAt: sql`excluded.updated_at`, // было updated_at
-        },
+    const result = await this.client
+      .select({
+        file: filesTable,
+        link: messageFilesTable,
       })
-      .returning();
+      .from(filesTable)
+      .innerJoin(messageFilesTable, eq(filesTable.id, messageFilesTable.fileId))
+      .where(eq(filesTable.id, id))
+      .limit(1);
+
+    if (result.length === 0) return null;
+
+    const { file, link } = result[0];
     return new MessageFile({
-      messageId: data.messageId,
-      sessionId: data.sessionId,
-      error_code: result.errorCode,
-      file_name: result.fileName,
-      file_size: result.fileSize,
-      id: result.id,
-      inserted_at: result.insertedAt?.getTime() ?? null,
-      previewable: result.previewable,
-      status: result.status,
-      token_usage: result.tokenUsage,
-      updated_at: result.updatedAt?.getTime() ?? null,
+      sessionId: link.sessionId,
+      messageId: link.messageId,
+      error_code: file.errorCode,
+      file_name: file.fileName,
+      file_size: file.fileSize,
+      id: file.id,
+      inserted_at: file.insertedAt,
+      previewable: file.previewable,
+      status: file.status,
+      token_usage: file.tokenUsage,
+      updated_at: file.updatedAt,
     });
   }
 
-  async createManyFiles(data: MessageFileCreate[]): Promise<number> {
+  // ========== Массовые операции с файлами ==========
+  async createManyFiles(data: MessageFileCreate[], tx?: PgTx): Promise<number> {
     if (data.length === 0) return 0;
-    const values = data.map((f) => new MessageFile(f));
-    const result = await this.client
-      .insert(filesTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: filesTable.id,
-        set: {
-          status: sql`excluded.status`,
-          fileName: sql`excluded.file_name`, // было file_name
-          previewable: sql`excluded.previewable`,
-          fileSize: sql`excluded.file_size`, // было file_size
-          tokenUsage: sql`excluded.token_usage`, // было token_usage
-          errorCode: sql`excluded.error_code`, // было error_code
-          insertedAt: sql`excluded.inserted_at`, // было inserted_at
-          updatedAt: sql`excluded.updated_at`, // было updated_at
-        },
+
+    const messageFiles = data.map((d) => new MessageFile(d));
+    const fileDbValues = messageFiles
+      .map((mf) => ({
+        id: mf.id,
+        status: mf.status,
+        fileName: mf.fileName,
+        previewable: mf.previewable,
+        fileSize: mf.fileSize,
+        tokenUsage: mf.tokenUsage,
+        errorCode: mf.errorCode,
+        insertedAt: mf.insertedAt,
+        updatedAt: mf.updatedAt,
+      }))
+      .uniqueBy((u) => u.id);
+    const linkValues = messageFiles
+      .filter((mf) => mf.sessionId && mf.messageId)
+      .map((mf) => ({
+        sessionId: mf.sessionId,
+        messageId: mf.messageId,
+        fileId: mf.id,
+      }))
+      .uniqueBy((a) => `${a.sessionId}=${a.messageId}=${a.fileId}`);
+
+    const execute = async (db: PgTx) => {
+      if (fileDbValues.length > 0) {
+        await db
+          .insert(filesTable)
+          .values(fileDbValues)
+          .onConflictDoUpdate({
+            target: filesTable.id,
+            set: {
+              status: sql`excluded.status`,
+              fileName: sql`excluded.file_name`,
+              previewable: sql`excluded.previewable`,
+              fileSize: sql`excluded.file_size`,
+              tokenUsage: sql`excluded.token_usage`,
+              errorCode: sql`excluded.error_code`,
+              insertedAt: sql`excluded.inserted_at`,
+              updatedAt: sql`excluded.updated_at`,
+            },
+          });
+      }
+
+      if (linkValues.length > 0) {
+        await db
+          .insert(messageFilesTable)
+          .values(linkValues)
+          .onConflictDoNothing({
+            target: [messageFilesTable.sessionId, messageFilesTable.messageId, messageFilesTable.fileId],
+          });
+      }
+    };
+
+    if (tx) {
+      await execute(tx);
+      return data.length;
+    } else {
+      return await this.client.transaction(async (newTx) => {
+        await execute(newTx);
+        return data.length;
       });
-    return result.rowCount ?? 0;
+    }
+  }
+
+  async createFile(data: MessageFileCreate, tx?: PgTx): Promise<MessageFile> {
+    const execute = async (db: PgTx) => {
+      // Вставка одного файла с returning
+      const messageFile = new MessageFile(data);
+      const [result] = await db
+        .insert(filesTable)
+        .values({
+          id: messageFile.id,
+          status: messageFile.status,
+          fileName: messageFile.fileName,
+          previewable: messageFile.previewable,
+          fileSize: messageFile.fileSize,
+          tokenUsage: messageFile.tokenUsage,
+          errorCode: messageFile.errorCode,
+          insertedAt: messageFile.insertedAt,
+          updatedAt: messageFile.updatedAt,
+        })
+        .onConflictDoUpdate({
+          target: filesTable.id,
+          set: {
+            status: sql`excluded.status`,
+            fileName: sql`excluded.file_name`,
+            previewable: sql`excluded.previewable`,
+            fileSize: sql`excluded.file_size`,
+            tokenUsage: sql`excluded.token_usage`,
+            errorCode: sql`excluded.error_code`,
+            insertedAt: sql`excluded.inserted_at`,
+            updatedAt: sql`excluded.updated_at`,
+          },
+        })
+        .returning();
+
+      // Создание связи, если есть контекст
+      if (messageFile.sessionId && messageFile.messageId) {
+        await db
+          .insert(messageFilesTable)
+          .values({
+            sessionId: messageFile.sessionId,
+            messageId: messageFile.messageId,
+            fileId: messageFile.id,
+          })
+          .onConflictDoNothing();
+      }
+
+      return new MessageFile({
+        ...data,
+        ...result,
+        error_code: result.errorCode,
+        file_name: result.fileName,
+        file_size: result.fileSize,
+        inserted_at: result.insertedAt,
+        token_usage: result.tokenUsage,
+        updated_at: result.updatedAt,
+      });
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
   }
 
   // ========== Сообщения ==========
@@ -398,22 +441,21 @@ export class DrizzleRepository implements IRepository {
     return items.map(
       (item) =>
         new ChatMessage({
+          ...item,
           accumulated_token_usage: item.accumulatedTokenUsage,
           auto_continue: item.autoContinue,
           ban_edit: item.banEdit,
           ban_regenerate: item.banRegenerate,
-          feedback: item.feedback,
-          files: [],
+
+          files: [], // можно до загрузить, но для простоты оставляем пустым
           fragments: [],
           has_pending_fragment: item.hasPendingFragment,
-          inserted_at: item.insertedAt?.getTime() ?? null,
+          inserted_at: item.insertedAt,
           message_id: item.messageId,
           model: item.model!,
           parent_id: item.parentMessageId,
           role: item.role as Role,
           search_enabled: item.searchEnabled,
-          sessionId: item.sessionId,
-          status: item.status,
           thinking_enabled: item.thinkingEnabled,
         }),
     );
@@ -426,34 +468,113 @@ export class DrizzleRepository implements IRepository {
       .where(and(eq(chatMessagesTable.sessionId, sessionId), eq(chatMessagesTable.messageId, messageId)));
     return item
       ? new ChatMessage({
+          ...item,
           accumulated_token_usage: item.accumulatedTokenUsage,
           auto_continue: item.autoContinue,
           ban_edit: item.banEdit,
           ban_regenerate: item.banRegenerate,
-          feedback: item.feedback,
-          files: [],
+          files: [], // можно до загрузить, но для простоты оставляем пустым
           fragments: [],
           has_pending_fragment: item.hasPendingFragment,
-          inserted_at: item.insertedAt?.getTime() ?? null,
+          inserted_at: item.insertedAt,
           message_id: item.messageId,
           model: item.model!,
           parent_id: item.parentMessageId,
           role: item.role as Role,
           search_enabled: item.searchEnabled,
-          sessionId: item.sessionId,
-          status: item.status,
           thinking_enabled: item.thinkingEnabled,
         })
       : null;
   }
 
-  async createMessage(data: ChatMessageCreate): Promise<ChatMessage> {
-    const { sessionId, files = [], fragments, ...rest } = data;
+  // ========== Массовые операции с сообщениями ==========
+  async createManyMessages(sessionId: string, messages: ChatMessageCreate[], tx?: PgTx): Promise<number> {
+    if (messages.length === 0) return 0;
 
-    return await this.client.transaction(async (tx) => {
-      // 1. Сообщение
+    const chatMessages = messages.map((msg) => new ChatMessage({ ...msg, sessionId }));
+
+    const messageFiles = messages.flatMap((msg) => msg.files.map((file) => ({ ...file, sessionId, messageId: msg.message_id }) as MessageFileCreate));
+    const fragments = messages.flatMap((msg) =>
+      msg.fragments.map(
+        (frag) =>
+          ({
+            ...frag,
+            sessionId,
+            messageId: msg.message_id,
+            id: frag.id,
+          }) as MessageFragmentCreate,
+      ),
+    );
+
+    const execute = async (db: PgTx) => {
+      // Вставка сообщений
+      if (chatMessages.length > 0) {
+        const messageValues = chatMessages.map((m) => ({
+          sessionId: m.sessionId,
+          messageId: m.messageId,
+          parentMessageId: m.parentMessageId,
+          model: m.model,
+          role: m.role,
+          thinkingEnabled: m.thinkingEnabled,
+          banEdit: m.banEdit,
+          banRegenerate: m.banRegenerate,
+          status: m.status,
+          accumulatedTokenUsage: m.accumulatedTokenUsage,
+          feedback: m.feedback,
+          insertedAt: m.insertedAt,
+          searchEnabled: m.searchEnabled,
+          hasPendingFragment: m.hasPendingFragment,
+          autoContinue: m.autoContinue,
+        }));
+
+        await db
+          .insert(chatMessagesTable)
+          .values(messageValues)
+          .onConflictDoUpdate({
+            target: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
+            set: {
+              parentMessageId: sql`excluded.parent_message_id`,
+              model: sql`excluded.model`,
+              role: sql`excluded.role`,
+              thinkingEnabled: sql`excluded.thinking_enabled`,
+              banEdit: sql`excluded.ban_edit`,
+              banRegenerate: sql`excluded.ban_regenerate`,
+              status: sql`excluded.status`,
+              accumulatedTokenUsage: sql`excluded.accumulated_token_usage`,
+              feedback: sql`excluded.feedback`,
+              insertedAt: sql`excluded.inserted_at`,
+              searchEnabled: sql`excluded.search_enabled`,
+              hasPendingFragment: sql`excluded.has_pending_fragment`,
+              autoContinue: sql`excluded.auto_continue`,
+            },
+          });
+      }
+
+      // Вставка файлов и связей
+      await this.createManyFiles(messageFiles, db);
+
+      // Вставка фрагментов
+      await this.createManyFragments(fragments, db);
+    };
+
+    if (tx) {
+      await execute(tx);
+      return messages.length;
+    } else {
+      return await this.client.transaction(async (newTx) => {
+        await execute(newTx);
+        return messages.length;
+      });
+    }
+  }
+
+  async createMessage(data: ChatMessageCreate, tx?: PgTx): Promise<ChatMessage> {
+    const { sessionId, files = [], fragments = [] } = data;
+
+    const execute = async (db: PgTx) => {
+      // Создаём само сообщение
       const message = new ChatMessage({ ...data, sessionId });
-      const [insertedMessage] = await tx
+      const [insertedMessage] = await db
         .insert(chatMessagesTable)
         .values({
           sessionId: message.sessionId,
@@ -492,65 +613,21 @@ export class DrizzleRepository implements IRepository {
         })
         .returning();
 
-      // 2. Файлы (создаём при необходимости и связываем)
-      for (const fileData of files) {
-        let file = await tx
-          .select()
-          .from(filesTable)
-          .where(eq(filesTable.id, fileData.id))
-          .limit(1)
-          .then((rows) => rows[0]);
-
-        if (!file) {
-          const newFile = new MessageFile({ ...fileData, sessionId: sessionId, messageId: message.messageId });
-          [file] = await tx.insert(filesTable).values(newFile).returning();
-        }
-
-        await tx
-          .insert(messageFilesTable)
-          .values({
-            sessionId: message.sessionId,
-            messageId: message.messageId,
-            fileId: file.id,
-          })
-          .onConflictDoNothing();
+      // Сохраняем файлы и связи (используем массовый метод)
+      if (files.length > 0) {
+        const fileCreates = files.map((file) => ({ ...file, sessionId, messageId: message.messageId }));
+        await this.createManyFiles(fileCreates, db);
       }
 
-      // 3. Фрагменты
-      if (fragments && fragments.length > 0) {
-        const fragmentInserts = fragments.map((frag, index) => {
-          const fragCreate: MessageFragmentCreate = {
-            ...frag,
-            sessionId: message.sessionId,
-            messageId: message.messageId,
-            id: index,
-          };
-          const fragment = new MessageFragment(fragCreate);
-          return {
-            sessionId: fragment.sessionId,
-            messageId: fragment.messageId,
-            fragmentOrder: fragment.fragmentOrder,
-            type: fragment.type,
-            content: fragment.content,
-            elapsedSecs: fragment.elapsedSecs,
-            references: fragment.references,
-            stageId: fragment.stageId,
-          };
-        });
-
-        await tx
-          .insert(messageFragmentsTable)
-          .values(fragmentInserts)
-          .onConflictDoUpdate({
-            target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
-            set: {
-              type: sql`excluded.type`,
-              content: sql`excluded.content`,
-              elapsedSecs: sql`excluded.elapsed_secs`,
-              references: sql`excluded.references`,
-              stageId: sql`excluded.stage_id`,
-            },
-          });
+      // Сохраняем фрагменты
+      if (fragments.length > 0) {
+        const fragmentCreates = fragments.map((frag) => ({
+          ...frag,
+          sessionId,
+          messageId: message.messageId,
+          id: frag.id,
+        }));
+        await this.createManyFragments(fragmentCreates, db);
       }
 
       return new ChatMessage({
@@ -562,7 +639,7 @@ export class DrizzleRepository implements IRepository {
         files: [],
         fragments: [],
         has_pending_fragment: insertedMessage.hasPendingFragment,
-        inserted_at: insertedMessage.insertedAt?.getTime() ?? null,
+        inserted_at: insertedMessage.insertedAt,
         message_id: insertedMessage.messageId,
         model: insertedMessage.model!,
         parent_id: insertedMessage.parentMessageId,
@@ -572,165 +649,108 @@ export class DrizzleRepository implements IRepository {
         status: insertedMessage.status,
         thinking_enabled: insertedMessage.thinkingEnabled,
       });
-    });
-  }
-
-  /**
-   * Массовое сохранение сообщений одной сессии.
-   * @param sessionId - идентификатор сессии
-   * @param messages - массив данных сообщений (без sessionId)
-   */
-  async createManyMessages(sessionId: string, messages: ChatMessageCreate[]): Promise<number> {
-    if (messages.length === 0) return 0;
-
-    // Вспомогательная функция для сбора уникальных файлов
-    const collectUniqueFiles = (msgs: ChatMessageCreate[]): Map<string, MessageFileCreate> => {
-      const filesMap = new Map<string, MessageFileCreate>();
-      for (const msg of msgs) {
-        if (msg.files) {
-          for (const file of msg.files) {
-            filesMap.set(file.id, file as MessageFileCreate);
-          }
-        }
-      }
-      return filesMap;
     };
 
-    // Собираем уникальные файлы
-    const filesMap = collectUniqueFiles(messages);
-    const filesList = Array.from(filesMap.values());
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
+  }
 
-    // Создаём объекты ChatMessage с добавленным sessionId
-    const chatMessages = messages.map((msg) => new ChatMessage({ ...msg, sessionId }));
+  // ========== Users ==========
+  async findAllUsers(): Promise<User[]> {
+    const items = await this.client.select().from(userTable);
+    return items.map((item) => new User({ ...item }));
+  }
 
-    // Собираем связи message-files
-    const messageFiles = messages
-      .map((msg) =>
-        msg.files.map(
-          (file) =>
-            new MessageFile({
-              ...file,
-              sessionId,
-              messageId: msg.message_id,
-            }),
-        ),
-      )
-      .flatMap((a) => a);
+  async findUserById(id: string): Promise<User | null> {
+    const [item] = await this.client.select().from(userTable).where(eq(userTable.id, id));
+    return item ? new User({ ...item }) : null;
+  }
 
-    // Собираем фрагменты
-    const fragments = messages
-      .map((msg) =>
-        msg.fragments.map(
-          (frag) =>
-            new MessageFragment({
-              ...frag,
-              sessionId,
-              messageId: msg.message_id,
-              id: frag.id,
-            }),
-        ),
-      )
-      .flatMap((a) => a);
+  // ========== Массовые операции с пользователями ==========
+  async createManyUsers(data: UserCreate[], tx?: PgTx): Promise<number> {
+    if (data.length === 0) return 0;
 
-    // Выполняем всё в одной транзакции
-    return await this.client.transaction(async (tx) => {
-      // 1. Upsert файлов
-      if (filesList.length > 0) {
-        const fileValues = filesList.map((f) => new MessageFile(f));
-        await tx
-          .insert(filesTable)
-          .values(fileValues)
-          .onConflictDoUpdate({
-            target: filesTable.id,
-            set: {
-              status: sql`excluded.status`,
-              fileName: sql`excluded.file_name`,
-              previewable: sql`excluded.previewable`,
-              fileSize: sql`excluded.file_size`,
-              tokenUsage: sql`excluded.token_usage`,
-              errorCode: sql`excluded.error_code`,
-              insertedAt: sql`excluded.inserted_at`,
-              updatedAt: sql`excluded.updated_at`,
-            },
-          });
-      }
+    const users = data.map((d) => new User({ ...d, id: d.id ?? crypto.randomUUID() }));
 
-      // 2. Upsert сообщений
-      if (chatMessages.length > 0) {
-        const messageValues = chatMessages.map((m) => ({
-          sessionId: m.sessionId,
-          messageId: m.messageId,
-          parentMessageId: m.parentMessageId,
-          model: m.model,
-          role: m.role,
-          thinkingEnabled: m.thinkingEnabled,
-          banEdit: m.banEdit,
-          banRegenerate: m.banRegenerate,
-          status: m.status,
-          accumulatedTokenUsage: m.accumulatedTokenUsage,
-          feedback: m.feedback,
-          insertedAt: m.insertedAt,
-          searchEnabled: m.searchEnabled,
-          hasPendingFragment: m.hasPendingFragment,
-          autoContinue: m.autoContinue,
-        }));
-        await tx
-          .insert(chatMessagesTable)
-          .values(messageValues)
-          .onConflictDoUpdate({
-            target: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
-            set: {
-              parentMessageId: sql`excluded.parent_message_id`,
-              model: sql`excluded.model`,
-              role: sql`excluded.role`,
-              thinkingEnabled: sql`excluded.thinking_enabled`,
-              banEdit: sql`excluded.ban_edit`,
-              banRegenerate: sql`excluded.ban_regenerate`,
-              status: sql`excluded.status`,
-              accumulatedTokenUsage: sql`excluded.accumulated_token_usage`,
-              feedback: sql`excluded.feedback`,
-              insertedAt: sql`excluded.inserted_at`,
-              searchEnabled: sql`excluded.search_enabled`,
-              hasPendingFragment: sql`excluded.has_pending_fragment`,
-              autoContinue: sql`excluded.auto_continue`,
-            },
-          });
-      }
+    const execute = async (db: PgTx) => {
+      const result = await db
+        .insert(userTable)
+        .values(users.map((u) => ({ ...u })))
+        .onConflictDoUpdate({
+          target: userTable.id,
+          set: {
+            name: sql`excluded.name`,
+            credentials: sql`excluded.credentials`,
+          },
+        });
+      return result.rowCount ?? 0;
+    };
 
-      const messageFileValues = messageFiles.map((f) => ({
-        sessionId: f.sessionId,
-        messageId: f.messageId,
-        fileId: f.id,
-      }));
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
+  }
 
-      // 3. Upsert связей message-files
-      if (messageFiles.length > 0) {
-        await tx
-          .insert(messageFilesTable)
-          .values(messageFileValues)
-          .onConflictDoNothing({
-            target: [messageFilesTable.sessionId, messageFilesTable.messageId, messageFilesTable.fileId],
-          });
-      }
+  async createUser(data: UserCreate, tx?: PgTx): Promise<User> {
+    const execute = async (db: PgTx) => {
+      const user = new User(data);
+      const [result] = await db
+        .insert(userTable)
+        .values({ ...user })
+        .onConflictDoUpdate({
+          target: userTable.id,
+          set: {
+            name: sql`excluded.name`,
+            credentials: sql`excluded.credentials`,
+          },
+        })
+        .returning();
+      return new User({ ...result });
+    };
 
-      // 4. Upsert фрагментов
-      if (fragments.length > 0) {
-        await tx
-          .insert(messageFragmentsTable)
-          .values(fragments)
-          .onConflictDoUpdate({
-            target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
-            set: {
-              type: sql`excluded.type`,
-              content: sql`excluded.content`,
-              elapsedSecs: sql`excluded.elapsed_secs`,
-              references: sql`excluded.references`,
-              stageId: sql`excluded.stage_id`,
-            },
-          });
-      }
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
+  }
 
-      return messages.length;
-    });
+  async deleteUser(id: string): Promise<boolean> {
+    const [deleted] = await this.client.delete(userTable).where(eq(userTable.id, id)).returning({ id: userTable.id });
+    return !!deleted;
+  }
+
+  // ========== Интеграционный метод для MessagesBizData ==========
+  async createMessagesBizData(user_id: string, data: MessagesBizData, tx?: PgTx): Promise<void> {
+    const { chat_session, chat_messages } = data;
+
+    const sessionData: ChatSessionsCreate = {
+      ...chat_session,
+      user_id,
+    };
+
+    const execute = async (db: PgTx) => {
+      await this.createSession(sessionData, db);
+      await this.createManyMessages(
+        chat_session.id,
+        chat_messages.map((m) => ({ ...m, sessionId: chat_session.id })),
+        db,
+      );
+    };
+
+    if (tx) {
+      await execute(tx);
+    } else {
+      await this.client.transaction(async (newTx) => {
+        await execute(newTx);
+      });
+    }
   }
 }
+
+type PgTx = PgTransaction<any, any, any>;

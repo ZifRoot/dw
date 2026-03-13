@@ -1,52 +1,79 @@
 import { InitDb } from "./db/Initdb";
-import { runWithAppLifecycleAsync, startAndWaitAsync } from "./db/db-manager";
+import { startAndWaitAsync } from "./db/db-manager";
 import { IRepository } from "./db/IRepository";
 
-import { Deepseek } from "./deepseek";
-import { ChatSessionFull } from "./db/resp";
+import { credentials, Deepseek } from "./deepseek";
+import { ChatSessions } from "./db/models/ChatSessions";
+import { ChatSessionBase, MessagesBizData } from "./db/resp";
+import { ChatSessionsCreate } from "./db/models/ChatSessionsCreate";
+import { User } from "./db/models/User";
+import { dateStr } from "./utils/data-utils";
 
 class Program {
-  deepseek: Deepseek;
   repository?: IRepository;
 
   async start() {
     //await this.deepseek.start();
-    if (true) {
-      await startAndWaitAsync();
-      this.repository = InitDb();
 
-      var sessions = await this.repository.findAllSessions();
+    //await startAndWaitAsync();
+    this.repository = InitDb();
 
-      var sessions = sessions.filter((s) => s.version == null);
-      sessions.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
+    var users = await this.repository.findAllUsers();
+    for (const user of users) {
+      await this.SoftUpdate(user);
+    }
 
-      try {
-        for (const session of sessions) {
-          var his = await this.deepseek.history_messages(session.id!);
+    console.log("DONE");
+    //await this.SoftUpdate();
+  }
 
-          await this.deepseek.saveMessagesBizData(this.repository, his.data.biz_data);
-        }
-      } catch (error) {
-        console.error(error);
-      }
-
+  async SoftUpdate(user: User) {
+    if (!this.repository) {
+      console.error("null repository");
       return;
+    }
 
-      // await this.repository.create({ id: '46086758-631f-4413-8e27-c1392c0954db', title: "---3463456---456", title_type: "fg", updated_at: 5, pinned: false });
-      let updated_at: number | null = null;
-      while (true) {
-        let fetchpage = await this.deepseek.fetch_page(updated_at);
-        let ud0 = fetchpage.data.biz_data.chat_sessions[0].updated_at;
-        let ude = fetchpage.data.biz_data.chat_sessions.at(-1)?.updated_at;
-        let has_more = fetchpage.data.biz_data.has_more;
-        console.log(`0:updated_at = ${ud0} | END:updated_at = ${ude} | has_more = ${has_more}`);
+    console.log(`User: ${user.name}`);
 
-        let num = await this.repository!.createManySessions(fetchpage.data.biz_data.chat_sessions as ChatSessionFull[]);
-        console.log(`Created ${num}`);
+    var deepseek = new Deepseek(user.credentials as credentials);
+    var fetch_page = await deepseek.fetch_page_all();
+    var first_page = fetch_page.at(-1);
+    console.log(`Page: ${first_page?.title} ${dateStr(first_page?.updated_at)}`);
 
-        if (!has_more) break;
-        updated_at = ude!;
+    var sessions = await this.repository.findAllSessions(user.id);
+
+    const map_sessions = new Map(sessions.map((obj) => [obj.id!, obj]));
+
+    var in_sessions = fetch_page.map((s) => new ChatSessions({ ...s, user_id: user.id }));
+
+    var sessions_for_update = in_sessions
+      .map((in_session) => ({ in_session: in_session, db_session: map_sessions.get(in_session.id) }))
+      .filter((s) => {
+        if (s.db_session == null) return true;
+        var date1 = s.db_session.updated_at;
+        var date2 = s.in_session.updated_at;
+
+        const sec1 = date1.getTime() / 1000;
+        const sec2 = date2.getTime() / 1000;
+
+        const diff = Math.abs(sec1 - sec2) > 1;
+
+        return diff;
+      });
+
+    try {
+      for (const s of sessions_for_update) {
+        var session = s.db_session ?? s.in_session;
+        console.log(
+          `Обновление: ${s.db_session == null ? "новый" : `(${dateStr(s.db_session.updated_at)})->(${dateStr(s.in_session.updated_at)}) `} [${session.title}]`,
+        );
+
+        var his = await deepseek.history_messages(session.id, session.version);
+
+        await this.repository.createMessagesBizData(user.id, his.data.biz_data);
       }
+    } catch (error) {
+      console.error(error);
     }
   }
 
@@ -55,7 +82,6 @@ class Program {
   }
 
   constructor() {
-    this.deepseek = new Deepseek();
   }
 }
 

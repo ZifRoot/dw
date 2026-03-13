@@ -1,51 +1,24 @@
-import * as fs from "fs";
-import { MessagesBizData, MessagesResponse, SessionsResponse } from "./db/resp";
-import { ChatSessionsCreate } from "./db/models/ChatSessionsCreate";
-import { IRepository } from "./db/IRepository";
+import { ChatSessionBase, MessagesResponse, SessionsResponse } from "./db/resp";
 
 export class Deepseek {
-  async start() {
-    await this.main();
-  }
+  headers: Headers;
 
-  async main() {
-    let fetchpage = await this.history_messages("199898be-4200-480e-b15b-a12fe03a27a6");
+  async fetch_page_all(): Promise<ChatSessionBase[]> {
+    let updated_at: number | null = null;
+    var chat_sessions_all: ChatSessionBase[] = [];
+    while (true) {
+      let fetchpage = await this.fetch_page(updated_at);
+      var biz_data = fetchpage.data.biz_data;
+      var chat_sessions = biz_data.chat_sessions;
+      let ud0 = chat_sessions[0].updated_at;
+      let ude = chat_sessions.at(-1)?.updated_at;
+      let has_more = biz_data.has_more;
+      chat_sessions_all.push(...chat_sessions);
 
-    fs.writeFileSync("./history_messages-crypto.json", JSON.stringify(fetchpage));
-
-    fetchpage.data.biz_data.chat_session;
-
-    console.log(fetchpage);
-  }
-
-  /**
-   * Сохраняет полные данные сессии и всех её сообщений в репозиторий.
-   * @param repo - экземпляр DrizzleRepository
-   * @param data - объект MessagesBizData из API
-   */
-  async saveMessagesBizData(repo: IRepository, data: MessagesBizData): Promise<void> {
-    const { chat_session, chat_messages } = data;
-
-    // Сохраняем сессию (полная версия)
-    const sessionData: ChatSessionsCreate = {
-      id: chat_session.id,
-      title: chat_session.title,
-      title_type: chat_session.title_type,
-      pinned: chat_session.pinned,
-      updated_at: chat_session.updated_at,
-      seq_id: chat_session.seq_id,
-      agent: chat_session.agent,
-      version: chat_session.version,
-      current_message_id: chat_session.current_message_id,
-      inserted_at: chat_session.inserted_at,
-    };
-    await repo.createSession(sessionData);
-
-    // Сохраняем сообщения (sessionId передаётся отдельно)
-    await repo.createManyMessages(
-      chat_session.id,
-      chat_messages.map((m) => ({ ...m, sessionId: chat_session.id })),
-    );
+      if (!has_more) break;
+      updated_at = ude!;
+    }
+    return chat_sessions_all;
   }
 
   async fetch_page(updated_at?: number | null) {
@@ -55,8 +28,8 @@ export class Deepseek {
     return fetchpage;
   }
 
-  async history_messages(chat_session_id: string) {
-    let resp = await this.history_messages_resp(chat_session_id);
+  async history_messages(chat_session_id: string, version?: number) {
+    let resp = await this.history_messages_resp(chat_session_id, version ?? null);
 
     let fetchpage = (await resp.json()) as MessagesResponse;
     return fetchpage;
@@ -72,71 +45,71 @@ export class Deepseek {
     }
     let str = url.toString();
 
-    return await fetch(str, {
-      headers: {
-        accept: "*/*",
-        "accept-language": "ru,en-US;q=0.9,en;q=0.8",
-        authorization: "Bearer 8Ji/4dcIBnws2l2B0ZGM7UPPSxbM6pudbpjpL1HwuSL0rvLPAxzWxjkn+1Zs0nS1",
-        priority: "u=1, i",
-        "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
-        "sec-ch-ua-arch": '"x86"',
-        "sec-ch-ua-bitness": '"64"',
-        "sec-ch-ua-full-version": '"145.0.7632.159"',
-        "sec-ch-ua-full-version-list": '"Not:A-Brand";v="99.0.0.0", "Google Chrome";v="145.0.7632.159", "Chromium";v="145.0.7632.159"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-model": '""',
-        "sec-ch-ua-platform": '"Windows"',
-        "sec-ch-ua-platform-version": '"19.0.0"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "x-app-version": "20241129.1",
-        "x-client-locale": "ru",
-        "x-client-platform": "web",
-        "x-client-timezone-offset": "25200",
-        "x-client-version": "1.7.0",
-        cookie:
-          "HWWAFSESTIME=1738007477582; HWWAFSESID=31df2133e0f423528fe; intercom-device-id-guh50jw4=d93c5232-6bab-4aba-a985-9793a7708785; BENSESSCC_TAG=b7803c2b9c4c4d7fa5c8001845be86d0; HMACCOUNT=A319A977C622789A; Hm_lpvt_1fff341d7a963a4043e858ef0e19a17c=1739785523; ds_cookie_preference=%257B%2522level%2522%253A%2522all%2522%257D; ds_session_id=e474ac74b26745b596b683bd76cd405f; cf_clearance=ejRKEE4CVQP_cxLs.NFCRhWEbYYKLugBrZmLTdudboc-1764700995-1.2.1.1-GrR.qVdlVSPlpNxWvrbE0IRWVVcX5A_cGnKTj9jXU7WnkcGYC6CuHV1XX1yoYdJZ5JmkYk0Wn1bYK3mTsx50rTe7c8UovJ3XAXPBNtgqHWAkXXIOPcdPbA4d0IyTwjJskmRTxK3WKz_PfSHCjhh45dzqXDnJYwHj6u3OrnMI9rV7ubT7DxHDYt9Lrtg7jD7bX213oBmEID2T3gGQ1H9pVaQewRpeH9Ojgl3OV7PNKw4",
-      },
-      body: null,
-      method: "GET",
-    });
+    return await fetch(str, { headers: this.headers, body: null, method: "GET" });
   }
 
-  async history_messages_resp(chat_session_id: string) {
+  async history_messages_resp(chat_session_id: string, version: number | null) {
     let url = new URL("https://chat.deepseek.com/api/v0/chat/history_messages");
     url.searchParams.append("chat_session_id", chat_session_id);
-    // url.searchParams.append("cache_version", "2");
+    if (version != null) {
+      url.searchParams.append("cache_version", `${version}`);
+    }
+
     let str = url.toString();
 
-    return await fetch(str, {
-      headers: {
-        accept: "*/*",
-        "accept-language": "ru,en-US;q=0.9,en;q=0.8",
-        authorization: "Bearer 8Ji/4dcIBnws2l2B0ZGM7UPPSxbM6pudbpjpL1HwuSL0rvLPAxzWxjkn+1Zs0nS1",
-        priority: "u=1, i",
-        "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
-        "sec-ch-ua-arch": '"x86"',
-        "sec-ch-ua-bitness": '"64"',
-        "sec-ch-ua-full-version": '"145.0.7632.159"',
-        "sec-ch-ua-full-version-list": '"Not:A-Brand";v="99.0.0.0", "Google Chrome";v="145.0.7632.159", "Chromium";v="145.0.7632.159"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-model": '""',
-        "sec-ch-ua-platform": '"Windows"',
-        "sec-ch-ua-platform-version": '"19.0.0"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "x-app-version": "20241129.1",
-        "x-client-locale": "ru",
-        "x-client-platform": "web",
-        "x-client-timezone-offset": "25200",
-        "x-client-version": "1.7.0",
-        cookie:
-          "HWWAFSESTIME=1738007477582; HWWAFSESID=31df2133e0f423528fe; intercom-device-id-guh50jw4=d93c5232-6bab-4aba-a985-9793a7708785; BENSESSCC_TAG=b7803c2b9c4c4d7fa5c8001845be86d0; HMACCOUNT=A319A977C622789A; Hm_lpvt_1fff341d7a963a4043e858ef0e19a17c=1739785523; ds_cookie_preference=%257B%2522level%2522%253A%2522all%2522%257D; ds_session_id=e474ac74b26745b596b683bd76cd405f; cf_clearance=ejRKEE4CVQP_cxLs.NFCRhWEbYYKLugBrZmLTdudboc-1764700995-1.2.1.1-GrR.qVdlVSPlpNxWvrbE0IRWVVcX5A_cGnKTj9jXU7WnkcGYC6CuHV1XX1yoYdJZ5JmkYk0Wn1bYK3mTsx50rTe7c8UovJ3XAXPBNtgqHWAkXXIOPcdPbA4d0IyTwjJskmRTxK3WKz_PfSHCjhh45dzqXDnJYwHj6u3OrnMI9rV7ubT7DxHDYt9Lrtg7jD7bX213oBmEID2T3gGQ1H9pVaQewRpeH9Ojgl3OV7PNKw4",
-      },
-      body: null,
-      method: "GET",
-    });
+    return await fetch(str, { headers: this.headers, body: null, method: "GET" });
+  }
+  constructor(user: credentials) {
+    this.headers = {
+      ...user,
+      accept: "*/*",
+      "accept-language": "ru,en-US;q=0.9,en;q=0.8",
+      priority: "u=1, i",
+      "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
+      "sec-ch-ua-arch": '"x86"',
+      "sec-ch-ua-bitness": '"64"',
+      "sec-ch-ua-full-version": '"145.0.7632.159"',
+      "sec-ch-ua-full-version-list": '"Not:A-Brand";v="99.0.0.0", "Google Chrome";v="145.0.7632.159", "Chromium";v="145.0.7632.159"',
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-model": '""',
+      "sec-ch-ua-platform": '"Windows"',
+      "sec-ch-ua-platform-version": '"19.0.0"',
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin",
+      "x-app-version": "20241129.1",
+      "x-client-locale": "ru",
+      "x-client-platform": "web",
+      "x-client-timezone-offset": "25200",
+      "x-client-version": "1.7.0",
+    };
   }
 }
+//cosHuyThAgDzXXU0vhTX+SIVi+ByZGga/6NYpS8tu1pht4dwMnfjtOipq088NJsb
+
+export type credentials = { authorization: string; cookie: string };
+
+type Headers = {
+  accept: string;
+  "accept-language": string;
+  authorization?: string;
+  priority: string;
+  "sec-ch-ua": string;
+  "sec-ch-ua-arch": string;
+  "sec-ch-ua-bitness": string;
+  "sec-ch-ua-full-version": string;
+  "sec-ch-ua-full-version-list": string;
+  "sec-ch-ua-mobile": string;
+  "sec-ch-ua-model": string;
+  "sec-ch-ua-platform": string;
+  "sec-ch-ua-platform-version": string;
+  "sec-fetch-dest": string;
+  "sec-fetch-mode": string;
+  "sec-fetch-site": string;
+  "x-app-version": string;
+  "x-client-locale": string;
+  "x-client-platform": string;
+  "x-client-timezone-offset": string;
+  "x-client-version": string;
+  cookie?: string;
+};

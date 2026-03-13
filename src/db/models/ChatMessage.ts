@@ -1,3 +1,4 @@
+import { toDate } from "../../utils/data-utils";
 import { ChatMessageCreate } from "./ChatMessageCreate";
 
 export class ChatMessage {
@@ -29,7 +30,7 @@ export class ChatMessage {
     this.status = data.status;
     this.accumulatedTokenUsage = data.accumulated_token_usage;
     this.feedback = data.feedback ?? null;
-    this.insertedAt = new Date(data.inserted_at * 1000);
+    this.insertedAt = toDate(data.inserted_at)!;
     this.searchEnabled = data.search_enabled;
     this.hasPendingFragment = data.has_pending_fragment;
     this.autoContinue = data.auto_continue;
