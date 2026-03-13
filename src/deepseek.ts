@@ -7,7 +7,7 @@ export class Deepseek {
     let updated_at: number | null = null;
     var chat_sessions_all: ChatSessionBase[] = [];
     while (true) {
-      let fetchpage = await this.fetch_page(updated_at);
+      let fetchpage = await this.fetch_page_raw(updated_at);
       var biz_data = fetchpage.data.biz_data;
       var chat_sessions = biz_data.chat_sessions;
       let ud0 = chat_sessions[0].updated_at;
@@ -21,11 +21,15 @@ export class Deepseek {
     return chat_sessions_all;
   }
 
-  async fetch_page(updated_at?: number | null) {
+  async fetch_page_raw(updated_at?: number | null) {
     let resp = await this.fetch_page_resp(updated_at);
 
     let fetchpage = (await resp.json()) as SessionsResponse;
     return fetchpage;
+  }
+
+  async fetch_page(updated_at?: number | null) {
+    return (await this.fetch_page_raw(updated_at)).data.biz_data.chat_sessions;
   }
 
   async history_messages(chat_session_id: string, version?: number) {

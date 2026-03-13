@@ -1,11 +1,8 @@
 import { InitDb } from "./db/Initdb";
-import { startAndWaitAsync } from "./db/db-manager";
 import { IRepository } from "./db/IRepository";
 
 import { credentials, Deepseek } from "./deepseek";
 import { ChatSessions } from "./db/models/ChatSessions";
-import { ChatSessionBase, MessagesBizData } from "./db/resp";
-import { ChatSessionsCreate } from "./db/models/ChatSessionsCreate";
 import { User } from "./db/models/User";
 import { dateStr } from "./utils/data-utils";
 
@@ -13,21 +10,26 @@ class Program {
   repository?: IRepository;
 
   async start() {
-    //await this.deepseek.start();
-
     //await startAndWaitAsync();
     this.repository = InitDb();
 
-    var users = await this.repository.findAllUsers();
-    for (const user of users) {
-      await this.SoftUpdate(user);
-    }
+    await this.fetch_all();
 
     console.log("DONE");
-    //await this.SoftUpdate();
   }
 
-  async SoftUpdate(user: User) {
+  async fetch_all() {
+    if (!this.repository) {
+      console.error("null repository");
+      return;
+    }
+    var users = await this.repository.findAllUsers();
+    for (const user of users) {
+      await this.fetch_User(user, true);
+    }
+  }
+
+  async fetch_User(user: User, all: boolean) {
     if (!this.repository) {
       console.error("null repository");
       return;
@@ -36,9 +38,9 @@ class Program {
     console.log(`User: ${user.name}`);
 
     var deepseek = new Deepseek(user.credentials as credentials);
-    var fetch_page = await deepseek.fetch_page_all();
+    var fetch_page = all ? await deepseek.fetch_page_all() : await deepseek.fetch_page();
     var first_page = fetch_page.at(-1);
-    console.log(`Page: ${first_page?.title} ${dateStr(first_page?.updated_at)}`);
+    // console.log(`Page: ${first_page?.title} ${dateStr(first_page?.updated_at)}`);
 
     var sessions = await this.repository.findAllSessions(user.id);
 
