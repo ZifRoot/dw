@@ -2,7 +2,6 @@ import { MessagesResponse, SessionsResponse } from "./db/resp";
 
 export class Deepseek {
   headers: Headers;
-
   async fetch_page(updated_at?: number | null) {
     let resp = await this.fetch_page_resp(updated_at);
 
@@ -41,11 +40,11 @@ export class Deepseek {
 
     return await fetch(str, { headers: this.headers, body: null, method: "GET" });
   }
-  constructor() {
+  constructor(user: credentials) {
     this.headers = {
+      ...user,
       accept: "*/*",
       "accept-language": "ru,en-US;q=0.9,en;q=0.8",
-      authorization: "Bearer 8Ji/4dcIBnws2l2B0ZGM7UPPSxbM6pudbpjpL1HwuSL0rvLPAxzWxjkn+1Zs0nS1",
       priority: "u=1, i",
       "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
       "sec-ch-ua-arch": '"x86"',
@@ -64,17 +63,17 @@ export class Deepseek {
       "x-client-platform": "web",
       "x-client-timezone-offset": "25200",
       "x-client-version": "1.7.0",
-      cookie:
-        "HWWAFSESTIME=1738007477582; HWWAFSESID=31df2133e0f423528fe; intercom-device-id-guh50jw4=d93c5232-6bab-4aba-a985-9793a7708785; BENSESSCC_TAG=b7803c2b9c4c4d7fa5c8001845be86d0; HMACCOUNT=A319A977C622789A; Hm_lpvt_1fff341d7a963a4043e858ef0e19a17c=1739785523; ds_cookie_preference=%257B%2522level%2522%253A%2522all%2522%257D; ds_session_id=e474ac74b26745b596b683bd76cd405f; cf_clearance=ejRKEE4CVQP_cxLs.NFCRhWEbYYKLugBrZmLTdudboc-1764700995-1.2.1.1-GrR.qVdlVSPlpNxWvrbE0IRWVVcX5A_cGnKTj9jXU7WnkcGYC6CuHV1XX1yoYdJZ5JmkYk0Wn1bYK3mTsx50rTe7c8UovJ3XAXPBNtgqHWAkXXIOPcdPbA4d0IyTwjJskmRTxK3WKz_PfSHCjhh45dzqXDnJYwHj6u3OrnMI9rV7ubT7DxHDYt9Lrtg7jD7bX213oBmEID2T3gGQ1H9pVaQewRpeH9Ojgl3OV7PNKw4",
     };
   }
 }
 //cosHuyThAgDzXXU0vhTX+SIVi+ByZGga/6NYpS8tu1pht4dwMnfjtOipq088NJsb
 
+export type credentials = { authorization: string; cookie: string };
+
 type Headers = {
   accept: string;
   "accept-language": string;
-  authorization: string;
+  authorization?: string;
   priority: string;
   "sec-ch-ua": string;
   "sec-ch-ua-arch": string;
@@ -93,5 +92,5 @@ type Headers = {
   "x-client-platform": string;
   "x-client-timezone-offset": string;
   "x-client-version": string;
-  cookie: string;
+  cookie?: string;
 };

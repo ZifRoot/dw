@@ -2,38 +2,47 @@ import { InitDb } from "./db/Initdb";
 import { startAndWaitAsync } from "./db/db-manager";
 import { IRepository } from "./db/IRepository";
 
-import { Deepseek } from "./deepseek";
+import { credentials, Deepseek } from "./deepseek";
 import { ChatSessions } from "./db/models/ChatSessions";
 import { MessagesBizData } from "./db/resp";
 import { ChatSessionsCreate } from "./db/models/ChatSessionsCreate";
+import { User } from "./db/models/User";
 
 class Program {
-  deepseek: Deepseek;
   repository?: IRepository;
   format: Intl.DateTimeFormatOptions;
 
   async start() {
     //await this.deepseek.start();
-    if (true) {
-      await startAndWaitAsync();
-      this.repository = InitDb();
 
-      await this.SoftUpdate();
+    //await startAndWaitAsync();
+    this.repository = InitDb();
+
+    var users = await this.repository.findAllUsers();
+    for (const user of users) {
+      await this.SoftUpdate(user);
     }
+
+    console.log("DONE");
+    //await this.SoftUpdate();
   }
 
-  private async SoftUpdate() {
+  async SoftUpdate(user: User) {
     if (!this.repository) {
       console.error("null repository");
       return;
     }
-    var fetch_page = await this.deepseek.fetch_page();
 
-    var sessions = await this.repository.findAllSessions();
+    console.log(`User: ${user.name}`);
+
+    var deepseek = new Deepseek(user.credentials as credentials);
+    var fetch_page = await deepseek.fetch_page();
+
+    var sessions = await this.repository.findAllSessions(user.id);
 
     const map_sessions = new Map(sessions.map((obj) => [obj.id!, obj]));
 
-    var in_sessions = fetch_page.data.biz_data.chat_sessions.map((s) => new ChatSessions(s));
+    var in_sessions = fetch_page.data.biz_data.chat_sessions.map((s) => new ChatSessions({ ...s, user_id: user.id }));
 
     var sessions_for_update = in_sessions
       .map((in_session) => ({ in_session: in_session, db_session: map_sessions.get(in_session.id) }))
@@ -57,9 +66,9 @@ class Program {
           `Обновление: ${s.db_session == null ? "новый" : `(${s.db_session.updated_at.toLocaleString("ru-RU", this.format)})->(${s.in_session.updated_at.toLocaleString("ru-RU", this.format)}) `} [${session.title}]`,
         );
 
-        var his = await this.deepseek.history_messages(session.id, session.version);
+        var his = await deepseek.history_messages(session.id, session.version);
 
-        await this.saveMessagesBizData(his.data.biz_data);
+        await this.saveMessagesBizData(user.id, his.data.biz_data);
       }
     } catch (error) {
       console.error(error);
@@ -71,7 +80,7 @@ class Program {
    * @param repo - экземпляр DrizzleRepository
    * @param data - объект MessagesBizData из API
    */
-  async saveMessagesBizData(data: MessagesBizData): Promise<void> {
+  async saveMessagesBizData(user_id: string, data: MessagesBizData): Promise<void> {
     if (!this.repository) {
       console.error("null repository");
       return;
@@ -79,18 +88,7 @@ class Program {
     const { chat_session, chat_messages } = data;
 
     // Сохраняем сессию (полная версия)
-    const sessionData: ChatSessionsCreate = {
-      id: chat_session.id,
-      title: chat_session.title,
-      title_type: chat_session.title_type,
-      pinned: chat_session.pinned,
-      updated_at: chat_session.updated_at,
-      seq_id: chat_session.seq_id,
-      agent: chat_session.agent,
-      version: chat_session.version,
-      current_message_id: chat_session.current_message_id,
-      inserted_at: chat_session.inserted_at,
-    };
+    const sessionData: ChatSessionsCreate = { ...chat_session, user_id };
     await this.repository.createSession(sessionData);
 
     // Сохраняем сообщения (sessionId передаётся отдельно)
@@ -112,7 +110,7 @@ class Program {
       hour: "2-digit",
       minute: "2-digit",
     };
-    this.deepseek = new Deepseek();
+    //this.deepseek = new Deepseek();
     //"cosHuyThAgDzXXU0vhTX+SIVi+ByZGga/6NYpS8tu1pht4dwMnfjtOipq088NJsb"
   }
 }

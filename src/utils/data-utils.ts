@@ -54,7 +54,7 @@ export function uuidToBuffer(uuid: string): Uint8Array<ArrayBuffer> {
  * @param {string} input - Входная строка (например, "file-adc1dbf5-82f0-4535-806e-da9c6a1af398" или "adc1dbf582f04535806eda9c6a1af398")
  * @returns {string|null} - Нормализованный UUID или null, если строка не содержит валидного UUID.
  */
-export function normalizeUUID(input: string): string | null {
+export function normalizeUUID(input?: string): string | null {
   if (typeof input !== "string") return null;
 
   // Удаляем префикс "file-", если он есть

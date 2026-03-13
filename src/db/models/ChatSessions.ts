@@ -1,6 +1,5 @@
 import { toDate } from "../../utils/data-utils";
-import { ChatSessionFull } from "../resp";
-import { ChatSessionsCreate } from "./ChatSessionsCreate";
+import { ChatSessionsCreate, FullWithDates } from "./ChatSessionsCreate";
 
 /**
  * Класс модели сессии.
@@ -19,6 +18,7 @@ export class ChatSessions {
   public version?: number;
   public current_message_id?: number;
   public inserted_at?: Date;
+  public user_id: string | null;
 
   constructor(data: ChatSessionsCreate) {
     this.id = data.id;
@@ -26,9 +26,11 @@ export class ChatSessions {
     this.title_type = data.title_type;
     this.pinned = data.pinned ?? false;
     this.updated_at = toDate(data.updated_at)!;
+    this.user_id = data.user_id;
 
-    // Поля из Full (TS поймет тип внутри блока if)
+    // Поля из Full (проверяем наличие полей полной версии)
     if (isFull(data)) {
+      // data теперь рассматривается как FullWithDates
       if (data.seq_id != null) this.seq_id = data.seq_id;
       if (data.agent != null) this.agent = data.agent;
       if (data.version != null) this.version = data.version;
@@ -38,12 +40,12 @@ export class ChatSessions {
   }
 }
 
-const nameof = <T>(name: keyof T) => name;
-
-function isFull(data: ChatSessionsCreate): data is ChatSessionFull {
-  // Список ключей, которые есть только в Full версии
-  const fullKeys: (keyof ChatSessionFull)[] = ["version"];
-
-  // Проверяем, что ВСЕ эти ключи присутствуют в объекте
+/**
+ * Проверяет, содержит ли объект поля полной версии сессии.
+ * Возвращает true, если объект соответствует типу FullWithDates.
+ */
+function isFull(data: ChatSessionsCreate): data is FullWithDates {
+  // Ключи, которые присутствуют только в полной версии
+  const fullKeys: (keyof FullWithDates)[] = ["version"];
   return fullKeys.every((key) => key in data);
 }

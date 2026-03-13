@@ -8,10 +8,12 @@ import { MessageFileCreate } from "./models/MessageFileCreate";
 import { ChatMessageCreate } from "./models/ChatMessageCreate";
 import { MessageFragment } from "./models/MessageFragment";
 import { MessageFragmentCreate } from "./models/MessageFragmentCreate";
+import { User } from "./models/User";
+import { UserCreate } from "./models/UserCreate";
 
 export interface IRepository {
   // ========== Chat Sessions ==========
-  findAllSessions(): Promise<ChatSessions[]>;
+  findAllSessions(userId: string): Promise<ChatSessions[]>;
   findSessionById(id: string): Promise<ChatSessions | null>;
   createSession(data: ChatSessionsCreate): Promise<ChatSessions>;
   createManySessions(data: ChatSessionsCreate[]): Promise<number>;
@@ -38,4 +40,10 @@ export interface IRepository {
   addFileToMessage(sessionId: string, messageId: number, fileId: string): Promise<void>;
   removeFileFromMessage(sessionId: string, messageId: number, fileId: string): Promise<void>;
   getFilesForMessage(sessionId: string, messageId: number): Promise<MessageFile[]>;
+
+  // ========== Users ==========
+  findAllUsers(): Promise<User[]>;
+  findUserById(id: string): Promise<User | null>;
+  createUser(data: UserCreate): Promise<User>;
+  createManyUsers(data: UserCreate[]): Promise<number>;
 }

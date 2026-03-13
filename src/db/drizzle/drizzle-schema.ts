@@ -7,7 +7,8 @@ export const fileStatusEnum = text("file_status");
 
 export const userTable = pgTable("user", {
   id: uuid("id").primaryKey().defaultRandom(),
-  name: text("title").notNull(),
+  name: text("name").notNull(),
+  credentials: jsonb("credentials"),
 });
 
 // ========================

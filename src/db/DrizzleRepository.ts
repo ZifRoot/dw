@@ -1,6 +1,6 @@
 import { eq, and, sql } from "drizzle-orm";
 import { db_drizzle } from "./drizzle/drizzle-db";
-import { chatSessionsTable, chatMessagesTable, filesTable, messageFilesTable, messageFragmentsTable } from "./drizzle/drizzle-schema";
+import { chatSessionsTable, chatMessagesTable, filesTable, messageFilesTable, messageFragmentsTable, userTable } from "./drizzle/drizzle-schema";
 import { ChatSessions } from "./models/ChatSessions";
 import { ChatSessionsCreate } from "./models/ChatSessionsCreate";
 import { MessageFile } from "./models/MessageFile";
@@ -10,7 +10,10 @@ import { ChatMessageCreate } from "./models/ChatMessageCreate";
 import { MessageFragmentCreate } from "./models/MessageFragmentCreate";
 import { MessageFragment } from "./models/MessageFragment";
 import { IRepository } from "./IRepository";
-import { FragmentType, Role } from "./resp";
+import { FragmentType, MessagesBizData, Role } from "./resp";
+import { User } from "./models/User";
+import { UserCreate } from "./models/UserCreate";
+import { PgTransaction } from "drizzle-orm/pg-core";
 
 export class DrizzleRepository implements IRepository {
   constructor(private client: typeof db_drizzle) {}
@@ -192,41 +195,15 @@ export class DrizzleRepository implements IRepository {
   }
 
   // ========== Сессии ==========
-  async findAllSessions(): Promise<ChatSessions[]> {
-    const items = await this.client.select().from(chatSessionsTable);
-    return items.map(
-      (item) =>
-        new ChatSessions({
-          agent: item.agent,
-          current_message_id: item.current_message_id,
-          id: item.id,
-          inserted_at: item.inserted_at, // Date → конструктор примет
-          pinned: item.pinned,
-          seq_id: item.seq_id,
-          title: item.title,
-          title_type: item.title_type,
-          updated_at: item.updated_at,
-          version: item.version,
-        }),
-    );
+  async findAllSessions(userId: string): Promise<ChatSessions[]> {
+    const items = await this.client.select().from(chatSessionsTable).where(eq(chatSessionsTable.user_id, userId));
+
+    return items.map((item) => new ChatSessions({ ...item }));
   }
 
   async findSessionById(id: string): Promise<ChatSessions | null> {
     const [item] = await this.client.select().from(chatSessionsTable).where(eq(chatSessionsTable.id, id));
-    return item
-      ? new ChatSessions({
-          agent: item.agent,
-          current_message_id: item.current_message_id,
-          id: item.id,
-          inserted_at: item.inserted_at,
-          pinned: item.pinned,
-          seq_id: item.seq_id,
-          title: item.title,
-          title_type: item.title_type,
-          updated_at: item.updated_at,
-          version: item.version,
-        })
-      : null;
+    return item ? new ChatSessions({ ...item }) : null;
   }
 
   async createSession(data: ChatSessionsCreate): Promise<ChatSessions> {
@@ -246,22 +223,12 @@ export class DrizzleRepository implements IRepository {
           version: sql`excluded.version`,
           current_message_id: sql`excluded.current_message_id`,
           inserted_at: sql`excluded.inserted_at`,
+          user_id: sql`excluded.user_id`,
         },
       })
       .returning();
 
-    return new ChatSessions({
-      id: result.id,
-      title: result.title,
-      agent: result.agent,
-      current_message_id: result.current_message_id,
-      inserted_at: result.inserted_at,
-      pinned: result.pinned,
-      seq_id: result.seq_id,
-      title_type: result.title_type,
-      updated_at: result.updated_at,
-      version: result.version,
-    });
+    return new ChatSessions({ ...result });
   }
 
   async createManySessions(data: ChatSessionsCreate[]): Promise<number> {
@@ -282,6 +249,7 @@ export class DrizzleRepository implements IRepository {
           version: sql`excluded.version`,
           current_message_id: sql`excluded.current_message_id`,
           inserted_at: sql`excluded.inserted_at`,
+          user_id: sql`excluded.user_id`,
         },
       });
 
@@ -379,62 +347,73 @@ export class DrizzleRepository implements IRepository {
     });
   }
 
-  async createManyFiles(data: MessageFileCreate[]): Promise<number> {
+  async createManyFiles(data: MessageFileCreate[], tx?: PgTransaction<any, any, any>): Promise<number> {
     if (data.length === 0) return 0;
 
     const messageFiles = data.map((d) => new MessageFile(d));
-
-    return await this.client.transaction(async (tx) => {
-      // 1. Массовая вставка/обновление файлов
-      const fileDbValues = messageFiles.map((mf) => ({
-        id: mf.id,
-        status: mf.status,
-        fileName: mf.fileName,
-        previewable: mf.previewable,
-        fileSize: mf.fileSize,
-        tokenUsage: mf.tokenUsage,
-        errorCode: mf.errorCode,
-        insertedAt: mf.insertedAt,
-        updatedAt: mf.updatedAt,
+    const fileDbValues = messageFiles.map((mf) => ({
+      id: mf.id,
+      status: mf.status,
+      fileName: mf.fileName,
+      previewable: mf.previewable,
+      fileSize: mf.fileSize,
+      tokenUsage: mf.tokenUsage,
+      errorCode: mf.errorCode,
+      insertedAt: mf.insertedAt,
+      updatedAt: mf.updatedAt,
+    }));
+    const linkValues = messageFiles
+      .filter((mf) => mf.sessionId && mf.messageId)
+      .map((mf) => ({
+        sessionId: mf.sessionId,
+        messageId: mf.messageId,
+        fileId: mf.id,
       }));
 
-      await tx
-        .insert(filesTable)
-        .values(fileDbValues)
-        .onConflictDoUpdate({
-          target: filesTable.id,
-          set: {
-            status: sql`excluded.status`,
-            fileName: sql`excluded.file_name`,
-            previewable: sql`excluded.previewable`,
-            fileSize: sql`excluded.file_size`,
-            tokenUsage: sql`excluded.token_usage`,
-            errorCode: sql`excluded.error_code`,
-            insertedAt: sql`excluded.inserted_at`,
-            updatedAt: sql`excluded.updated_at`,
-          },
-        });
+    // Функция, выполняющая операции с БД
+    const execute = async (db: typeof db_drizzle | PgTransaction<any, any, any>) => {
+      // 1. Массовая вставка/обновление файлов
+      if (fileDbValues.length > 0) {
+        await db
+          .insert(filesTable)
+          .values(fileDbValues)
+          .onConflictDoUpdate({
+            target: filesTable.id,
+            set: {
+              status: sql`excluded.status`,
+              fileName: sql`excluded.file_name`,
+              previewable: sql`excluded.previewable`,
+              fileSize: sql`excluded.file_size`,
+              tokenUsage: sql`excluded.token_usage`,
+              errorCode: sql`excluded.error_code`,
+              insertedAt: sql`excluded.inserted_at`,
+              updatedAt: sql`excluded.updated_at`,
+            },
+          });
+      }
 
       // 2. Массовая вставка связей
-      const linkValues = messageFiles
-        .filter((mf) => mf.sessionId && mf.messageId)
-        .map((mf) => ({
-          sessionId: mf.sessionId,
-          messageId: mf.messageId,
-          fileId: mf.id,
-        }));
-
       if (linkValues.length > 0) {
-        await tx
+        await db
           .insert(messageFilesTable)
           .values(linkValues)
           .onConflictDoNothing({
             target: [messageFilesTable.sessionId, messageFilesTable.messageId, messageFilesTable.fileId],
           });
       }
+    };
 
+    if (tx) {
+      // Используем переданную транзакцию
+      await execute(tx);
       return data.length;
-    });
+    } else {
+      // Создаём собственную транзакцию
+      return await this.client.transaction(async (newTx) => {
+        await execute(newTx);
+        return data.length;
+      });
+    }
   }
 
   // ========== Сообщения ==========
@@ -639,44 +618,9 @@ export class DrizzleRepository implements IRepository {
   async createManyMessages(sessionId: string, messages: ChatMessageCreate[]): Promise<number> {
     if (messages.length === 0) return 0;
 
-    // Вспомогательная функция для сбора уникальных файлов (только данные файла)
-    const collectUniqueFiles = (msgs: ChatMessageCreate[]): Map<string, Omit<MessageFileCreate, "sessionId" | "messageId">> => {
-      const filesMap = new Map<string, Omit<MessageFileCreate, "sessionId" | "messageId">>();
-      for (const msg of msgs) {
-        if (msg.files) {
-          for (const file of msg.files) {
-            filesMap.set(file.id, {
-              id: file.id,
-              status: file.status,
-              file_name: file.file_name,
-              previewable: file.previewable,
-              file_size: file.file_size,
-              token_usage: file.token_usage,
-              error_code: file.error_code,
-              inserted_at: file.inserted_at,
-              updated_at: file.updated_at,
-            });
-          }
-        }
-      }
-      return filesMap;
-    };
-
-    const filesMap = collectUniqueFiles(messages);
-    const filesList = Array.from(filesMap.values());
-
     const chatMessages = messages.map((msg) => new ChatMessage({ ...msg, sessionId }));
 
-    const messageFiles = messages
-      .flatMap((msg) =>
-        msg.files.map((file) => ({
-          sessionId,
-          messageId: msg.message_id,
-          fileId: file.id,
-        })),
-      )
-      .filter((v, i, a) => a.findIndex((t) => t.sessionId === v.sessionId && t.messageId === v.messageId && t.fileId === v.fileId) === i);
-
+    const messageFiles = messages.flatMap((msg) => msg.files.map((file) => ({ ...file, sessionId, messageId: msg.message_id }) as MessageFileCreate));
     const fragments = messages.flatMap((msg) =>
       msg.fragments.map(
         (frag) =>
@@ -690,41 +634,6 @@ export class DrizzleRepository implements IRepository {
     );
 
     return await this.client.transaction(async (tx) => {
-      // 1. Upsert файлов
-      if (filesList.length > 0) {
-        const fileValues = filesList.map((f) => {
-          const mf = new MessageFile({ ...f, sessionId, messageId: 0 }); // messageId временный, но не используется для вставки в files
-          return {
-            id: mf.id,
-            status: mf.status,
-            fileName: mf.fileName,
-            previewable: mf.previewable,
-            fileSize: mf.fileSize,
-            tokenUsage: mf.tokenUsage,
-            errorCode: mf.errorCode,
-            insertedAt: mf.insertedAt,
-            updatedAt: mf.updatedAt,
-          };
-        });
-
-        await tx
-          .insert(filesTable)
-          .values(fileValues)
-          .onConflictDoUpdate({
-            target: filesTable.id,
-            set: {
-              status: sql`excluded.status`,
-              fileName: sql`excluded.file_name`,
-              previewable: sql`excluded.previewable`,
-              fileSize: sql`excluded.file_size`,
-              tokenUsage: sql`excluded.token_usage`,
-              errorCode: sql`excluded.error_code`,
-              insertedAt: sql`excluded.inserted_at`,
-              updatedAt: sql`excluded.updated_at`,
-            },
-          });
-      }
-
       // 2. Upsert сообщений
       if (chatMessages.length > 0) {
         const messageValues = chatMessages.map((m) => ({
@@ -768,15 +677,7 @@ export class DrizzleRepository implements IRepository {
           });
       }
 
-      // 3. Upsert связей message-files
-      if (messageFiles.length > 0) {
-        await tx
-          .insert(messageFilesTable)
-          .values(messageFiles)
-          .onConflictDoNothing({
-            target: [messageFilesTable.sessionId, messageFilesTable.messageId, messageFilesTable.fileId],
-          });
-      }
+      await this.createManyFiles(messageFiles, tx);
 
       // 4. Upsert фрагментов
       if (fragments.length > 0) {
@@ -808,5 +709,73 @@ export class DrizzleRepository implements IRepository {
 
       return messages.length;
     });
+  }
+
+  // ========== Users ==========
+  async findAllUsers(): Promise<User[]> {
+    const items = await this.client.select().from(userTable);
+    return items.map((item) => new User({ ...item }));
+  }
+
+  async findUserById(id: string): Promise<User | null> {
+    const [item] = await this.client.select().from(userTable).where(eq(userTable.id, id));
+    return item ? new User({ ...item }) : null;
+  }
+
+  async createUser(data: UserCreate): Promise<User> {
+    // Если id не передан, БД сгенерирует сама (defaultRandom)
+    const user = new User(data);
+
+    const [result] = await this.client
+      .insert(userTable)
+      .values({ ...user })
+      .onConflictDoUpdate({
+        target: userTable.id,
+        set: {
+          name: sql`excluded.name`,
+          credentials: sql`excluded.credentials`,
+        },
+      })
+      .returning();
+
+    return new User({ ...result });
+  }
+
+  async createManyUsers(data: UserCreate[]): Promise<number> {
+    if (data.length === 0) return 0;
+
+    const users = data.map((d) => new User({ ...d, id: d.id ?? crypto.randomUUID() }));
+
+    const result = await this.client
+      .insert(userTable)
+      .values(users.map((u) => ({ ...u })))
+      .onConflictDoUpdate({
+        target: userTable.id,
+        set: {
+          name: sql`excluded.name`,
+          credentials: sql`excluded.credentials`,
+        },
+      });
+
+    return result.rowCount ?? 0;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const [deleted] = await this.client.delete(userTable).where(eq(userTable.id, id)).returning({ id: userTable.id });
+    return !!deleted;
+  }
+
+  async createMessagesBizData(user_id: string, data: MessagesBizData): Promise<void> {
+    const { chat_session, chat_messages } = data;
+
+    // Сохраняем сессию (полная версия)
+    const sessionData: ChatSessionsCreate = { ...chat_session, user_id };
+    await this.createSession(sessionData);
+
+    // Сохраняем сообщения (sessionId передаётся отдельно)
+    await this.createManyMessages(
+      chat_session.id,
+      chat_messages.map((m) => ({ ...m, sessionId: chat_session.id })),
+    );
   }
 }
