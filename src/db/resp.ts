@@ -118,5 +118,10 @@ export type MessagesBizData = {
   chat_messages: ChatMessage[];
 };
 
+export type FileBizData = {
+  url: string;
+};
+
 export type SessionsResponse = ApiResponse<SessionsBizData>;
 export type MessagesResponse = ApiResponse<MessagesBizData>;
+export type FileResponse = ApiResponse<FileBizData>;

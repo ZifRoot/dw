@@ -64,7 +64,7 @@ class Program {
     console.log(`User: ${user.name}`);
 
     var deepseek = new Deepseek(user.credentials as credentials);
-    var fetch_page = all ? await deepseek.fetch_page_all() : await deepseek.fetch_page();
+    var fetch_page = all ? await deepseek.fetch_page_all() : (await deepseek.fetch_page()).chat_sessions;
     var first_page = fetch_page.at(-1);
     // console.log(`Page: ${first_page?.title} ${dateStr(first_page?.updated_at)}`);
 
@@ -98,7 +98,7 @@ class Program {
 
         var his = await deepseek.history_messages(session.id, session.version);
 
-        await this.repository.createMessagesBizData(user.id, his.data.biz_data);
+        await this.repository.createMessagesBizData(user.id, his);
       }
     } catch (error) {
       console.error(error);
