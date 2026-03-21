@@ -42,12 +42,7 @@ export class DrizzleRepository implements IRepository {
     return items.map(
       (item) =>
         new MessageFragment({
-          elapsed_secs: item.elapsedSecs,
-          stage_id: item.stageId,
-          content: item.content,
-          messageId: item.messageId,
-          references: item.references,
-          sessionId: item.sessionId,
+          ...item,
           type: item.type as FragmentType,
           id: item.fragmentOrder,
         }),
@@ -61,6 +56,7 @@ export class DrizzleRepository implements IRepository {
         messageId: messageFragmentsTable.messageId,
         fragmentOrder: messageFragmentsTable.fragmentOrder,
         type: messageFragmentsTable.type,
+        size: messageFragmentsTable.size,
       })
       .from(messageFragmentsTable)
       .where(and(eq(messageFragmentsTable.sessionId, sessionId), eq(messageFragmentsTable.messageId, messageId)))
@@ -69,9 +65,8 @@ export class DrizzleRepository implements IRepository {
     return items.map(
       (item) =>
         new MessageFragment({
+          ...item,
           content: "",
-          messageId: item.messageId,
-          sessionId: item.sessionId,
           type: item.type as FragmentType,
           id: item.fragmentOrder,
         }),
@@ -91,12 +86,7 @@ export class DrizzleRepository implements IRepository {
       );
     return item
       ? new MessageFragment({
-          elapsed_secs: item.elapsedSecs,
-          stage_id: item.stageId,
-          content: item.content,
-          messageId: item.messageId,
-          references: item.references,
-          sessionId: item.sessionId,
+          ...item,
           type: item.type as FragmentType,
           id: item.fragmentOrder,
         })
@@ -108,29 +98,20 @@ export class DrizzleRepository implements IRepository {
     if (data.length === 0) return 0;
 
     const fragments = data.map((d) => new MessageFragment(d));
-    const values = fragments.map((f) => ({
-      sessionId: f.sessionId,
-      messageId: f.messageId,
-      fragmentOrder: f.fragmentOrder,
-      type: f.type,
-      content: f.content,
-      elapsedSecs: f.elapsedSecs,
-      references: f.references,
-      stageId: f.stageId,
-    }));
 
     const execute = async (db: PgTx) => {
       const result = await db
         .insert(messageFragmentsTable)
-        .values(values)
+        .values(fragments)
         .onConflictDoUpdate({
           target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
           set: {
             type: sql`excluded.type`,
             content: sql`excluded.content`,
-            elapsedSecs: sql`excluded.elapsed_secs`,
+            elapsed_secs: sql`excluded.elapsed_secs`,
             references: sql`excluded.references`,
-            stageId: sql`excluded.stage_id`,
+            stage_id: sql`excluded.stage_id`,
+            size: sql`excluded.size`,
           },
         });
       return result.rowCount ?? 0;
@@ -150,37 +131,24 @@ export class DrizzleRepository implements IRepository {
       const fragment = new MessageFragment(data);
       const [result] = await db
         .insert(messageFragmentsTable)
-        .values({
-          sessionId: fragment.sessionId,
-          messageId: fragment.messageId,
-          fragmentOrder: fragment.fragmentOrder,
-          type: fragment.type,
-          content: fragment.content,
-          elapsedSecs: fragment.elapsedSecs,
-          references: fragment.references,
-          stageId: fragment.stageId,
-        })
+        .values(fragment)
         .onConflictDoUpdate({
           target: [messageFragmentsTable.sessionId, messageFragmentsTable.messageId, messageFragmentsTable.fragmentOrder],
           set: {
             type: sql`excluded.type`,
             content: sql`excluded.content`,
-            elapsedSecs: sql`excluded.elapsed_secs`,
+            elapsed_secs: sql`excluded.elapsed_secs`,
             references: sql`excluded.references`,
-            stageId: sql`excluded.stage_id`,
+            stage_id: sql`excluded.stage_id`,
+            size: sql`excluded.size`,
           },
         })
         .returning();
 
       return new MessageFragment({
-        content: result.content,
+        ...result,
         id: result.fragmentOrder,
-        messageId: result.messageId,
-        sessionId: result.sessionId,
         type: result.type as FragmentType,
-        elapsed_secs: result.elapsedSecs,
-        references: result.references,
-        stage_id: result.stageId,
       });
     };
 
@@ -212,17 +180,9 @@ export class DrizzleRepository implements IRepository {
     return items.map(
       ({ file }) =>
         new MessageFile({
+          ...file,
           sessionId,
           messageId,
-          error_code: file.errorCode,
-          file_name: file.fileName,
-          file_size: file.fileSize,
-          id: file.id,
-          inserted_at: file.insertedAt,
-          previewable: file.previewable,
-          status: file.status,
-          token_usage: file.tokenUsage,
-          updated_at: file.updatedAt,
         }),
     );
   }
@@ -243,12 +203,11 @@ export class DrizzleRepository implements IRepository {
     if (data.length === 0) return 0;
 
     const sessions = data.map((ch) => new ChatSessions(ch));
-    const values = sessions.map((s) => ({ ...s }));
 
     const execute = async (db: PgTx) => {
       const result = await db
         .insert(chatSessionsTable)
-        .values(values)
+        .values(sessions)
         .onConflictDoUpdate({
           target: chatSessionsTable.id,
           set: {
@@ -322,17 +281,8 @@ export class DrizzleRepository implements IRepository {
 
     const { file, link } = result[0];
     return new MessageFile({
-      sessionId: link.sessionId,
-      messageId: link.messageId,
-      error_code: file.errorCode,
-      file_name: file.fileName,
-      file_size: file.fileSize,
-      id: file.id,
-      inserted_at: file.insertedAt,
-      previewable: file.previewable,
-      status: file.status,
-      token_usage: file.tokenUsage,
-      updated_at: file.updatedAt,
+      ...link,
+      ...file,
     });
   }
 
@@ -341,19 +291,7 @@ export class DrizzleRepository implements IRepository {
     if (data.length === 0) return 0;
 
     const messageFiles = data.map((d) => new MessageFile(d));
-    const fileDbValues = messageFiles
-      .map((mf) => ({
-        id: mf.id,
-        status: mf.status,
-        fileName: mf.fileName,
-        previewable: mf.previewable,
-        fileSize: mf.fileSize,
-        tokenUsage: mf.tokenUsage,
-        errorCode: mf.errorCode,
-        insertedAt: mf.insertedAt,
-        updatedAt: mf.updatedAt,
-      }))
-      .uniqueBy((u) => u.id);
+    const fileDbValues = messageFiles.uniqueBy((u) => u.id);
     const linkValues = messageFiles
       .filter((mf) => mf.sessionId && mf.messageId)
       .map((mf) => ({
@@ -372,13 +310,14 @@ export class DrizzleRepository implements IRepository {
             target: filesTable.id,
             set: {
               status: sql`excluded.status`,
-              fileName: sql`excluded.file_name`,
+              file_name: sql`excluded.file_name`,
               previewable: sql`excluded.previewable`,
-              fileSize: sql`excluded.file_size`,
-              tokenUsage: sql`excluded.token_usage`,
-              errorCode: sql`excluded.error_code`,
-              insertedAt: sql`excluded.inserted_at`,
-              updatedAt: sql`excluded.updated_at`,
+              file_size: sql`excluded.file_size`,
+              token_usage: sql`excluded.token_usage`,
+              error_code: sql`excluded.error_code`,
+              inserted_at: sql`excluded.inserted_at`,
+              updated_at: sql`excluded.updated_at`,
+              content: sql`excluded.content`,
             },
           });
       }
@@ -410,28 +349,19 @@ export class DrizzleRepository implements IRepository {
       const messageFile = new MessageFile(data);
       const [result] = await db
         .insert(filesTable)
-        .values({
-          id: messageFile.id,
-          status: messageFile.status,
-          fileName: messageFile.fileName,
-          previewable: messageFile.previewable,
-          fileSize: messageFile.fileSize,
-          tokenUsage: messageFile.tokenUsage,
-          errorCode: messageFile.errorCode,
-          insertedAt: messageFile.insertedAt,
-          updatedAt: messageFile.updatedAt,
-        })
+        .values({ ...messageFile })
         .onConflictDoUpdate({
           target: filesTable.id,
           set: {
             status: sql`excluded.status`,
-            fileName: sql`excluded.file_name`,
+            file_name: sql`excluded.file_name`,
             previewable: sql`excluded.previewable`,
-            fileSize: sql`excluded.file_size`,
-            tokenUsage: sql`excluded.token_usage`,
-            errorCode: sql`excluded.error_code`,
-            insertedAt: sql`excluded.inserted_at`,
-            updatedAt: sql`excluded.updated_at`,
+            file_size: sql`excluded.file_size`,
+            token_usage: sql`excluded.token_usage`,
+            error_code: sql`excluded.error_code`,
+            inserted_at: sql`excluded.inserted_at`,
+            updated_at: sql`excluded.updated_at`,
+            content: sql`excluded.content`,
           },
         })
         .returning();
@@ -451,12 +381,6 @@ export class DrizzleRepository implements IRepository {
       return new MessageFile({
         ...data,
         ...result,
-        error_code: result.errorCode,
-        file_name: result.fileName,
-        file_size: result.fileSize,
-        inserted_at: result.insertedAt,
-        token_usage: result.tokenUsage,
-        updated_at: result.updatedAt,
       });
     };
 
@@ -533,7 +457,6 @@ export class DrizzleRepository implements IRepository {
             ...frag,
             sessionId,
             messageId: msg.message_id,
-            id: frag.id,
           }) as MessageFragmentCreate,
       ),
     );
@@ -541,27 +464,9 @@ export class DrizzleRepository implements IRepository {
     const execute = async (db: PgTx) => {
       // Вставка сообщений
       if (chatMessages.length > 0) {
-        const messageValues = chatMessages.map((m) => ({
-          sessionId: m.sessionId,
-          messageId: m.messageId,
-          parentMessageId: m.parentMessageId,
-          model: m.model,
-          role: m.role,
-          thinkingEnabled: m.thinkingEnabled,
-          banEdit: m.banEdit,
-          banRegenerate: m.banRegenerate,
-          status: m.status,
-          accumulatedTokenUsage: m.accumulatedTokenUsage,
-          feedback: m.feedback,
-          insertedAt: m.insertedAt,
-          searchEnabled: m.searchEnabled,
-          hasPendingFragment: m.hasPendingFragment,
-          autoContinue: m.autoContinue,
-        }));
-
         await db
           .insert(chatMessagesTable)
-          .values(messageValues)
+          .values(chatMessages)
           .onConflictDoUpdate({
             target: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
             set: {
@@ -608,23 +513,7 @@ export class DrizzleRepository implements IRepository {
       const message = new ChatMessage({ ...data, sessionId });
       const [insertedMessage] = await db
         .insert(chatMessagesTable)
-        .values({
-          sessionId: message.sessionId,
-          messageId: message.messageId,
-          parentMessageId: message.parentMessageId,
-          model: message.model,
-          role: message.role,
-          thinkingEnabled: message.thinkingEnabled,
-          banEdit: message.banEdit,
-          banRegenerate: message.banRegenerate,
-          status: message.status,
-          accumulatedTokenUsage: message.accumulatedTokenUsage,
-          feedback: message.feedback,
-          insertedAt: message.insertedAt,
-          searchEnabled: message.searchEnabled,
-          hasPendingFragment: message.hasPendingFragment,
-          autoContinue: message.autoContinue,
-        })
+        .values(message)
         .onConflictDoUpdate({
           target: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
           set: {
@@ -663,13 +552,13 @@ export class DrizzleRepository implements IRepository {
       }
 
       return new ChatMessage({
-        accumulated_token_usage: insertedMessage.accumulatedTokenUsage,
-        auto_continue: insertedMessage.autoContinue,
-        ban_edit: insertedMessage.banEdit,
-        ban_regenerate: insertedMessage.banRegenerate,
-        feedback: insertedMessage.feedback,
+        ...insertedMessage,
         files: [],
         fragments: [],
+        ban_edit: insertedMessage.banEdit,
+        ban_regenerate: insertedMessage.banRegenerate,
+        auto_continue: insertedMessage.autoContinue,
+        accumulated_token_usage: insertedMessage.accumulatedTokenUsage,
         has_pending_fragment: insertedMessage.hasPendingFragment,
         inserted_at: insertedMessage.insertedAt,
         message_id: insertedMessage.messageId,
@@ -677,8 +566,6 @@ export class DrizzleRepository implements IRepository {
         parent_id: insertedMessage.parentMessageId,
         role: insertedMessage.role as Role,
         search_enabled: insertedMessage.searchEnabled,
-        sessionId: insertedMessage.sessionId,
-        status: insertedMessage.status,
         thinking_enabled: insertedMessage.thinkingEnabled,
       });
     };

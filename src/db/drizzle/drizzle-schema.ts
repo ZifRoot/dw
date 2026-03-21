@@ -70,13 +70,14 @@ export const chatMessagesTable = pgTable(
 export const filesTable = pgTable("files", {
   id: uuid("id").primaryKey().defaultRandom(),
   status: text("status").notNull(),
-  fileName: text("file_name").notNull(),
+  file_name: text("file_name").notNull(),
   previewable: boolean("previewable").notNull(),
-  fileSize: integer("file_size").notNull(),
-  tokenUsage: integer("token_usage").notNull(),
-  errorCode: integer("error_code"),
-  insertedAt: timestamp("inserted_at").notNull(),
-  updatedAt: timestamp("updated_at").notNull(),
+  file_size: integer("file_size").notNull(),
+  token_usage: integer("token_usage").notNull(),
+  error_code: integer("error_code"),
+  inserted_at: timestamp("inserted_at").notNull(),
+  updated_at: timestamp("updated_at").notNull(),
+  content: text("content"),
 });
 
 // ========================
@@ -117,9 +118,10 @@ export const messageFragmentsTable = pgTable(
     fragmentOrder: integer("fragment_order").notNull(),
     type: text("type").notNull(),
     content: text("content").notNull(),
-    elapsedSecs: doublePrecision("elapsed_secs"),
+    elapsed_secs: doublePrecision("elapsed_secs"),
     references: jsonb("references"),
-    stageId: integer("stage_id"),
+    stage_id: integer("stage_id"),
+    size: integer("size"),
   },
   (table) => [
     primaryKey({ columns: [table.sessionId, table.messageId, table.fragmentOrder] }),

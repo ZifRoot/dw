@@ -6,26 +6,28 @@ export class MessageFile {
   public status: string;
   public sessionId: string;
   public messageId: number;
-  public fileName: string;
+  public file_name: string;
   public previewable: boolean;
-  public fileSize: number;
-  public tokenUsage: number;
-  public errorCode: number | null;
-  public insertedAt: Date;
-  public updatedAt: Date;
+  public file_size: number;
+  public token_usage: number;
+  public error_code: number | null;
+  public inserted_at: Date;
+  public updated_at: Date;
+  public content: string | null;
 
   constructor(data: MessageFileCreate) {
     this.id = normalizeUUID(data.id) ?? crypto.randomUUID();
     this.sessionId = data.sessionId;
     this.messageId = data.messageId;
     this.status = data.status;
-    this.fileName = data.file_name;
+    this.file_name = data.file_name;
     this.previewable = data.previewable;
-    this.fileSize = data.file_size;
+    this.file_size = data.file_size;
 
-    this.tokenUsage = data.token_usage;
-    this.errorCode = data.error_code ?? null;
-    this.insertedAt = toDate(data.inserted_at)!;
-    this.updatedAt = toDate(data.updated_at)!;
+    this.token_usage = data.token_usage;
+    this.error_code = data.error_code ?? null;
+    this.inserted_at = toDate(data.inserted_at)!;
+    this.updated_at = toDate(data.updated_at)!;
+    this.content = data.content ?? null;
   }
 }

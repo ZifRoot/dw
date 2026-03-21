@@ -196,7 +196,7 @@ export class EmbeddingController {
         fragmentsList.push({
           id: `file_${file.id}`,
           messageId: msg.messageId,
-          size_bytes: file.fileSize,
+          size_bytes: file.file_size,
         });
       }
       // Текстовые фрагменты
