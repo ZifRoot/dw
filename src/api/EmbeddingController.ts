@@ -1,6 +1,5 @@
 import { Router, Request, Response } from "express";
 import { IRepository } from "../db/IRepository";
-import { Embedding } from "../db/models/Embedding";
 
 export class EmbeddingController {
   private router: Router;
@@ -14,11 +13,11 @@ export class EmbeddingController {
     // GET /documents
     this.router.get("/documents", this.getAllDocuments.bind(this));
     // GET /documents/:id
-    this.router.get("/documents/:id", this.getDocumentById.bind(this));
-    // GET /documents/:id/text (legacy)
-    this.router.get("/documents/:id/text", this.getDocumentText.bind(this));
-    // GET /documents/:id/fragment/:fragment_id/text
-    this.router.get("/documents/:id/fragment/:fragment_id/text", this.getFragmentText.bind(this));
+    this.router.get("/document/:id", this.getDocumentById.bind(this));
+    // GET /document/:id/text (legacy)
+    this.router.get("/document/:id/text", this.getDocumentText.bind(this));
+    // GET /document/:id/fragment/:fragment_id/text
+    this.router.get("/document/:id/fragment/:fragment_id/text", this.getFragmentText.bind(this));
     // POST /embeddings/:id
     this.router.post("/embeddings/:id", this.postEmbeddings.bind(this));
   }
@@ -27,55 +26,13 @@ export class EmbeddingController {
     return this.router;
   }
 
-  // Вспомогательные методы для получения данных о сессии
-  private async getSessionWithDetails(sessionId: string): Promise<any> {
-    const session = await this.repo.findSessionById(sessionId);
-    if (!session) return null;
-
-    // Получаем все сообщения сессии
-    // const messages = await this.repo.findAllMessages(sessionId);
-
-    // Собираем фрагменты (текстовые) и файлы
-    // const fragmentsList: { id: string; size_bytes: number }[] = [];
-    // for (const msg of messages) {
-    //   // Текстовые фрагменты
-    //   // const msgFragments = await this.repo.findAllFragmentsShrort(sessionId, msg.messageId);
-    //   // for (const frag of msgFragments) {
-    //   //   fragmentsList.push({
-    //   //     id: `msg_${msg.messageId}_frag_${frag.fragmentOrder}`,
-    //   //     size_bytes: Buffer.byteLength(frag.content, "utf8"),
-    //   //   });
-    //   // }
-    //   // // Файлы, прикреплённые к сообщению
-    //   // const files = await this.repo.getFilesForMessage(sessionId, msg.messageId);
-    //   // for (const file of files) {
-    //   //   fragmentsList.push({
-    //   //     id: `file_${file.id}`,
-    //   //     size_bytes: file.fileSize,
-    //   //   });
-    //   // }
-    // }
-
-    // Получаем эмбеддинги для сессии (список моделей)
-    const embeddings = await this.repo.findEmbeddingsBySession(sessionId);
-    const models = embeddings.map((e) => e.model_name);
-
-    return {
-      id: session.id,
-      name: session.title,
-      // size_bytes: fragmentsList.reduce((sum, f) => sum + f.size_bytes, 0),
-      models,
-      // fragments: fragmentsList,
-    };
-  }
-
   // GET /documents
   async getAllDocuments(req: Request, res: Response) {
     try {
       const sessions = await this.repo.findAllSessionsAll();
       const result = [];
       for (const session of sessions) {
-        const doc = await this.getSessionWithDetails(session.id);
+        const doc = await this.getSessionWithDetails1(session.id);
         if (doc) result.push(doc);
       }
       res.json(result);
@@ -92,7 +49,7 @@ export class EmbeddingController {
       if (typeof id !== "string") {
         return res.status(400).send("id");
       }
-      const doc = await this.getSessionWithDetails(id);
+      const doc = await this.getSessionWithDetails2(id);
       if (!doc) {
         return res.status(404).json({ error: "Document not found" });
       }
@@ -207,5 +164,62 @@ export class EmbeddingController {
       console.error("Error in POST /embeddings/:id:", err);
       res.status(500).json({ error: "Internal server error" });
     }
+  }
+
+  // Вспомогательные методы для получения данных о сессии
+  private async getSessionWithDetails1(sessionId: string): Promise<any> {
+    const session = await this.repo.findSessionById(sessionId);
+    if (!session) return null;
+    // Получаем эмбеддинги для сессии (список моделей)
+    const embeddings = await this.repo.findEmbeddingsBySession(sessionId);
+    const models = embeddings.map((e) => e.model_name);
+
+    return {
+      id: session.id,
+      name: session.title,
+      models,
+    };
+  }
+
+  // Вспомогательные методы для получения данных о сессии
+  private async getSessionWithDetails2(sessionId: string): Promise<any> {
+    const session = await this.repo.findSessionById(sessionId);
+    if (!session) return null;
+
+    // Получаем все сообщения сессии
+    const messages = await this.repo.findAllMessages(sessionId);
+
+    // Собираем фрагменты (текстовые) и файлы
+    const fragmentsList: { id: string; size_bytes: number }[] = [];
+    for (const msg of messages) {
+      // Текстовые фрагменты
+      const msgFragments = await this.repo.findAllFragments(sessionId, msg.messageId);
+      for (const frag of msgFragments) {
+        fragmentsList.push({
+          id: `msg_${msg.messageId}_frag_${frag.fragmentOrder}`,
+          size_bytes: Buffer.byteLength(frag.content, "utf8"),
+        });
+      }
+      // Файлы, прикреплённые к сообщению
+      const files = await this.repo.getFilesForMessage(sessionId, msg.messageId);
+      for (const file of files) {
+        fragmentsList.push({
+          id: `file_${file.id}`,
+          size_bytes: file.fileSize,
+        });
+      }
+    }
+
+    // Получаем эмбеддинги для сессии (список моделей)
+    const embeddings = await this.repo.findEmbeddingsBySession(sessionId);
+    const models = embeddings.map((e) => e.model_name);
+
+    return {
+      id: session.id,
+      name: session.title,
+      size_bytes: fragmentsList.reduce((sum, f) => sum + f.size_bytes, 0),
+      models,
+      fragments: fragmentsList,
+    };
   }
 }
