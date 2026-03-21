@@ -53,15 +53,15 @@ export const chatMessagesTable = pgTable(
     hasPendingFragment: boolean("has_pending_fragment").notNull(),
     autoContinue: boolean("auto_continue").notNull(),
   },
-  (table) => ({
-    pk: primaryKey({ columns: [table.sessionId, table.messageId] }),
-    parentFk: foreignKey({
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.messageId] }),
+    foreignKey({
       columns: [table.sessionId, table.parentMessageId],
       foreignColumns: [table.sessionId, table.messageId],
     }),
-    parentIdx: index("chat_messages_parent_idx").on(table.sessionId, table.parentMessageId),
-    sessionIdx: index("chat_messages_session_id_idx").on(table.sessionId),
-  }),
+    index("chat_messages_parent_idx").on(table.sessionId, table.parentMessageId),
+    index("chat_messages_session_id_idx").on(table.sessionId),
+  ],
 );
 
 // ========================
@@ -91,17 +91,15 @@ export const messageFilesTable = pgTable(
       .notNull()
       .references(() => filesTable.id),
   },
-  (table) => ({
-    pk: primaryKey({
-      columns: [table.sessionId, table.messageId, table.fileId],
-    }),
-    messageFk: foreignKey({
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.messageId, table.fileId] }),
+    foreignKey({
       columns: [table.sessionId, table.messageId],
       foreignColumns: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
     }),
-    messageIdx: index("message_files_message_idx").on(table.sessionId, table.messageId),
-    fileIdx: index("message_files_file_idx").on(table.fileId),
-  }),
+    index("message_files_message_idx").on(table.sessionId, table.messageId),
+    index("message_files_file_idx").on(table.fileId),
+  ],
 );
 
 // ========================
@@ -119,10 +117,25 @@ export const messageFragmentsTable = pgTable(
     references: jsonb("references"),
     stageId: integer("stage_id"),
   },
-  (table) => ({
-    pk: primaryKey({
-      columns: [table.sessionId, table.messageId, table.fragmentOrder],
-    }),
-    messageIdx: index("message_fragments_message_idx").on(table.sessionId, table.messageId),
-  }),
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.messageId, table.fragmentOrder] }),
+    index("message_fragments_message_idx").on(table.sessionId, table.messageId),
+  ],
+);
+
+// drizzle-schema.ts (дополнение)
+export const embeddingsTable = pgTable(
+  "embeddings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => chatSessionsTable.id, { onDelete: "cascade" }),
+    model_name: text("model_name").notNull(),
+    dimension: integer("dimension").notNull(),
+    processing_time_ms: integer("processing_time_ms").notNull(),
+    embedding: jsonb("embedding_vector"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("embeddings_session_idx").on(table.sessionId)],
 );

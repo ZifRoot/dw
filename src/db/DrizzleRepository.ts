@@ -15,6 +15,14 @@ import { User } from "./models/User";
 import { UserCreate } from "./models/UserCreate";
 import { PgTransaction } from "drizzle-orm/pg-core";
 
+// DrizzleRepository.ts (дополнения)
+
+import { embeddingsTable } from "./drizzle/drizzle-schema";
+import { Embedding } from "./models/Embedding";
+import { EmbeddingCreate } from "./models/EmbeddingCreate";
+
+type PgTx = PgTransaction<any, any, any>;
+
 export class DrizzleRepository implements IRepository {
   constructor(private client: typeof db_drizzle) {}
 
@@ -39,6 +47,30 @@ export class DrizzleRepository implements IRepository {
           content: item.content,
           messageId: item.messageId,
           references: item.references,
+          sessionId: item.sessionId,
+          type: item.type as FragmentType,
+          id: item.fragmentOrder,
+        }),
+    );
+  }
+
+  async findAllFragmentsShrort(sessionId: string, messageId: number): Promise<MessageFragment[]> {
+    const items = await this.client
+      .select({
+        sessionId: messageFragmentsTable.sessionId,
+        messageId: messageFragmentsTable.messageId,
+        fragmentOrder: messageFragmentsTable.fragmentOrder,
+        type: messageFragmentsTable.type,
+      })
+      .from(messageFragmentsTable)
+      .where(and(eq(messageFragmentsTable.sessionId, sessionId), eq(messageFragmentsTable.messageId, messageId)))
+      .orderBy(messageFragmentsTable.fragmentOrder);
+
+    return items.map(
+      (item) =>
+        new MessageFragment({
+          content: "",
+          messageId: item.messageId,
           sessionId: item.sessionId,
           type: item.type as FragmentType,
           id: item.fragmentOrder,
@@ -751,6 +783,81 @@ export class DrizzleRepository implements IRepository {
       });
     }
   }
-}
 
-type PgTx = PgTransaction<any, any, any>;
+  // внутри класса DrizzleRepository:
+
+  // ========== Embeddings ==========
+  async findEmbeddingsBySession(sessionId: string, tx?: PgTransaction<any, any, any>): Promise<Embedding[]> {
+    const db = tx || this.client;
+    const items = await db.select().from(embeddingsTable).where(eq(embeddingsTable.sessionId, sessionId));
+    return items.map((item) => new Embedding(item));
+  }
+
+  async findEmbeddingBySessionAndModel(sessionId: string, modelName: string, tx?: PgTransaction<any, any, any>): Promise<Embedding | null> {
+    const db = tx || this.client;
+    const [item] = await db
+      .select()
+      .from(embeddingsTable)
+      .where(and(eq(embeddingsTable.sessionId, sessionId), eq(embeddingsTable.model_name, modelName)))
+      .limit(1);
+    return item ? new Embedding(item) : null;
+  }
+
+  async createManyEmbeddings(sessionId: string, data: EmbeddingCreate[], tx?: PgTransaction<any, any, any>): Promise<number> {
+    if (data.length === 0) return 0;
+
+    const embeddings = data.map((d) => new Embedding({ ...d, sessionId }));
+
+    const execute = async (db: typeof db_drizzle | PgTransaction<any, any, any>) => {
+      const result = await db
+        .insert(embeddingsTable)
+        .values(embeddings)
+        .onConflictDoUpdate({
+          target: [embeddingsTable.sessionId, embeddingsTable.model_name], // если такой эмбеддинг уже есть – обновляем
+          set: {
+            dimension: sql`excluded.dimension`,
+            processing_time_ms: sql`excluded.processing_time_ms`,
+            createdAt: sql`excluded.created_at`,
+          },
+        });
+      return result.rowCount ?? 0;
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
+  }
+
+  async createEmbedding(sessionId: string, data: EmbeddingCreate, tx?: PgTransaction<any, any, any>): Promise<Embedding> {
+    const execute = async (db: typeof db_drizzle | PgTransaction<any, any, any>) => {
+      const embedding = new Embedding({ ...data, sessionId });
+      const [result] = await db
+        .insert(embeddingsTable)
+        .values(embedding)
+        .onConflictDoUpdate({
+          target: [embeddingsTable.sessionId, embeddingsTable.model_name],
+          set: {
+            dimension: sql`excluded.dimension`,
+            processing_time_ms: sql`excluded.processing_time_ms`,
+            createdAt: sql`excluded.created_at`,
+          },
+        })
+        .returning();
+      return new Embedding(result);
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await this.client.transaction(async (newTx) => execute(newTx));
+    }
+  }
+
+  // ========== Дополнительный метод для получения всех сессий ==========
+  async findAllSessionsAll(): Promise<ChatSessions[]> {
+    const items = await this.client.select().from(chatSessionsTable);
+    return items.map((item) => new ChatSessions({ ...item }));
+  }
+}

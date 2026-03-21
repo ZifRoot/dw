@@ -1,21 +1,47 @@
 import { InitDb } from "./db/Initdb";
 import { IRepository } from "./db/IRepository";
-
 import { credentials, Deepseek } from "./deepseek";
 import { ChatSessions } from "./db/models/ChatSessions";
 import { User } from "./db/models/User";
 import { dateStr } from "./utils/data-utils";
+import { startAndWaitAsync } from "./db/db-manager";
+import express from "express";
+import { EmbeddingController } from "./api/EmbeddingController";
+
+// import { EmbeddingPipeline } from "./getEmbeddings";
 
 class Program {
   repository?: IRepository;
 
   async start() {
-    //await startAndWaitAsync();
+    // var r = await EmbeddingPipeline.getInstance();
+    //await getEmbeddings();
+    await this.F();
+
+    console.log("DONE");
+  }
+
+  async F() {
+    // await startAndWaitAsync();
+    this.repository = InitDb();
+    // await this.fetch_all();
+    const app = express();
+    app.use(express.json());
+
+    const embeddingController = new EmbeddingController(this.repository!);
+    app.use("/api", embeddingController.getRouter());
+
+    const PORT = process.env.PORT || 8081;
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }
+
+  async s1() {
+    await startAndWaitAsync();
     this.repository = InitDb();
 
     await this.fetch_all();
-
-    console.log("DONE");
   }
 
   async fetch_all() {
@@ -83,8 +109,7 @@ class Program {
     this.start().catch(console.error);
   }
 
-  constructor() {
-  }
+  constructor() {}
 }
 
 const greet = (name: string): void => {

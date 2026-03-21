@@ -12,6 +12,9 @@ import { User } from "./models/User";
 import { UserCreate } from "./models/UserCreate";
 import { MessagesBizData } from "./resp";
 
+import { Embedding } from "./models/Embedding";
+import { EmbeddingCreate } from "./models/EmbeddingCreate";
+
 export interface IRepository {
   // ========== Chat Sessions ==========
   findAllSessions(userId: string): Promise<ChatSessions[]>;
@@ -49,4 +52,15 @@ export interface IRepository {
   createManyUsers(data: UserCreate[]): Promise<number>;
   // ========== BizData ==========
   createMessagesBizData(user_id: string, data: MessagesBizData): Promise<void>;
+
+  // ========== Embeddings ==========
+  findEmbeddingsBySession(sessionId: string): Promise<Embedding[]>;
+  findEmbeddingBySessionAndModel(sessionId: string, modelName: string): Promise<Embedding | null>;
+  createEmbedding(sessionId: string, data: EmbeddingCreate): Promise<Embedding>;
+  createManyEmbeddings(sessionId: string, data: EmbeddingCreate[]): Promise<number>;
+
+  // ========== Дополнительно для кластеризатора ==========
+  findAllSessionsAll(): Promise<ChatSessions[]>; // все сессии без фильтра по пользователю
+
+  findAllFragmentsShrort(sessionId: string, messageId: number): Promise<MessageFragment[]>;
 }
