@@ -43,6 +43,13 @@
       "when": 1774100357697,
       "tag": "0005_chunky_forge",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774110408152,
+      "tag": "0006_misty_rogue",
+      "breakpoints": true
     }
   ]
 }

@@ -175,8 +175,7 @@ export class EmbeddingController {
     const models = embeddings.map((e) => e.model_name);
 
     return {
-      id: session.id,
-      name: session.title,
+      ...session,
       models,
     };
   }
@@ -190,24 +189,26 @@ export class EmbeddingController {
     const messages = await this.repo.findAllMessages(sessionId);
 
     // Собираем фрагменты (текстовые) и файлы
-    const fragmentsList: { id: string; size_bytes: number }[] = [];
+    const fragmentsList: { id: string; size_bytes: number; messageId: number }[] = [];
     for (const msg of messages) {
+      const files = await this.repo.getFilesForMessage(sessionId, msg.messageId);
+      for (const file of files) {
+        fragmentsList.push({
+          id: `file_${file.id}`,
+          messageId: msg.messageId,
+          size_bytes: file.fileSize,
+        });
+      }
       // Текстовые фрагменты
       const msgFragments = await this.repo.findAllFragments(sessionId, msg.messageId);
       for (const frag of msgFragments) {
         fragmentsList.push({
           id: `msg_${msg.messageId}_frag_${frag.fragmentOrder}`,
+          messageId: msg.messageId,
           size_bytes: Buffer.byteLength(frag.content, "utf8"),
         });
       }
       // Файлы, прикреплённые к сообщению
-      const files = await this.repo.getFilesForMessage(sessionId, msg.messageId);
-      for (const file of files) {
-        fragmentsList.push({
-          id: `file_${file.id}`,
-          size_bytes: file.fileSize,
-        });
-      }
     }
 
     // Получаем эмбеддинги для сессии (список моделей)
@@ -215,11 +216,11 @@ export class EmbeddingController {
     const models = embeddings.map((e) => e.model_name);
 
     return {
-      id: session.id,
-      name: session.title,
+      ...session,
       size_bytes: fragmentsList.reduce((sum, f) => sum + f.size_bytes, 0),
       models,
       fragments: fragmentsList,
+      messages
     };
   }
 }

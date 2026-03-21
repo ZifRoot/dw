@@ -1,0 +1,3 @@
+ALTER TABLE "message_files" ADD CONSTRAINT "message_files_session_id_chat_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."chat_sessions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_fragments" ADD CONSTRAINT "message_fragments_session_id_chat_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."chat_sessions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_fragments" ADD CONSTRAINT "message_fragments_session_id_message_id_chat_messages_session_id_message_id_fk" FOREIGN KEY ("session_id","message_id") REFERENCES "public"."chat_messages"("session_id","message_id") ON DELETE no action ON UPDATE no action;

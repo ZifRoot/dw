@@ -207,8 +207,8 @@ export class DrizzleRepository implements IRepository {
       .select({ file: filesTable })
       .from(messageFilesTable)
       .innerJoin(filesTable, eq(messageFilesTable.fileId, filesTable.id))
-      .where(and(eq(messageFilesTable.sessionId, sessionId), eq(messageFilesTable.messageId, messageId)));
-
+      .where(and(eq(messageFilesTable.sessionId, sessionId), eq(messageFilesTable.messageId, messageId)))
+      .orderBy(messageFilesTable.messageId);
     return items.map(
       ({ file }) =>
         new MessageFile({

@@ -85,7 +85,9 @@ export const filesTable = pgTable("files", {
 export const messageFilesTable = pgTable(
   "message_files",
   {
-    sessionId: uuid("session_id").notNull(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => chatSessionsTable.id),
     messageId: integer("message_id").notNull(),
     fileId: uuid("file_id")
       .notNull()
@@ -108,7 +110,9 @@ export const messageFilesTable = pgTable(
 export const messageFragmentsTable = pgTable(
   "message_fragments",
   {
-    sessionId: uuid("session_id").notNull(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => chatSessionsTable.id),
     messageId: integer("message_id").notNull(),
     fragmentOrder: integer("fragment_order").notNull(),
     type: text("type").notNull(),
@@ -120,6 +124,10 @@ export const messageFragmentsTable = pgTable(
   (table) => [
     primaryKey({ columns: [table.sessionId, table.messageId, table.fragmentOrder] }),
     index("message_fragments_message_idx").on(table.sessionId, table.messageId),
+    foreignKey({
+      columns: [table.sessionId, table.messageId],
+      foreignColumns: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
+    }),
   ],
 );
 
