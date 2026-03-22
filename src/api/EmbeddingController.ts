@@ -123,6 +123,8 @@ export class EmbeddingController {
           return res.status(404).send("File not found");
         }
         // Файлы не являются текстом – возвращаем 404 или пустоту (по заданию не уточнено)
+
+        res.send(file.contentBytes);
         res.status(404).send("File content not available as text");
       } else {
         res.status(400).send("Invalid fragment ID");
@@ -189,12 +191,13 @@ export class EmbeddingController {
     const messages = await this.repo.findAllMessages(sessionId);
 
     // Собираем фрагменты (текстовые) и файлы
-    const fragmentsList: { id: string; size_bytes: number; messageId: number }[] = [];
+    const fragmentsList: { id: string; size_bytes: number; messageId: number; name?: string }[] = [];
     for (const msg of messages) {
       const files = await this.repo.getFilesForMessage(sessionId, msg.messageId);
       for (const file of files) {
         fragmentsList.push({
           id: `file_${file.id}`,
+          name: file.file_name,
           messageId: msg.messageId,
           size_bytes: file.file_size,
         });
@@ -220,7 +223,7 @@ export class EmbeddingController {
       size_bytes: fragmentsList.reduce((sum, f) => sum + f.size_bytes, 0),
       models,
       fragments: fragmentsList,
-      messages
+      messages,
     };
   }
 }
