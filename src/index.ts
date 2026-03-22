@@ -7,6 +7,7 @@ import { dateStr } from "./utils/data-utils";
 import { startAndWaitAsync } from "./db/db-manager";
 import express from "express";
 import { EmbeddingController } from "./api/EmbeddingController";
+import { MessageFile } from "./db/models/MessageFile";
 
 // import { EmbeddingPipeline } from "./getEmbeddings";
 
@@ -14,11 +15,48 @@ class Program {
   repository?: IRepository;
 
   async start() {
-    // var r = await EmbeddingPipeline.getInstance();
+    // let r = await EmbeddingPipeline.getInstance();
     //await getEmbeddings();
-    await this.F();
+
+    await this.filex();
 
     console.log("DONE");
+  }
+
+  async filex() {
+    this.repository = InitDb();
+
+    let users = await this.repository.findAllUsers();
+
+    for (const user of users) {
+      let deepseek = new Deepseek(user.credentials as credentials);
+      // await this.fetch_User(user, true);
+      let map = new Map<string, MessageFile>();
+      let sessions = await this.repository.findAllSessions(user.id);
+
+      for (const session of sessions) {
+        let messages = await this.repository.findAllMessages(session.id);
+
+        for (const message of messages) {
+          let files = await this.repository.findAllFilesByMessage(message.sessionId, message.messageId);
+          for (const file of files) {
+            if (!map.has(file.id)) {
+              map.set(file.id, file);
+            }
+          }
+        }
+      }
+
+      let files = [...map.values()];
+
+      files = files.filter((f) => f.content == null);
+
+      for (const file of files) {
+        let text = await deepseek.file(file.id, file.sessionId, file.messageId);
+        file.content = text;
+      }
+      await this.repository.createManyFiles(files);
+    }
   }
 
   async F() {
@@ -49,7 +87,7 @@ class Program {
       console.error("null repository");
       return;
     }
-    var users = await this.repository.findAllUsers();
+    let users = await this.repository.findAllUsers();
     for (const user of users) {
       await this.fetch_User(user, true);
     }
@@ -63,23 +101,23 @@ class Program {
 
     console.log(`User: ${user.name}`);
 
-    var deepseek = new Deepseek(user.credentials as credentials);
-    var fetch_page = all ? await deepseek.fetch_page_all() : (await deepseek.fetch_page()).chat_sessions;
-    var first_page = fetch_page.at(-1);
+    let deepseek = new Deepseek(user.credentials as credentials);
+    let fetch_page = all ? await deepseek.fetch_page_all() : (await deepseek.fetch_page()).chat_sessions;
+    let first_page = fetch_page.at(-1);
     // console.log(`Page: ${first_page?.title} ${dateStr(first_page?.updated_at)}`);
 
-    var sessions = await this.repository.findAllSessions(user.id);
+    let sessions = await this.repository.findAllSessions(user.id);
 
     const map_sessions = new Map(sessions.map((obj) => [obj.id!, obj]));
 
-    var in_sessions = fetch_page.map((s) => new ChatSessions({ ...s, user_id: user.id }));
+    let in_sessions = fetch_page.map((s) => new ChatSessions({ ...s, user_id: user.id }));
 
-    var sessions_for_update = in_sessions
+    let sessions_for_update = in_sessions
       .map((in_session) => ({ in_session: in_session, db_session: map_sessions.get(in_session.id) }))
       .filter((s) => {
         if (s.db_session == null) return true;
-        var date1 = s.db_session.updated_at;
-        var date2 = s.in_session.updated_at;
+        let date1 = s.db_session.updated_at;
+        let date2 = s.in_session.updated_at;
 
         const sec1 = date1.getTime() / 1000;
         const sec2 = date2.getTime() / 1000;
@@ -91,12 +129,12 @@ class Program {
 
     try {
       for (const s of sessions_for_update) {
-        var session = s.db_session ?? s.in_session;
+        let session = s.db_session ?? s.in_session;
         console.log(
           `Обновление: ${s.db_session == null ? "новый" : `(${dateStr(s.db_session.updated_at)})->(${dateStr(s.in_session.updated_at)}) `} [${session.title}]`,
         );
 
-        var his = await deepseek.history_messages(session.id, session.version);
+        let his = await deepseek.history_messages(session.id, session.version);
 
         await this.repository.createMessagesBizData(user.id, his);
       }

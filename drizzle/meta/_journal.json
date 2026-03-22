@@ -57,6 +57,13 @@
       "when": 1774118384411,
       "tag": "0007_sloppy_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774120880888,
+      "tag": "0008_bright_skaar",
+      "breakpoints": true
     }
   ]
 }

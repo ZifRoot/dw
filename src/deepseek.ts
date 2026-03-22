@@ -28,11 +28,11 @@ export class Deepseek {
     return (await this.history_messages_raw(chat_session_id, version)).data.biz_data;
   }
 
-  async file_preview(file_id: string, chat_session_id: string, message_id: string) {
+  async file_preview(file_id: string, chat_session_id: string, message_id: string | number) {
     return (await this.file_preview_raw(file_id, chat_session_id, message_id)).data.biz_data;
   }
 
-  async file(file_id: string, chat_session_id: string, message_id: string) {
+  async file(file_id: string, chat_session_id: string, message_id: string | number) {
     var resp = await this.file_resp(file_id, chat_session_id, message_id);
 
     var text = await resp.text();
@@ -53,7 +53,7 @@ export class Deepseek {
     return fetchpage;
   }
 
-  async file_preview_raw(file_id: string, chat_session_id: string, message_id: string) {
+  async file_preview_raw(file_id: string, chat_session_id: string, message_id: string | number) {
     let resp = await this.file_preview_resp(file_id, chat_session_id, message_id);
 
     let fetchpage = (await resp.json()) as FileResponse;
@@ -85,7 +85,7 @@ export class Deepseek {
     return await fetch(str, { headers: this.headers, body: null, method: "GET" });
   }
 
-  async file_preview_resp(file_id: string, chat_session_id: string, message_id: string) {
+  async file_preview_resp(file_id: string, chat_session_id: string, message_id: string | number) {
     if (!file_id.startsWith("file-")) {
       file_id = `file-${file_id}`;
     }
@@ -93,14 +93,14 @@ export class Deepseek {
     let url = new URL("https://chat.deepseek.com/api/v0/file/preview");
     url.searchParams.append("file_id", file_id);
     url.searchParams.append("chat_session_id", chat_session_id);
-    url.searchParams.append("message_id", message_id);
+    url.searchParams.append("message_id", `${message_id}`);
 
     let str = url.toString();
 
     return await fetch(str, { headers: this.headers, body: null, method: "GET" });
   }
 
-  async file_resp(file_id: string, chat_session_id: string, message_id: string) {
+  async file_resp(file_id: string, chat_session_id: string, message_id: string | number) {
     var url = (await this.file_preview(file_id, chat_session_id, message_id)).url;
 
     return await fetch(url, { headers: this.headers, body: null, method: "GET" });

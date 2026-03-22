@@ -25,9 +25,20 @@ type PgTx = PgTransaction<any, any, any>;
 
 export class DrizzleRepository implements IRepository {
   constructor(private client: typeof db_drizzle) {}
+  async findAllFiles(): Promise<MessageFile[]> {
+    const items = await this.client.select().from(filesTable).orderBy(messageFilesTable.messageId);
+    return items.map(
+      (file) =>
+        new MessageFile({
+          ...file,
+          sessionId: null!,
+          messageId: null!,
+        }),
+    );
+  }
 
   // ========== Файлы для конкретного сообщения ==========
-  async findAllFiles(sessionId: string, messageId: number): Promise<MessageFile[]> {
+  async findAllFilesByMessage(sessionId: string, messageId: number): Promise<MessageFile[]> {
     return this.getFilesForMessage(sessionId, messageId);
   }
 

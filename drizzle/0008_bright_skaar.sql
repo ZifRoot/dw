@@ -1,0 +1,1 @@
+ALTER TABLE "message_fragments" ALTER COLUMN "size" SET NOT NULL;

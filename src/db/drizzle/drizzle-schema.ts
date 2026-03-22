@@ -121,7 +121,7 @@ export const messageFragmentsTable = pgTable(
     elapsed_secs: doublePrecision("elapsed_secs"),
     references: jsonb("references"),
     stage_id: integer("stage_id"),
-    size: integer("size"),
+    size: integer("size").notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.sessionId, table.messageId, table.fragmentOrder] }),

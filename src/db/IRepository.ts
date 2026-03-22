@@ -29,10 +29,11 @@ export interface IRepository {
   createManyMessages(sessionId: string, messages: ChatMessageCreate[]): Promise<number>;
 
   // ========== Files ==========
-  findAllFiles(sessionId: string, messageId: number): Promise<MessageFile[]>;
+  findAllFilesByMessage(sessionId: string, messageId: number): Promise<MessageFile[]>;
   findFileById(id: string): Promise<MessageFile | null>;
   createFile(data: MessageFileCreate): Promise<MessageFile>;
   createManyFiles(data: MessageFileCreate[]): Promise<number>;
+  findAllFiles(): Promise<MessageFile[]>;
 
   // ========== Message Fragments ==========
   findAllFragments(sessionId: string, messageId: number): Promise<MessageFragment[]>;
