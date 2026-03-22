@@ -34,6 +34,7 @@ export class MessageFile {
     if (data.content == null) {
       this.content = null;
       this.contentBytes = null;
+      return;
     }
 
     // Если это строка
@@ -44,6 +45,7 @@ export class MessageFile {
       const buffer = Buffer.from(hex, "hex");
       this.content = hex;
       this.contentBytes = buffer;
+      return;
     }
 
     // Если это Buffer (проверяем через isBuffer)
@@ -51,6 +53,13 @@ export class MessageFile {
       const hex = data.content.toString("hex");
       this.content = hex;
       this.contentBytes = data.content;
+      return;
+    }
+    if (data.content instanceof ArrayBuffer) {
+      const buffer = Buffer.from(data.content);
+      this.content = buffer.toString("hex");
+      this.contentBytes = buffer;
+      return;
     }
 
     // Запасной вариант (по типам сюда не должны попасть)
