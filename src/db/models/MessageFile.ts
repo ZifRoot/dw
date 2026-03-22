@@ -13,7 +13,7 @@ export class MessageFile {
   public error_code: number | null;
   public inserted_at: Date;
   public updated_at: Date;
-  public content: string | null;
+  public content: Blob | null;
 
   constructor(data: MessageFileCreate) {
     this.id = normalizeUUID(data.id) ?? crypto.randomUUID();

@@ -5,5 +5,5 @@ export type MessageFileCreate = Omit<ChatMessageFile, "inserted_at" | "updated_a
   updated_at: number | Date | null;
   sessionId: string;
   messageId: number;
-  content?: string | null | undefined;
+  content?: Blob | null | undefined;
 };
