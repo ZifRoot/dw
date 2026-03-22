@@ -35,7 +35,7 @@ export class Deepseek {
   async file(file_id: string, chat_session_id: string, message_id: string | number) {
     var resp = await this.file_resp(file_id, chat_session_id, message_id);
 
-    var text = await resp.text();
+    var text = await resp.arrayBuffer();
     return text;
   }
 

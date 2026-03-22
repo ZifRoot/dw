@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, boolean, timestamp, integer, doublePrecision, jsonb, primaryKey, foreignKey, index } from "drizzle-orm/pg-core";
+import { bytea } from "./types";
 
 // Enums реализованы как text (согласно вашему пожеланию)
 export const roleEnum = text("role");
@@ -77,7 +78,7 @@ export const filesTable = pgTable("files", {
   error_code: integer("error_code"),
   inserted_at: timestamp("inserted_at").notNull(),
   updated_at: timestamp("updated_at").notNull(),
-  content: text("content"),
+  content: bytea("content"),
 });
 
 // ========================
