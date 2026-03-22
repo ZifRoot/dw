@@ -1,4 +1,4 @@
-import { ChatSessionBase, MessagesResponse, SessionsResponse } from "./db/resp";
+import { ChatSessionBase, FileResponse, MessagesResponse, SessionsResponse } from "./db/resp";
 
 export class Deepseek {
   headers: Headers;
@@ -8,11 +8,10 @@ export class Deepseek {
     var chat_sessions_all: ChatSessionBase[] = [];
     while (true) {
       let fetchpage = await this.fetch_page(updated_at);
-      var biz_data = fetchpage.data.biz_data;
-      var chat_sessions = biz_data.chat_sessions;
+      var chat_sessions = fetchpage.chat_sessions;
       let ud0 = chat_sessions[0].updated_at;
       let ude = chat_sessions.at(-1)?.updated_at;
-      let has_more = biz_data.has_more;
+      let has_more = fetchpage.has_more;
       chat_sessions_all.push(...chat_sessions);
 
       if (!has_more) break;
@@ -22,16 +21,42 @@ export class Deepseek {
   }
 
   async fetch_page(updated_at?: number | null) {
+    return (await this.fetch_page_raw(updated_at)).data.biz_data;
+  }
+
+  async history_messages(chat_session_id: string, version?: number) {
+    return (await this.history_messages_raw(chat_session_id, version)).data.biz_data;
+  }
+
+  async file_preview(file_id: string, chat_session_id: string, message_id: string | number) {
+    return (await this.file_preview_raw(file_id, chat_session_id, message_id)).data.biz_data;
+  }
+
+  async file(file_id: string, chat_session_id: string, message_id: string | number) {
+    var resp = await this.file_resp(file_id, chat_session_id, message_id);
+
+    var text = await resp.arrayBuffer();
+    return text;
+  }
+
+  async fetch_page_raw(updated_at?: number | null) {
     let resp = await this.fetch_page_resp(updated_at);
 
     let fetchpage = (await resp.json()) as SessionsResponse;
     return fetchpage;
   }
 
-  async history_messages(chat_session_id: string, version?: number) {
+  async history_messages_raw(chat_session_id: string, version?: number) {
     let resp = await this.history_messages_resp(chat_session_id, version ?? null);
 
     let fetchpage = (await resp.json()) as MessagesResponse;
+    return fetchpage;
+  }
+
+  async file_preview_raw(file_id: string, chat_session_id: string, message_id: string | number) {
+    let resp = await this.file_preview_resp(file_id, chat_session_id, message_id);
+
+    let fetchpage = (await resp.json()) as FileResponse;
     return fetchpage;
   }
 
@@ -59,6 +84,28 @@ export class Deepseek {
 
     return await fetch(str, { headers: this.headers, body: null, method: "GET" });
   }
+
+  async file_preview_resp(file_id: string, chat_session_id: string, message_id: string | number) {
+    if (!file_id.startsWith("file-")) {
+      file_id = `file-${file_id}`;
+    }
+
+    let url = new URL("https://chat.deepseek.com/api/v0/file/preview");
+    url.searchParams.append("file_id", file_id);
+    url.searchParams.append("chat_session_id", chat_session_id);
+    url.searchParams.append("message_id", `${message_id}`);
+
+    let str = url.toString();
+
+    return await fetch(str, { headers: this.headers, body: null, method: "GET" });
+  }
+
+  async file_resp(file_id: string, chat_session_id: string, message_id: string | number) {
+    var url = (await this.file_preview(file_id, chat_session_id, message_id)).url;
+
+    return await fetch(url, { headers: this.headers, body: null, method: "GET" });
+  }
+
   constructor(user: credentials) {
     this.headers = {
       ...user,

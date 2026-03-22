@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, boolean, timestamp, integer, doublePrecision, jsonb, primaryKey, foreignKey, index } from "drizzle-orm/pg-core";
+import { bytea } from "./types";
 
 // Enums реализованы как text (согласно вашему пожеланию)
 export const roleEnum = text("role");
@@ -53,15 +54,15 @@ export const chatMessagesTable = pgTable(
     hasPendingFragment: boolean("has_pending_fragment").notNull(),
     autoContinue: boolean("auto_continue").notNull(),
   },
-  (table) => ({
-    pk: primaryKey({ columns: [table.sessionId, table.messageId] }),
-    parentFk: foreignKey({
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.messageId] }),
+    foreignKey({
       columns: [table.sessionId, table.parentMessageId],
       foreignColumns: [table.sessionId, table.messageId],
     }),
-    parentIdx: index("chat_messages_parent_idx").on(table.sessionId, table.parentMessageId),
-    sessionIdx: index("chat_messages_session_id_idx").on(table.sessionId),
-  }),
+    index("chat_messages_parent_idx").on(table.sessionId, table.parentMessageId),
+    index("chat_messages_session_id_idx").on(table.sessionId),
+  ],
 );
 
 // ========================
@@ -70,13 +71,14 @@ export const chatMessagesTable = pgTable(
 export const filesTable = pgTable("files", {
   id: uuid("id").primaryKey().defaultRandom(),
   status: text("status").notNull(),
-  fileName: text("file_name").notNull(),
+  file_name: text("file_name").notNull(),
   previewable: boolean("previewable").notNull(),
-  fileSize: integer("file_size").notNull(),
-  tokenUsage: integer("token_usage").notNull(),
-  errorCode: integer("error_code"),
-  insertedAt: timestamp("inserted_at").notNull(),
-  updatedAt: timestamp("updated_at").notNull(),
+  file_size: integer("file_size").notNull(),
+  token_usage: integer("token_usage").notNull(),
+  error_code: integer("error_code"),
+  inserted_at: timestamp("inserted_at").notNull(),
+  updated_at: timestamp("updated_at").notNull(),
+  content: bytea("content"),
 });
 
 // ========================
@@ -85,23 +87,23 @@ export const filesTable = pgTable("files", {
 export const messageFilesTable = pgTable(
   "message_files",
   {
-    sessionId: uuid("session_id").notNull(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => chatSessionsTable.id),
     messageId: integer("message_id").notNull(),
     fileId: uuid("file_id")
       .notNull()
       .references(() => filesTable.id),
   },
-  (table) => ({
-    pk: primaryKey({
-      columns: [table.sessionId, table.messageId, table.fileId],
-    }),
-    messageFk: foreignKey({
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.messageId, table.fileId] }),
+    foreignKey({
       columns: [table.sessionId, table.messageId],
       foreignColumns: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
     }),
-    messageIdx: index("message_files_message_idx").on(table.sessionId, table.messageId),
-    fileIdx: index("message_files_file_idx").on(table.fileId),
-  }),
+    index("message_files_message_idx").on(table.sessionId, table.messageId),
+    index("message_files_file_idx").on(table.fileId),
+  ],
 );
 
 // ========================
@@ -110,19 +112,41 @@ export const messageFilesTable = pgTable(
 export const messageFragmentsTable = pgTable(
   "message_fragments",
   {
-    sessionId: uuid("session_id").notNull(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => chatSessionsTable.id),
     messageId: integer("message_id").notNull(),
     fragmentOrder: integer("fragment_order").notNull(),
     type: text("type").notNull(),
     content: text("content").notNull(),
-    elapsedSecs: doublePrecision("elapsed_secs"),
+    elapsed_secs: doublePrecision("elapsed_secs"),
     references: jsonb("references"),
-    stageId: integer("stage_id"),
+    stage_id: integer("stage_id"),
+    size: integer("size").notNull(),
   },
-  (table) => ({
-    pk: primaryKey({
-      columns: [table.sessionId, table.messageId, table.fragmentOrder],
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.messageId, table.fragmentOrder] }),
+    index("message_fragments_message_idx").on(table.sessionId, table.messageId),
+    foreignKey({
+      columns: [table.sessionId, table.messageId],
+      foreignColumns: [chatMessagesTable.sessionId, chatMessagesTable.messageId],
     }),
-    messageIdx: index("message_fragments_message_idx").on(table.sessionId, table.messageId),
-  }),
+  ],
+);
+
+// drizzle-schema.ts (дополнение)
+export const embeddingsTable = pgTable(
+  "embeddings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => chatSessionsTable.id, { onDelete: "cascade" }),
+    model_name: text("model_name").notNull(),
+    dimension: integer("dimension").notNull(),
+    processing_time_ms: integer("processing_time_ms").notNull(),
+    embedding: jsonb("embedding_vector"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("embeddings_session_idx").on(table.sessionId)],
 );
