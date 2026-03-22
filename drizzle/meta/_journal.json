@@ -64,6 +64,20 @@
       "when": 1774120880888,
       "tag": "0008_bright_skaar",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774186725208,
+      "tag": "0009_organic_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774186757916,
+      "tag": "0010_fancy_demogoblin",
+      "breakpoints": true
     }
   ]
 }

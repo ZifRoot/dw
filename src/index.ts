@@ -51,10 +51,15 @@ class Program {
 
       files = files.filter((f) => f.content == null);
 
-      for (const file of files) {
+      files = files.slice(0, 1);
+
+      let filesAs = files.map(async (file) => {
         let text = await deepseek.file(file.id, file.sessionId, file.messageId);
-        file.content = text;
-      }
+        return new MessageFile({ ...file, content: text });
+      });
+
+      files = await Promise.all(filesAs);
+
       await this.repository.createManyFiles(files);
     }
   }
