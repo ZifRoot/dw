@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { db_drizzle } from "./drizzle/drizzle-db";
 import { chatSessionsTable, chatMessagesTable, filesTable, messageFilesTable, messageFragmentsTable, userTable } from "./drizzle/drizzle-schema";
 import { ChatSessions } from "./models/ChatSessions";
@@ -682,13 +682,12 @@ export class DrizzleRepository implements IRepository {
     }
   }
 
-  // внутри класса DrizzleRepository:
-
   // ========== Embeddings ==========
   async findEmbeddingsBySession(sessionId: string, tx?: PgTransaction<any, any, any>): Promise<Embedding[]> {
     const db = tx || this.client;
-    const items = await db.select().from(embeddingsTable).where(eq(embeddingsTable.sessionId, sessionId));
-    return items.map((item) => new Embedding(item));
+    const items = await db.select().from(embeddingsTable).where(eq(embeddingsTable.sessionId, sessionId)).orderBy(desc(embeddingsTable.createdAt)); // по желанию
+
+    return items.map((item) => new Embedding({ ...item }));
   }
 
   async findEmbeddingBySessionAndModel(sessionId: string, modelName: string, tx?: PgTransaction<any, any, any>): Promise<Embedding | null> {
@@ -697,8 +696,12 @@ export class DrizzleRepository implements IRepository {
       .select()
       .from(embeddingsTable)
       .where(and(eq(embeddingsTable.sessionId, sessionId), eq(embeddingsTable.model_name, modelName)))
+      .orderBy(desc(embeddingsTable.createdAt))
       .limit(1);
-    return item ? new Embedding(item) : null;
+
+    if (!item) return null;
+
+    return new Embedding({ ...item });
   }
 
   async createManyEmbeddings(sessionId: string, data: EmbeddingCreate[], tx?: PgTransaction<any, any, any>): Promise<number> {
@@ -711,11 +714,11 @@ export class DrizzleRepository implements IRepository {
         .insert(embeddingsTable)
         .values(embeddings)
         .onConflictDoUpdate({
-          target: [embeddingsTable.sessionId, embeddingsTable.model_name], // если такой эмбеддинг уже есть – обновляем
+          target: [embeddingsTable.sessionId, embeddingsTable.model_name, embeddingsTable.createdAt],
           set: {
             dimension: sql`excluded.dimension`,
             processing_time_ms: sql`excluded.processing_time_ms`,
-            createdAt: sql`excluded.created_at`,
+            embedding: sql`excluded.embedding`,
           },
         });
       return result.rowCount ?? 0;
@@ -730,19 +733,24 @@ export class DrizzleRepository implements IRepository {
 
   async createEmbedding(sessionId: string, data: EmbeddingCreate, tx?: PgTransaction<any, any, any>): Promise<Embedding> {
     const execute = async (db: typeof db_drizzle | PgTransaction<any, any, any>) => {
-      const embedding = new Embedding({ ...data, sessionId });
+      const embedding = new Embedding({
+        ...data,
+        sessionId,
+      });
+
       const [result] = await db
         .insert(embeddingsTable)
         .values(embedding)
         .onConflictDoUpdate({
-          target: [embeddingsTable.sessionId, embeddingsTable.model_name],
+          target: [embeddingsTable.sessionId, embeddingsTable.model_name, embeddingsTable.createdAt],
           set: {
             dimension: sql`excluded.dimension`,
             processing_time_ms: sql`excluded.processing_time_ms`,
-            createdAt: sql`excluded.created_at`,
+            embedding: sql`excluded.embedding`,
           },
         })
         .returning();
+
       return new Embedding(result);
     };
 
