@@ -1,0 +1,1 @@
+ALTER TABLE "embeddings" ALTER COLUMN "model_name" SET DATA TYPE varchar(80);

@@ -718,7 +718,7 @@ export class DrizzleRepository implements IRepository {
           set: {
             dimension: sql`excluded.dimension`,
             processing_time_ms: sql`excluded.processing_time_ms`,
-            embedding: sql`excluded.embedding`,
+            embedding: sql`excluded.embedding_vector`,
           },
         });
       return result.rowCount ?? 0;
@@ -746,7 +746,7 @@ export class DrizzleRepository implements IRepository {
           set: {
             dimension: sql`excluded.dimension`,
             processing_time_ms: sql`excluded.processing_time_ms`,
-            embedding: sql`excluded.embedding`,
+            embedding: sql`excluded.embedding_vector`,
           },
         })
         .returning();
