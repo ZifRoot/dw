@@ -161,7 +161,5 @@ export const embeddingsTable = pgTable(
     processing_time_ms: real("processing_time_ms").notNull(),
     embedding: jsonb("embedding_vector"),
   },
-  (table) => [
-    ///primaryKey({ columns: [table.sessionId, table.model_name, table.createdAt] })
-  ],
+  (table) => [primaryKey({ columns: [table.sessionId, table.model_name, table.createdAt] })],
 );
