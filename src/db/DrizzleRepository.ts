@@ -1,25 +1,31 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { db_drizzle } from "./drizzle/drizzle-db";
-import { chatSessionsTable, chatMessagesTable, filesTable, messageFilesTable, messageFragmentsTable, userTable } from "./drizzle/drizzle-schema";
-import { ChatSessions } from "./models/ChatSessions";
-import { ChatSessionsCreate } from "./models/ChatSessionsCreate";
-import { MessageFile } from "./models/MessageFile";
-import { MessageFileCreate } from "./models/MessageFileCreate";
-import { ChatMessage } from "./models/ChatMessage";
-import { ChatMessageCreate } from "./models/ChatMessageCreate";
-import { MessageFragmentCreate } from "./models/MessageFragmentCreate";
-import { MessageFragment } from "./models/MessageFragment";
+import {
+  chatSessionsTable,
+  chatMessagesTable,
+  filesTable,
+  messageFilesTable,
+  messageFragmentsTable,
+  userTable,
+  embeddingsTable,
+} from "./drizzle/drizzle-schema";
 import { IRepository } from "./IRepository";
 import { FragmentType, MessagesBizData, Role } from "./resp";
-import { User } from "./models/User";
-import { UserCreate } from "./models/UserCreate";
 import { PgTransaction } from "drizzle-orm/pg-core";
-
-// DrizzleRepository.ts (дополнения)
-
-import { embeddingsTable } from "./drizzle/drizzle-schema";
-import { Embedding } from "./models/Embedding";
-import { EmbeddingCreate } from "./models/EmbeddingCreate";
+import {
+  ChatMessage,
+  ChatMessageCreate,
+  ChatSessions,
+  ChatSessionsCreate,
+  Embedding,
+  EmbeddingCreate,
+  MessageFile,
+  MessageFileCreate,
+  MessageFragment,
+  MessageFragmentCreate,
+  User,
+  UserCreate,
+} from "./models";
 
 type PgTx = PgTransaction<any, any, any>;
 

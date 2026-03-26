@@ -1,11 +1,11 @@
-// src/cli.ts
-
 import "dotenv/config";
 // import { PrismaItemRepository } from "./PrismaItemRepository";
 // import { PrismaPg } from "@prisma/adapter-pg";
 // import { PrismaClient } from "../generated/prisma/client";
 import { DrizzleRepository } from "./DrizzleRepository";
 import { db_drizzle } from "./drizzle/drizzle-db";
+import { IRepository } from "./IRepository";
+import { startAndWaitAsync, startAndWaitSync } from "./db-manager";
 
 // export async function testDb1() {
 //   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
@@ -28,7 +28,17 @@ export function InitdrizzleDb() {
   return new DrizzleRepository(db_drizzle);
 }
 
-export function InitDb() {
+export function InitDb(): IRepository {
+  startAndWaitSync();
+  return InitdrizzleDb();
+}
+
+export function InitDbFast(): IRepository {
+  return InitdrizzleDb();
+}
+
+export async function InitDbAsync(): Promise<IRepository> {
+  await startAndWaitAsync();
   return InitdrizzleDb();
 }
 // runWithPromiseAsync(main()).catch(console.error);
