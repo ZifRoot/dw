@@ -1,4 +1,18 @@
-import { pgTable, uuid, text, boolean, timestamp, integer, doublePrecision, jsonb, primaryKey, foreignKey, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  uuid,
+  text,
+  boolean,
+  timestamp,
+  integer,
+  doublePrecision,
+  jsonb,
+  primaryKey,
+  foreignKey,
+  index,
+  real,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { bytea } from "./types";
 
 // Enums реализованы как text (согласно вашему пожеланию)
@@ -114,7 +128,7 @@ export const messageFragmentsTable = pgTable(
   {
     sessionId: uuid("session_id")
       .notNull()
-      .references(() => chatSessionsTable.id),
+      .references(() => chatSessionsTable.id, { onDelete: "cascade" }),
     messageId: integer("message_id").notNull(),
     fragmentOrder: integer("fragment_order").notNull(),
     type: text("type").notNull(),
@@ -134,19 +148,18 @@ export const messageFragmentsTable = pgTable(
   ],
 );
 
-// drizzle-schema.ts (дополнение)
+// Таблица эмбеддингов с составным PK (sessionId, modelId)
 export const embeddingsTable = pgTable(
   "embeddings",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => chatSessionsTable.id, { onDelete: "cascade" }),
-    model_name: text("model_name").notNull(),
-    dimension: integer("dimension").notNull(),
-    processing_time_ms: integer("processing_time_ms").notNull(),
-    embedding: jsonb("embedding_vector"),
+    model_name: varchar("model_name", { length: 80 }).notNull(), // ограничение 50 символов
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    dimension: integer("dimension").notNull(),
+    processing_time_ms: real("processing_time_ms").notNull(),
+    embedding: jsonb("embedding_vector"),
   },
-  (table) => [index("embeddings_session_idx").on(table.sessionId)],
+  (table) => [primaryKey({ columns: [table.sessionId, table.model_name, table.createdAt] })],
 );

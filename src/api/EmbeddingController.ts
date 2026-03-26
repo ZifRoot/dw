@@ -1,10 +1,14 @@
 import { Router, Request, Response } from "express";
 import { IRepository } from "../db/IRepository";
+import { EmbeddingCreate } from "../db/models/EmbeddingCreate";
+import { Program } from "../program";
 
 export class EmbeddingController {
   private router: Router;
+  private repo: IRepository;
 
-  constructor(private repo: IRepository) {
+  constructor(private program: Program) {
+    this.repo = program.repository!;
     this.router = Router();
     this.setupRoutes();
   }
@@ -20,6 +24,13 @@ export class EmbeddingController {
     this.router.get("/document/:id/fragment/:fragment_id/text", this.getFragmentText.bind(this));
     // POST /embeddings/:id
     this.router.post("/embeddings/:id", this.postEmbeddings.bind(this));
+
+    this.router.get("/update", this.Update.bind(this));
+  }
+
+  async Update(req: Request, res: Response) {
+    this.program.Update();
+    res.json("OK");
   }
 
   getRouter(): Router {
@@ -147,10 +158,15 @@ export class EmbeddingController {
         return res.status(404).json({ error: "Document not found" });
       }
 
-      const embeddingsArray = req.body;
+      const embeddingsArray = req.body as EmbeddingCreate[];
       if (!Array.isArray(embeddingsArray)) {
         return res.status(400).json({ error: "Request body must be an array" });
       }
+
+      var embs = embeddingsArray.map((emb) => ({
+        session_title: session.title,
+        model_name: emb.model_name,
+      }));
 
       // // Валидация каждого объекта
       // for (const emb of embeddingsArray) {
@@ -162,6 +178,7 @@ export class EmbeddingController {
 
       const count = await this.repo.createManyEmbeddings(id, embeddingsArray);
       res.status(200).json({ status: "ok", received: count });
+      console.log("POST /embeddings/:id:", embs);
     } catch (err) {
       console.error("Error in POST /embeddings/:id:", err);
       res.status(500).json({ error: "Internal server error" });

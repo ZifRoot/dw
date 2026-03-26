@@ -149,3 +149,7 @@ export const format: Intl.DateTimeFormatOptions = {
   hour: "2-digit",
   minute: "2-digit",
 };
+
+export function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
