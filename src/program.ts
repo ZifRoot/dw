@@ -32,10 +32,12 @@ export class Program {
     app.use("/api", embeddingController.getRouter());
 
     // 1. Загружаем готовый openapi.json (если сгенерировали заранее)
-    const swaggerDocument = JSON.parse(fs.readFileSync("./openapi.json", "utf8"));
 
     // 2. Подключаем Swagger UI по пути /api-docs
-    app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+    app.use("/docs", swaggerUi.serve, (rq: any, rs: any, n: any) => {
+      const swaggerDocument = JSON.parse(fs.readFileSync("./openapi.json", "utf8"));
+      swaggerUi.setup(swaggerDocument)(rq, rs, n);
+    });
 
     const PORT = process.env.PORT || 8081;
     app.listen(PORT, () => {
