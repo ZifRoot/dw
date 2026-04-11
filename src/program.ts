@@ -1,5 +1,5 @@
 import { EmbeddingController } from "./api/EmbeddingController";
-import { InitDb } from "./db/Initdb";
+import { InitDb, InitDbAsync } from "./db/Initdb";
 import { IRepository } from "./db/IRepository";
 import { ChatSessions } from "./db/models/ChatSessions";
 import { MessageFile } from "./db/models/MessageFile";
@@ -42,7 +42,9 @@ export class Program {
     app.listen(PORT, () => {
       console.log(`Server running http://localhost:${PORT}/docs |`);
     });
-    this.repository = this.Repository();
+
+    this.repository = await this.RepositoryAsync();
+    console.log("repository ready");
   }
 
   async Update() {
@@ -195,6 +197,10 @@ export class Program {
 
   Repository() {
     return (this.repository = this.repository || InitDb());
+  }
+
+  async RepositoryAsync() {
+    return (this.repository = this.repository || (await InitDbAsync()));
   }
 
   constructor() {}

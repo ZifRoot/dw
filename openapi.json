@@ -142,6 +142,40 @@
         }
       }
     },
+    "/document/{id}/parse": {
+      "get": {
+        "summary": "Парсить документ",
+        "operationId": "getParseDocumentText",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Текст документа",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Документ не найден"
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
+    },
     "/document/{id}/fragment/{fragment_id}/text": {
       "get": {
         "summary": "Получить текст конкретного фрагмента",

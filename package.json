@@ -45,7 +45,7 @@
     "better-sqlite3": "^12.6.2",
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
-    "mdforge": "file:../mdforge/mdforge-0.6.0.tgz",
+    "mdforge": "file:../mdforge/mdforge-0.7.0.tgz",
     "pg": "^8.20.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0",
