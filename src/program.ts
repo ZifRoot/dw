@@ -23,8 +23,7 @@ export class Program {
   }
 
   async F() {
-    this.repository = this.Repository();
-    await this.Update();
+    //await this.Update();
     const app = express();
     app.use(express.json());
 
@@ -43,6 +42,7 @@ export class Program {
     app.listen(PORT, () => {
       console.log(`Server running http://localhost:${PORT}/docs |`);
     });
+    this.repository = this.Repository();
   }
 
   async Update() {
