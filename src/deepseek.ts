@@ -108,7 +108,6 @@ export class Deepseek {
 
   constructor(user: credentials) {
     this.headers = {
-      ...user,
       accept: "*/*",
       "accept-language": "ru,en-US;q=0.9,en;q=0.8",
       priority: "u=1, i",
@@ -129,6 +128,7 @@ export class Deepseek {
       "x-client-platform": "web",
       "x-client-timezone-offset": "25200",
       "x-client-version": "1.7.0",
+      ...user,
     };
   }
 }
