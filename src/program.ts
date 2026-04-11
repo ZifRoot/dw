@@ -7,6 +7,8 @@ import { User } from "./db/models/User";
 import { Deepseek, credentials } from "./deepseek";
 import { delay, dateStr } from "./utils/data-utils";
 import express from "express";
+import swaggerUi from "swagger-ui-express";
+import fs from "fs";
 
 export class Program {
   repository!: IRepository;
@@ -29,9 +31,15 @@ export class Program {
     const embeddingController = new EmbeddingController(this);
     app.use("/api", embeddingController.getRouter());
 
+    // 1. Загружаем готовый openapi.json (если сгенерировали заранее)
+    const swaggerDocument = JSON.parse(fs.readFileSync("./openapi.json", "utf8"));
+
+    // 2. Подключаем Swagger UI по пути /api-docs
+    app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
     const PORT = process.env.PORT || 8081;
     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+      console.log(`Server running http://localhost:${PORT}/docs |`);
     });
   }
 
@@ -187,6 +195,5 @@ export class Program {
     return (this.repository = this.repository || InitDb());
   }
 
-  constructor() {
-  }
+  constructor() {}
 }
