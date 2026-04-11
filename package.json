@@ -24,8 +24,6 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "npm run docker:up && prisma migrate dev",
     "docker:up": "ts-node src/db/db-manager.ts up",
     "docker:down": "ts-node src/db/db-manager.ts down"
   },
