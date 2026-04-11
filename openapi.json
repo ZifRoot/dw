@@ -1,0 +1,327 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Embedding API",
+    "version": "1.0.0",
+    "description": "API для работы с документами, фрагментами и эмбеддингами"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8081/api",
+      "description": "Локальный сервер"
+    }
+  ],
+  "paths": {
+    "/documents": {
+      "get": {
+        "summary": "Получить список всех документов",
+        "operationId": "getAllDocuments",
+        "responses": {
+          "200": {
+            "description": "Массив документов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "models": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
+    },
+    "/document/{id}": {
+      "get": {
+        "summary": "Получить документ по ID с фрагментами и моделями",
+        "operationId": "getDocumentById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Идентификатор сессии"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Документ найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "size_bytes": {
+                      "type": "integer"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "fragments": {
+                      "type": "array"
+                    },
+                    "messages": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Документ не найден"
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
+    },
+    "/document/{id}/text": {
+      "get": {
+        "summary": "Получить весь текст документа (склеенные фрагменты, legacy)",
+        "operationId": "getDocumentText",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Текст документа",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Документ не найден"
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
+    },
+    "/document/{id}/fragment/{fragment_id}/text": {
+      "get": {
+        "summary": "Получить текст конкретного фрагмента",
+        "operationId": "getFragmentText",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID сессии"
+          },
+          {
+            "name": "fragment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Формат: msg_<messageId>_frag_<order> или file_<fileId>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Текст фрагмента",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный формат fragment_id"
+          },
+          "404": {
+            "description": "Фрагмент не найден"
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
+    },
+    "/embeddings/{id}": {
+      "post": {
+        "summary": "Сохранить эмбеддинги для документа",
+        "operationId": "postEmbeddings",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID сессии"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EmbeddingCreate"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Эмбеддинги успешно приняты",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "received": {
+                      "type": "integer",
+                      "example": 5
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректный запрос (не массив, пропущены поля)"
+          },
+          "404": {
+            "description": "Документ не найден"
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
+    },
+    "/update": {
+      "get": {
+        "summary": "Запустить принудительное обновление данных",
+        "operationId": "updateData",
+        "responses": {
+          "200": {
+            "description": "Обновление запущено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "example": "OK"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EmbeddingCreate": {
+        "type": "object",
+        "required": [
+          "model_name",
+          "embedding",
+          "dimension",
+          "processing_time_ms"
+        ],
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "description": "Название модели эмбеддингов"
+          },
+          "embedding": {
+            "description": "Вектор эмбеддинга (не сохраняется, но ожидается в запросе)",
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "type": "object"
+              }
+            ]
+          },
+          "dimension": {
+            "type": "integer",
+            "description": "Размерность вектора"
+          },
+          "processing_time_ms": {
+            "type": "number",
+            "description": "Время обработки в миллисекундах"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "Не используется, т.к. ID сессии берётся из URL"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Опциональная временная метка"
+          }
+        }
+      }
+    }
+  }
+}
