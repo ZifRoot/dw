@@ -175,5 +175,3 @@ export function getHighResTime() {
 
   return `${hh}:${mm}:${ss}.${ms}${micro}`;
 }
-
-console.log(getHighResTime()); // "18:35:48.50612"

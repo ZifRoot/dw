@@ -1,5 +1,6 @@
 import * as d3 from "d3";
 import { ZoomTransform } from "d3";
+import { Throttler } from "../utils/throttler";
 
 export interface PointData {
   _groupElement?: SVGGElement;
@@ -8,6 +9,7 @@ export interface PointData {
   y: number;
   text: string; // текст, загруженный с сервера
   labelOffset?: { dx: number; dy: number }; // смещение текста относительно точки
+  embedding?: Embedding[];
 }
 
 export interface ChatSession {
@@ -18,21 +20,29 @@ export interface ChatSession {
   updated_at: number; // timestamp в секундах, может быть дробным
 }
 
+export interface Embedding {
+  sessionId: string;
+  model_name: string;
+  createdAt: Date;
+  dimension: number;
+  processing_time_ms: number;
+  embedding: number[] | null;
+}
+
 export class CanvasEngine {
   private svg!: d3.Selection<SVGSVGElement, unknown, null, undefined>;
   private container!: d3.Selection<SVGGElement, unknown, null, undefined>;
   private points: PointData[] = [];
   transform: ZoomTransform;
-
-  // Поведение перетаскивания для групп
-  // ==================== Drag & Drop ====================
-  private dragBehavior = d3.drag<SVGCircleElement, PointData>().on("start", this.onDragStart.bind(this)).on("drag", this.onDrag.bind(this));
+  throttle: Throttler;
+  dragBehavior: d3.DragBehavior<SVGCircleElement, PointData, PointData | d3.SubjectPosition>;
 
   constructor(private element: HTMLElement) {
+    this.transform = d3.zoomIdentity;
+    this.throttle = new Throttler(10, 100);
+    this.dragBehavior = d3.drag<SVGCircleElement, PointData>().on("start", this.onDragStart.bind(this)).on("drag", this.onDrag.bind(this));
     this.initSvg();
     this.initZoom();
-    // Инициализируем трансформацию единичной матрицей
-    this.transform = d3.zoomIdentity;
     this.addInitialPoints().catch((e) => console.error(e));
   }
 
@@ -91,6 +101,11 @@ export class CanvasEngine {
   private applyDragToGroups() {
     this.container.selectAll<SVGCircleElement, PointData>("g.point-group circle.point").call(this.dragBehavior);
   }
+  private async addInitialPoints() {
+    this.points.push(...(await this.fetchTextForPoint()));
+    this.renderPoints();
+    this.GetEmbeddings().catch((e) => console.error(e));
+  }
 
   // ==================== Работа с текстом через fetch ====================
   private async fetchTextForPoint(): Promise<PointData[]> {
@@ -100,22 +115,37 @@ export class CanvasEngine {
       const response = await fetch(`http://localhost:5173/api/documents`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = (await response.json()) as ChatSession[];
-      let dd = data.map(
+      let points = data.map(
         (a) =>
           ({
             text: a.title,
             id: a.id,
-
             x: Math.random() * 800,
             y: Math.random() * 600,
-
             // labelOffset: { dx: 1, dy: 1 }, // справа
           }) as PointData,
       );
 
-      return dd;
+      return points;
     } catch (error) {}
     return [];
+  }
+  // ==================== Создание точек ====================
+
+  async GetEmbeddings() {
+    await Promise.all(this.points.map((p) => this.Pointx(p)));
+  }
+
+  private async Pointx_1(p: PointData) {
+    let id = p.id;
+    const resp = await fetch(`http://localhost:5173/api/embeddings/${id}`);
+    const data = (await resp.json()) as Embedding[];
+    p.embedding = data;
+  }
+
+  private Pointx(p: PointData) {
+    return this.Pointx_1(p);
+    //await this.throttle.throttle(() => );
   }
 
   // ==================== Рендеринг точек с группами ====================
@@ -191,17 +221,6 @@ export class CanvasEngine {
       .style("font-size", `${12 * s}px`)
       .attr("x", (d) => (d.labelOffset?.dx ?? 12) * s)
       .attr("y", (d) => (d.labelOffset?.dy ?? 4) * s);
-  }
-
-  // ==================== Создание точек ====================
-  private async addInitialPoints() {
-    this.points.push(...(await this.fetchTextForPoint()));
-    this.renderPoints();
-
-    // После рендера загружаем текст для всех начальных точек
-    // this.points.forEach((point) => {
-    //   this.fetchTextForPoint(point.id);
-    // });
   }
 
   public addPoint(customText?: string, side: "right" | "left" | "top" | "bottom" = "right") {
