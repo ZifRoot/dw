@@ -5,25 +5,17 @@ import { ChatSessions } from "./db/models/ChatSessions";
 import { MessageFile } from "./db/models/MessageFile";
 import { User } from "./db/models/User";
 import { Deepseek, credentials } from "./deepseek";
-import { dateStr, delay, getHighResTime, safe } from "./utils/data-utils";
+import { dateStr, safe } from "./utils/data-utils";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import fs from "fs";
-
 
 export class Program {
   repository!: IRepository;
 
   async start() {
-    // let r = await EmbeddingPipeline.getInstance();
-    //await getEmbeddings();
+    await this.RepositoryAsync();
 
-    // await this.F();
-
-  }
-
-  async F() {
-    await this.Update();
     const app = express();
     app.use(express.json());
 
@@ -43,25 +35,25 @@ export class Program {
       console.log(`Server running http://localhost:${PORT}/docs |`);
     });
 
-    this.repository = await this.RepositoryAsync();
+    await this.Update();
     console.log("repository ready");
   }
 
   async Update() {
-    await this.all();
+    await this.ExecUsers();
   }
 
-  async all() {
+  async ExecUsers() {
     await this.RepositoryAsync();
     if (!this.repository) {
       console.error("null repository");
       return;
     }
     let users = await this.repository.findAllUsers();
-    await Promise.all(users.map((user) => this.User_all(user, true)));
+    await Promise.all(users.map((user) => this.ExecUser(user, true)));
   }
 
-  async User_all(user: User, all: boolean) {
+  async ExecUser(user: User, all: boolean) {
     if (!this.repository) {
       console.error("null repository");
       return;

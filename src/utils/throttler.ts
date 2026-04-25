@@ -1,10 +1,15 @@
+import { delay } from "./data-utils";
+
 /**
- * Ограничивает частоту выполнения операций (например, fetch-запросов) в Node.js / браузере.
+ * Ограничивает частоту выполнения операций (например, fetch-запросов).
  * Интервал отсчитывается от завершения предыдущей операции до начала следующей.
- * Гарантирует последовательное выполнение за счёт очереди на Promise.
+ * Все вызовы выстраиваются в очередь, гарантируется последовательное выполнение.
  */
 export class Throttler {
+  /** Время последнего завершения операции в миллисекундах (UTC) */
   private lastCompletion = 0;
+
+  /** Promise текущего вызова для формирования очереди */
   private nextPromise: Promise<void> | null = null;
 
   /**
@@ -25,60 +30,36 @@ export class Throttler {
   }
 
   /**
-   * Выполняет функцию с учётом интервала (или просто делает задержку, если fn не передана).
-   * @param fn - опциональная функция, возвращающая значение или Promise
-   * @returns результат fn, обёрнутый в Promise. Если fn не указана, возвращает Promise<void>.
+   * Выполняет переданную функцию с соблюдением заданного интервала.
+   * @typeparam T тип результата функции
+   * @param fn функция, возвращающая значение или Promise
+   * @returns Promise с результатом fn
+   * @throws ошибка, если fn выбросит исключение (оно пробрасывается)
    */
   async throttle<T = void>(fn?: () => T | Promise<T>): Promise<T> {
     const release = await this.prepareNext();
+    await this.applyDelay();
     try {
-      const delay = this.getDelayMs();
-      await this.sleep(delay);
-      return this.exec(fn);
+      return await this.exec(fn);
     } finally {
-      this.lastCompletion = Date.now();
+      this.updateCompletion();
       release();
     }
   }
 
   /**
-   * Подготавливает следующий вызов: дожидается завершения предыдущего и создаёт новый promise.
-   * @returns функцию, которую необходимо вызвать после выполнения полезной нагрузки для освобождения очереди.
+   * Ожидает завершения предыдущего вызова и создаёт promise для текущего.
+   * @private
+   * @returns функцию release, которую необходимо вызвать после выполнения полезной нагрузки
    */
   private async prepareNext(): Promise<() => void> {
     const prev = this.nextPromise;
-    let release: () => void;
+    let release: () => void = null!;
     this.nextPromise = new Promise<void>((resolve) => {
       release = resolve;
     });
     if (prev) await prev;
-    return () => {
-      release();
-      this.nextPromise = null;
-    };
-  }
-
-  /**
-   * Ожидает завершения текущего promise (если он существует).
-   */
-  private async waitNext(): Promise<void> {
-    const prev = this.nextPromise;
-    if (prev) await prev;
-  }
-
-  /**
-   * Создаёт promise для следующего вызова и возвращает функцию его разрешения.
-   * @returns функцию, которая разрешает promise и обнуляет ссылку на него.
-   */
-  private enqueueNext(): () => void {
-    let release: () => void;
-    this.nextPromise = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    return () => {
-      release();
-      this.nextPromise = null;
-    };
+    return release;
   }
 
   /**
@@ -90,20 +71,20 @@ export class Throttler {
     if (fn instanceof Function) {
       return await fn();
     }
-    return undefined as T;
+    return Promise.resolve(undefined as T);
   }
 
   /**
-   * Асинхронная задержка.
-   * @param delay - время в миллисекундах (если <= 0, задержка пропускается)
+   * Вычисляет и применяет задержку, необходимую для соблюдения интервала.
+   * @private
    */
-  private async sleep(delay: number): Promise<void> {
-    if (delay <= 0) return;
-    await new Promise((resolve) => setTimeout(resolve, delay));
+  private async applyDelay(): Promise<void> {
+    await delay(this.getDelayMs());
   }
 
   /**
-   * Возвращает следующий интервал: фиксированный или случайный (равномерное распределение).
+   * Возвращает следующий интервал (фиксированный или случайный).
+   * @returns задержка в миллисекундах
    */
   private getInterval(): number {
     if (this.minMs === this.maxMs) return this.minMs;
@@ -111,11 +92,20 @@ export class Throttler {
   }
 
   /**
-   * Вычисляет, сколько миллисекунд нужно ждать до разрешённого старта.
-   * @returns задержка в миллисекундах (0 – не ждать)
+   * Вычисляет задержку, необходимую для соблюдения интервала.
    */
   private getDelayMs(): number {
+    const now = Date.now();
     const desiredStart = this.lastCompletion + this.getInterval();
-    return Math.max(0, desiredStart - Date.now());
+    const delayTime = Math.max(0, desiredStart - now);
+    return delayTime;
+  }
+
+  /**
+   * Обновляет время последнего завершения операции.
+   * @private
+   */
+  private updateCompletion(): void {
+    this.lastCompletion = Date.now();
   }
 }
