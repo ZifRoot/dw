@@ -50,12 +50,12 @@ export class EmbeddingController {
   async getAllDocuments(req: Request, res: Response) {
     try {
       const sessions = await this.repo.findAllSessionsAll();
-      const result = [];
-      for (const session of sessions) {
-        const doc = await this.getSessionWithDetails1(session.id);
-        if (doc) result.push(doc);
-      }
-      res.json(result);
+      // const result = [];
+      // for (const session of sessions) {
+      //   const doc = await this.getSessionWithDetails1(session.id);
+      //   if (doc) result.push(doc);
+      // }
+      res.json(sessions);
     } catch (err) {
       console.error("Error in GET /documents:", err);
       res.status(500).json({ error: "Internal server error" });

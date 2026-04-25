@@ -20,6 +20,14 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    server: {
+      proxy: {
+        "/api": {
+          target: "http://localhost:8081", // Адрес вашего бэкенда
+          changeOrigin: true,
+        },
+      },
+    },
     plugins,
     build: {
       rollupOptions: isProd

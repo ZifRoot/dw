@@ -5,8 +5,14 @@
   display: grid;
   flex-direction: column;
   height: 100vh;
-  border: blue solid 15px;
+  border: blue solid 5px;
   overflow: hidden;
+  box-sizing: border-box;
+  grid-template-rows: auto 1fr;
+}
+
+div,
+svg {
   box-sizing: border-box;
 }
 
@@ -14,8 +20,10 @@
   background-color: black;
   overflow: hidden;
   border: rgb(21, 255, 0) solid 2px;
+  box-sizing: border-box;
 }
 html,
 body {
   margin: 0;
+  box-sizing: border-box;
 }

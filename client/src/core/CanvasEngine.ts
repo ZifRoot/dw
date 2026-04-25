@@ -1,21 +1,42 @@
 import * as d3 from "d3";
 import { ZoomTransform } from "d3";
 
+export interface PointData {
+  _groupElement?: SVGGElement;
+  id: string;
+  x: number;
+  y: number;
+  text: string; // текст, загруженный с сервера
+  labelOffset?: { dx: number; dy: number }; // смещение текста относительно точки
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  title_type: string;
+  pinned: boolean;
+  updated_at: number; // timestamp в секундах, может быть дробным
+}
+
 export class CanvasEngine {
   private svg!: d3.Selection<SVGSVGElement, unknown, null, undefined>;
   private container!: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private points: { id: string; x: number; y: number }[] = [];
-  transform?: ZoomTransform;
+  private points: PointData[] = [];
+  transform: ZoomTransform;
 
-  // Создаём поведение перетаскивания
-  private dragBehavior = d3.drag<SVGCircleElement, any>().on("drag", this.onDrag.bind(this));
+  // Поведение перетаскивания для групп
+  // ==================== Drag & Drop ====================
+  private dragBehavior = d3.drag<SVGCircleElement, PointData>().on("start", this.onDragStart.bind(this)).on("drag", this.onDrag.bind(this));
 
   constructor(private element: HTMLElement) {
     this.initSvg();
     this.initZoom();
-    this.addInitialPoints();
+    // Инициализируем трансформацию единичной матрицей
+    this.transform = d3.zoomIdentity;
+    this.addInitialPoints().catch((e) => console.error(e));
   }
 
+  // ==================== Инициализация SVG и зумирования ====================
   private initSvg() {
     this.svg = d3.select(this.element).append("svg").attr("width", "100%").attr("height", "100%").attr("viewBox", "0 0 800 600");
 
@@ -30,35 +51,36 @@ export class CanvasEngine {
     this.svg.call(zoom);
   }
 
-  // Обновление стилей точек при масштабировании
-  private updatePointsStyle() {
-    if (!this.transform) return;
-    this.container.attr("transform", this.transform.toString());
-    const scale = this.transform.k;
-    this.container
-      .selectAll("circle")
-      .attr("r", 6 / scale)
-      .attr("stroke-width", 2 / scale);
+  private onDragStart(event: d3.D3DragEvent<SVGCircleElement, PointData, any>, d: PointData) {
+    // Сохраняем ссылку на родительскую группу в самом объекте данных
+    const circle = event.sourceEvent.target as SVGCircleElement;
+    const group = circle.parentNode as SVGGElement;
+    d._groupElement = group;
   }
 
-  // Обработчик перетаскивания
-  private onDrag(event: d3.D3DragEvent<SVGCircleElement, any, any>, d: any) {
-    event.sourceEvent.stopPropagation(); // Отключаем масштабирование при drag
+  private onDrag(event: d3.D3DragEvent<SVGCircleElement, PointData, any>, d: PointData) {
+    event.sourceEvent.stopPropagation();
     if (!this.transform) return;
 
-    // Получаем координаты мыши в системе координат SVG
     const [mx, my] = d3.pointer(event.sourceEvent, this.svg.node()!);
-    // Преобразуем их в координаты исходного пространства (без трансформации)
     const [invX, invY] = this.transform.invert([mx, my]);
 
-    // Обновляем данные точки
     d.x = invX;
     d.y = invY;
 
-    // Обновляем позицию круга на экране
-    d3.select(event.sourceEvent.target).attr("cx", d.x).attr("cy", d.y);
+    // Перемещаем сохранённую группу (даже если курсор ушёл с кружка)
+    if (d._groupElement) {
+      d3.select(d._groupElement).attr("transform", `translate(${d.x},${d.y})`);
+    } else {
+      // fallback: ищем группу по id
+      const group = this.container
+        .select(`g.point-group`)
+        .filter((g) => (g as any).id === d.id)
+        .node();
+      if (group) d3.select(group).attr("transform", `translate(${d.x},${d.y})`);
+    }
 
-    // Сохраняем изменения в массиве points
+    // Обновляем массив
     const point = this.points.find((p) => p.id === d.id);
     if (point) {
       point.x = d.x;
@@ -66,55 +88,161 @@ export class CanvasEngine {
     }
   }
 
-  // Навешиваем поведение drag на все круги
-  private applyDragToCircles() {
-    this.container.selectAll<SVGCircleElement, any>("circle").call(this.dragBehavior);
+  private applyDragToGroups() {
+    this.container.selectAll<SVGCircleElement, PointData>("g.point-group circle.point").call(this.dragBehavior);
   }
 
-  private addInitialPoints() {
-    for (let i = 0; i < 5; i++) {
-      this.points.push({
-        id: `p-${i}`,
-        x: Math.random() * 800,
-        y: Math.random() * 600,
-      });
-    }
-    this.renderPoints();
+  // ==================== Работа с текстом через fetch ====================
+  private async fetchTextForPoint(): Promise<PointData[]> {
+    try {
+      // Предполагается, что сервер возвращает { text: "какой-то текст" }
+      // Используется прокси Vite на /api (см. vite.config.ts)
+      const response = await fetch(`http://localhost:5173/api/documents`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as ChatSession[];
+      let dd = data.map(
+        (a) =>
+          ({
+            text: a.title,
+            id: a.id,
+
+            x: Math.random() * 800,
+            y: Math.random() * 600,
+
+            labelOffset: { dx: 3, dy: 3 }, // справа
+          }) as PointData,
+      );
+
+      return dd;
+    } catch (error) {}
+    return [];
   }
 
+  // ==================== Рендеринг точек с группами ====================
   private renderPoints() {
-    const circles = this.container.selectAll<SVGCircleElement, any>("circle").data(this.points, (d: any) => d.id);
+    const groups = this.container.selectAll<SVGGElement, PointData>("g.point-group").data(this.points, (d: PointData) => d.id);
 
-    // Обновляем, добавляем и удаляем круги
-    circles.join(
-      (enter) =>
-        enter
-          .append("circle")
-          .attr("class", "point")
-          .attr("cx", (d) => d.x)
-          .attr("cy", (d) => d.y)
-          .attr("r", 6)
-          .attr("stroke-width", 2),
-      (update) => update.attr("cx", (d) => d.x).attr("cy", (d) => d.y),
-      (exit) => exit.remove(),
-    );
+    // Удаляем лишние группы
+    groups.exit().remove();
 
-    // Применяем drag ко всем кругам (новым и существующим)
-    this.applyDragToCircles();
+    // Создаём новые группы
+    const groupsEnter = groups
+      .enter()
+      .append("g")
+      .attr("class", "point-group")
+      .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+    // Добавляем круг в каждую новую группу
+    groupsEnter
+      .append("circle")
+      .attr("class", "point")
+      .attr("cx", 0)
+      .attr("cy", 0)
+      .attr("r", 15)
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 2)
+      .attr("fill", "#3b82f6");
+
+    // Добавляем текст в каждую новую группу
+    groupsEnter
+      .append("text")
+      .attr("class", "point-label")
+      // Настройка положения текста относительно точки (dx, dy)
+      .attr("dx", (d) => d.labelOffset?.dx ?? 8)
+      .attr("dy", (d) => d.labelOffset?.dy ?? 4)
+      .attr("x", (d) => d.labelOffset?.dx ?? 8)
+      .attr("y", (d) => d.labelOffset?.dy ?? 4)
+      .attr("dy", "0.35em") // вертикальное выравнивание
+      .style("font-size", "12px")
+      .style("fill", "#ffffff")
+      .style("stroke", "none")
+      .text((d) => d.text || "");
+
+    // Объединяем новые и существующие группы (обновляем transform и текст)
+    const allGroups = groupsEnter.merge(groups);
+
+    // Обновляем transform у всех групп (если координаты изменились)
+    allGroups.attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+    // Обновляем текст (в случае, если он поменялся без пересоздания группы)
+    allGroups.select("text.point-label").text((d) => d.text || "");
+
+    // Применяем поведение drag ко всем группам
+    this.applyDragToGroups();
+
+    // Применяем стили (размер круга, шрифта) с учётом текущего зума
     this.updatePointsStyle();
   }
 
-  public addPoint() {
-    this.points.push({
+  // Обновление стилей при зумировании (уменьшаем круг и текст)
+  private updatePointsStyle() {
+    if (!this.transform) return;
+    this.container.attr("transform", this.transform.toString());
+
+    const scale = this.transform.k;
+    this.container
+      .selectAll<SVGCircleElement, any>("circle.point")
+      .attr("r", 6 / scale)
+      .attr("stroke-width", 2 / scale);
+
+    this.container.selectAll<SVGTextElement, any>("text.point-label").style("font-size", `${12 / scale}px`);
+  }
+
+  // ==================== Создание точек ====================
+  private async addInitialPoints() {
+    this.points.push(...(await this.fetchTextForPoint()));
+    this.renderPoints();
+
+    // После рендера загружаем текст для всех начальных точек
+    // this.points.forEach((point) => {
+    //   this.fetchTextForPoint(point.id);
+    // });
+  }
+
+  public addPoint(customText?: string, side: "right" | "left" | "top" | "bottom" = "right") {
+    let dx = 8,
+      dy = 4;
+    switch (side) {
+      case "left":
+        dx = -8;
+        dy = 4;
+        break;
+      case "top":
+        dx = 0;
+        dy = -12;
+        break;
+      case "bottom":
+        dx = 0;
+        dy = 16;
+        break;
+      default:
+        dx = 8;
+        dy = 4;
+    }
+
+    const newPoint: PointData = {
       id: `p-${Date.now()}`,
       x: Math.random() * 800,
       y: Math.random() * 600,
-    });
+      text: customText || "",
+      labelOffset: { dx, dy },
+    };
+    this.points.push(newPoint);
     this.renderPoints();
+
+    // // Если текст не был передан через customText, загружаем с сервера
+    // if (!customText) {
+    //   this.fetchTextForPoint(newPoint.id);
+    // }
   }
 
   public clearPoints() {
     this.points = [];
     this.renderPoints();
+  }
+
+  // Опционально: публичный метод для принудительной перезагрузки текста для всех точек
+  public reloadAllTexts() {
+    // this.points.forEach((point) => this.fetchTextForPoint(point.id));
   }
 }
