@@ -1,5 +1,11 @@
 import { ChatSessionBase, FileResponse, MessagesResponse, SessionsResponse } from "./db/resp";
+import { getHighResTime } from "./utils/data-utils";
+import { Throttler } from "./utils/throttler";
+import { ThrottledMethod, InjectThrottle } from "./utils/throttler-decorators";
 
+let throttler = new Throttler(5000, 5000);
+
+@InjectThrottle(throttler)
 export class Deepseek {
   headers: Headers;
 
@@ -70,7 +76,7 @@ export class Deepseek {
     }
     let str = url.toString();
 
-    return await fetch(str, { headers: this.headers, body: null, method: "GET" });
+    return await this.GET(str);
   }
 
   async history_messages_resp(chat_session_id: string, version: number | null) {
@@ -82,7 +88,7 @@ export class Deepseek {
 
     let str = url.toString();
 
-    return await fetch(str, { headers: this.headers, body: null, method: "GET" });
+    return await this.GET(str);
   }
 
   async file_preview_resp(file_id: string, chat_session_id: string, message_id: string | number) {
@@ -96,13 +102,18 @@ export class Deepseek {
     url.searchParams.append("message_id", `${message_id}`);
 
     let str = url.toString();
-
-    return await fetch(str, { headers: this.headers, body: null, method: "GET" });
+    return await this.GET(str);
   }
 
   async file_resp(file_id: string, chat_session_id: string, message_id: string | number) {
     var url = (await this.file_preview(file_id, chat_session_id, message_id)).url;
 
+    return await this.GET(url);
+  }
+
+  @ThrottledMethod
+  async GET(url: string) {
+    console.log(`${getHighResTime()} | ${url} `);
     return await fetch(url, { headers: this.headers, body: null, method: "GET" });
   }
 

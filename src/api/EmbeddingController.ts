@@ -186,7 +186,7 @@ export class EmbeddingController {
     }
   }
 
-  // POST /embeddings/:id
+  // GET /embeddings/:id
   async getEmbeddings(req: Request, res: Response) {
     try {
       const { id } = req.params;

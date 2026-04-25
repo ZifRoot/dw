@@ -153,3 +153,26 @@ export const format: Intl.DateTimeFormatOptions = {
 export function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+export async function safe<T>(fn: () => Promise<T>) {
+  try {
+    return await fn();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+export function getHighResTime() {
+  const now = new Date();
+  // Получаем дробную часть текущей миллисекунды
+  const micro = (performance.now() % 1).toFixed(3).substring(2);
+
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  const ms = String(now.getMilliseconds()).padStart(3, "0");
+
+  return `${hh}:${mm}:${ss}.${ms}${micro}`;
+}
+
+console.log(getHighResTime()); // "18:35:48.50612"

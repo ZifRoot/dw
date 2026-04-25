@@ -5,10 +5,11 @@ import { ChatSessions } from "./db/models/ChatSessions";
 import { MessageFile } from "./db/models/MessageFile";
 import { User } from "./db/models/User";
 import { Deepseek, credentials } from "./deepseek";
-import { delay, dateStr } from "./utils/data-utils";
+import { dateStr, delay, getHighResTime, safe } from "./utils/data-utils";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import fs from "fs";
+
 
 export class Program {
   repository!: IRepository;
@@ -17,13 +18,12 @@ export class Program {
     // let r = await EmbeddingPipeline.getInstance();
     //await getEmbeddings();
 
-    await this.F();
+    // await this.F();
 
-    console.log("DONE");
   }
 
   async F() {
-    //await this.Update();
+    await this.Update();
     const app = express();
     app.use(express.json());
 
@@ -51,29 +51,14 @@ export class Program {
     await this.all();
   }
 
-  async filex() {
-    this.repository = this.Repository();
-
-    let users = await this.repository.findAllUsers();
-
-    for (const user of users) {
-      console.log(`User: ${user.name}`);
-      let deepseek = new Deepseek(user.credentials as credentials);
-      // await this.fetch_User(user, true);
-      await this.FilesUser(user, deepseek);
-    }
-  }
-
   async all() {
-    this.Repository();
+    await this.RepositoryAsync();
     if (!this.repository) {
       console.error("null repository");
       return;
     }
     let users = await this.repository.findAllUsers();
-    for (const user of users) {
-      await this.User_all(user, true);
-    }
+    await Promise.all(users.map((user) => this.User_all(user, true)));
   }
 
   async User_all(user: User, all: boolean) {
@@ -85,20 +70,11 @@ export class Program {
     console.log(`User: ${user.name}`);
 
     let deepseek = new Deepseek(user.credentials as credentials);
-    await this.FetchUser(all, deepseek, user);
-
-    this.FilesAllUser(user, deepseek).catch(() => {});
+    await this.FetchUser(deepseek, user, all);
+    await this.FilesUser(deepseek, user);
   }
 
-  private async FilesAllUser(user: User, deepseek: Deepseek) {
-    while (true) {
-      delay(500);
-      let res = await this.FilesUser(user, deepseek);
-      if (!res) return;
-    }
-  }
-
-  private async FilesUser(user: User, deepseek: Deepseek) {
+  private async FilesUser(deepseek: Deepseek, user: User) {
     if (!this.repository) {
       console.error("null repository");
       return;
@@ -123,34 +99,27 @@ export class Program {
 
     files = files.filter((f) => f.content == null);
 
-    const batchSize = 5;
+    console.log(`Файлов для скачевания ${files.length} будет скачено ${files.length}`);
 
-    console.log(`Файлов для скачевания ${files.length} будет скачено ${Math.min(files.length, batchSize)}`);
+    let filesAs = files.map((file) => this.file_2(deepseek, file));
 
-    files = files.slice(0, batchSize);
-
-    let filesAs = files
-      .map(async (file) => {
-        let text = await deepseek.file(file.id, file.sessionId, file.messageId);
-        return new MessageFile({ ...file, content: text });
-      })
-      .map((f) =>
-        f.catch((err) => {
-          console.error(err);
-          return null;
-        }),
-      );
-
-    files = (await Promise.all(filesAs)).filter((a) => a != null);
-
-    console.log(`Успешно скачено ${files.length}`);
-
-    await this.repository!.createManyFiles(files);
-
-    return files.length;
+    await Promise.all(filesAs);
   }
 
-  private async FetchUser(all: boolean, deepseek: Deepseek, user: User) {
+  private async file_2(deepseek: Deepseek, file: MessageFile) {
+    return safe(() => this.file_1(deepseek, file));
+  }
+
+  private async file_1(deepseek: Deepseek, file: MessageFile) {
+    console.log(`Качвню ${file.file_name} | байт ${file.file_size}`);
+    let text = await deepseek.file(file.id, file.sessionId, file.messageId);
+    const mf = new MessageFile({ ...file, content: text });
+    await this.repository!.createManyFiles([mf]);
+    console.log(`Успешно скачено ${file.file_name} | байт ${file.file_size}`);
+    return mf;
+  }
+
+  private async FetchUser(deepseek: Deepseek, user: User, all: boolean) {
     if (!this.repository) {
       console.error("null repository");
       return;
@@ -179,20 +148,23 @@ export class Program {
         return diff;
       });
 
-    try {
-      for (const s of sessions_for_update) {
-        let session = s.db_session ?? s.in_session;
-        console.log(
-          `Обновление: ${s.db_session == null ? "новый" : `(${dateStr(s.db_session.updated_at)})->(${dateStr(s.in_session.updated_at)}) `} [${session.title}]`,
-        );
+    await Promise.all(sessions_for_update.map((s) => this.user_2(s, deepseek, user)));
+  }
 
-        let his = await deepseek.history_messages(session.id, session.version);
+  private async user_2(s: { in_session: ChatSessions; db_session: ChatSessions | undefined }, deepseek: Deepseek, user: User) {
+    return safe(() => this.user_1(s, deepseek, user));
+  }
 
-        await this.repository.createMessagesBizData(user.id, his);
-      }
-    } catch (error) {
-      console.error(error);
-    }
+  private async user_1(s: { in_session: ChatSessions; db_session: ChatSessions | undefined }, deepseek: Deepseek, user: User) {
+    let session = s.db_session ?? s.in_session;
+    console.log(
+      `Обновление: ${s.db_session == null ? "новый" : `(${dateStr(s.db_session.updated_at)})->(${dateStr(s.in_session.updated_at)}) `} [${session.title}]`,
+    );
+
+    let his = await deepseek.history_messages(session.id, session.version);
+
+    await this.repository.createMessagesBizData(user.id, his);
+    // return 1;
   }
 
   Repository() {
