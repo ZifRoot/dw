@@ -9,6 +9,7 @@ import { dateStr, safe } from "./utils/data-utils";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import fs from "fs";
+import path from "path";
 
 export class Program {
   repository!: IRepository;
@@ -30,12 +31,16 @@ export class Program {
       swaggerUi.setup(swaggerDocument)(rq, rs, n);
     });
 
+    let clientPath = path.join(process.cwd(), "client", "dist");
+
+    app.use(express.static(clientPath));
+
     const PORT = process.env.PORT || 8081;
     app.listen(PORT, () => {
-      console.log(`Server running http://localhost:${PORT}/docs |`);
+      console.log(`Server running http://localhost:${PORT}/ |`);
     });
 
-    await this.Update();
+    // await this.Update();
     console.log("repository ready");
   }
 
@@ -156,7 +161,6 @@ export class Program {
     let his = await deepseek.history_messages(session.id, session.version);
 
     await this.repository.createMessagesBizData(user.id, his);
-    // return 1;
   }
 
   Repository() {
