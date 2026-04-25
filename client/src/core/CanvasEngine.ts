@@ -109,7 +109,7 @@ export class CanvasEngine {
             x: Math.random() * 800,
             y: Math.random() * 600,
 
-            labelOffset: { dx: 3, dy: 3 }, // справа
+            // labelOffset: { dx: 1, dy: 1 }, // справа
           }) as PointData,
       );
 
@@ -148,8 +148,8 @@ export class CanvasEngine {
       .append("text")
       .attr("class", "point-label")
       // Настройка положения текста относительно точки (dx, dy)
-      .attr("dx", (d) => d.labelOffset?.dx ?? 8)
-      .attr("dy", (d) => d.labelOffset?.dy ?? 4)
+      // .attr("dx", (d) => d.labelOffset?.dx ?? 8)
+      // .attr("dy", (d) => d.labelOffset?.dy ?? 4)
       .attr("x", (d) => d.labelOffset?.dx ?? 8)
       .attr("y", (d) => d.labelOffset?.dy ?? 4)
       .attr("dy", "0.35em") // вертикальное выравнивание
@@ -180,12 +180,17 @@ export class CanvasEngine {
     this.container.attr("transform", this.transform.toString());
 
     const scale = this.transform.k;
+    const s = 1 / scale;
     this.container
       .selectAll<SVGCircleElement, any>("circle.point")
-      .attr("r", 6 / scale)
-      .attr("stroke-width", 2 / scale);
+      .attr("r", 6 * s)
+      .attr("stroke-width", 2 * s);
 
-    this.container.selectAll<SVGTextElement, any>("text.point-label").style("font-size", `${12 / scale}px`);
+    this.container
+      .selectAll<SVGTextElement, any>("text.point-label")
+      .style("font-size", `${12 * s}px`)
+      .attr("x", (d) => (d.labelOffset?.dx ?? 12) * s)
+      .attr("y", (d) => (d.labelOffset?.dy ?? 4) * s);
   }
 
   // ==================== Создание точек ====================
