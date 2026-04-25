@@ -1,5 +1,4 @@
 import * as d3 from "d3";
-
 import { ZoomTransform } from "d3";
 
 export class CanvasEngine {
@@ -7,6 +6,9 @@ export class CanvasEngine {
   private container!: d3.Selection<SVGGElement, unknown, null, undefined>;
   private points: { id: string; x: number; y: number }[] = [];
   transform?: ZoomTransform;
+
+  // Создаём поведение перетаскивания
+  private dragBehavior = d3.drag<SVGCircleElement, any>().on("drag", this.onDrag.bind(this));
 
   constructor(private element: HTMLElement) {
     this.initSvg();
@@ -28,17 +30,45 @@ export class CanvasEngine {
     this.svg.call(zoom);
   }
 
+  // Обновление стилей точек при масштабировании
   private updatePointsStyle() {
-    if (!this.transform) {
-      return;
-    }
-    let tr = this.transform?.toString();
-    let scale = this.transform.k;
-    this.container.attr("transform", tr);
+    if (!this.transform) return;
+    this.container.attr("transform", this.transform.toString());
+    const scale = this.transform.k;
     this.container
       .selectAll("circle")
-      .attr("r", 4 / scale)
+      .attr("r", 6 / scale)
       .attr("stroke-width", 2 / scale);
+  }
+
+  // Обработчик перетаскивания
+  private onDrag(event: d3.D3DragEvent<SVGCircleElement, any, any>, d: any) {
+    event.sourceEvent.stopPropagation(); // Отключаем масштабирование при drag
+    if (!this.transform) return;
+
+    // Получаем координаты мыши в системе координат SVG
+    const [mx, my] = d3.pointer(event.sourceEvent, this.svg.node()!);
+    // Преобразуем их в координаты исходного пространства (без трансформации)
+    const [invX, invY] = this.transform.invert([mx, my]);
+
+    // Обновляем данные точки
+    d.x = invX;
+    d.y = invY;
+
+    // Обновляем позицию круга на экране
+    d3.select(event.sourceEvent.target).attr("cx", d.x).attr("cy", d.y);
+
+    // Сохраняем изменения в массиве points
+    const point = this.points.find((p) => p.id === d.id);
+    if (point) {
+      point.x = d.x;
+      point.y = d.y;
+    }
+  }
+
+  // Навешиваем поведение drag на все круги
+  private applyDragToCircles() {
+    this.container.selectAll<SVGCircleElement, any>("circle").call(this.dragBehavior);
   }
 
   private addInitialPoints() {
@@ -55,6 +85,7 @@ export class CanvasEngine {
   private renderPoints() {
     const circles = this.container.selectAll<SVGCircleElement, any>("circle").data(this.points, (d: any) => d.id);
 
+    // Обновляем, добавляем и удаляем круги
     circles.join(
       (enter) =>
         enter
@@ -68,10 +99,11 @@ export class CanvasEngine {
       (exit) => exit.remove(),
     );
 
+    // Применяем drag ко всем кругам (новым и существующим)
+    this.applyDragToCircles();
     this.updatePointsStyle();
   }
 
-  // Публичный метод для добавления точки (вызывается из UI)
   public addPoint() {
     this.points.push({
       id: `p-${Date.now()}`,

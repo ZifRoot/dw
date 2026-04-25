@@ -24,7 +24,7 @@
       "cwd": "${workspaceFolder}",
       "protocol": "inspector",
       "internalConsoleOptions": "openOnSessionStart",
-      "preLaunchTask": "tsc: build",    // <-- добавляем эту строку
+      "preLaunchTask": "tsc: build",
       "env": {
         "NODE_ENV": "production"
       },
