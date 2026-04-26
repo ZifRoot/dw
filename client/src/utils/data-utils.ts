@@ -165,3 +165,29 @@ export function getHighResTime() {
 
   return `${hh}:${mm}:${ss}.${ms}${micro}`;
 }
+
+export function accurateSum(arr: number[]): number {
+  // Работаем с копией, чтобы не портить исходный массив
+  const data = arr.slice();
+  // Сортировка по убыванию модуля (большие модули в начало)
+  data.sort((a, b) => Math.abs(b) - Math.abs(a));
+
+  let len = data.length;
+  if (len === 0) return 0;
+
+  while (len > 1) {
+    const a = data[len - 2];
+    const b = data[len - 1];
+    const sum = a + b;
+    len--; // отбрасываем последний элемент
+    let pos = len - 1; // позиция, куда записали сумму
+    data[pos] = sum;
+
+    // Пузырьковый подъём влево по модулю
+    while (pos > 0 && Math.abs(data[pos]) > Math.abs(data[pos - 1])) {
+      [data[pos], data[pos - 1]] = [data[pos - 1], data[pos]];
+      pos--;
+    }
+  }
+  return data[0];
+}
