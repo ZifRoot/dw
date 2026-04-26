@@ -1,6 +1,5 @@
 import * as d3 from "d3";
 import { ZoomTransform } from "d3";
-import { Throttler } from "../utils/throttler";
 
 export interface PointData {
   _groupElement?: SVGGElement;
@@ -10,6 +9,19 @@ export interface PointData {
   text: string; // текст, загруженный с сервера
   labelOffset?: { dx: number; dy: number }; // смещение текста относительно точки
   embedding?: Embedding[];
+}
+
+export interface PointWithVector {
+  point: PointData; // ссылка на оригинальную точку
+  vector: number[]; // вектор эмбеддинга
+  modelName: string; // имя модели, к которой относится вектор
+}
+
+export interface CachedPair {
+  p1: PointWithVector;
+  p2: PointWithVector;
+  cosineDist: number; // предвычисленное косинусное расстояние
+  desiredDist: number; // желаемое расстояние в пикселях (зависит от maxDistancePx и maxCosineDist)
 }
 
 export interface ChatSession {
@@ -34,12 +46,14 @@ export class CanvasEngine {
   private container!: d3.Selection<SVGGElement, unknown, null, undefined>;
   private points: PointData[] = [];
   transform: ZoomTransform;
-  throttle: Throttler;
   dragBehavior: d3.DragBehavior<SVGCircleElement, PointData, PointData | d3.SubjectPosition>;
+  
+  private activePoints: PointWithVector[] = [];
+  private pairs: CachedPair[] = [];
+  private animationFrameId: number | null = null;
 
   constructor(private element: HTMLElement) {
     this.transform = d3.zoomIdentity;
-    this.throttle = new Throttler(10, 100);
     this.dragBehavior = d3.drag<SVGCircleElement, PointData>().on("start", this.onDragStart.bind(this)).on("drag", this.onDrag.bind(this));
     this.initSvg();
     this.initZoom();
@@ -98,6 +112,144 @@ export class CanvasEngine {
     }
   }
 
+  // ==================== Выбор модели с максимальным покрытием ====================
+  private selectBestModel(): string | null {
+    const coverage = new Map<string, number>(); // model_name -> количество точек с embedding !== null
+
+    for (const point of this.points) {
+      if (!point.embedding) continue;
+      for (const emb of point.embedding) {
+        if (emb.embedding && emb.embedding.length > 0) {
+          coverage.set(emb.model_name, (coverage.get(emb.model_name) || 0) + 1);
+        }
+      }
+    }
+
+    let bestModel: string | null = null;
+    let maxCount = 0;
+    for (const [model, count] of coverage.entries()) {
+      if (count > maxCount) {
+        maxCount = count;
+        bestModel = model;
+      }
+    }
+    console.log(`Выбрана модель "${bestModel}" с покрытием ${maxCount} из ${this.points.length} точек`);
+    return bestModel;
+  }
+
+  // ==================== Косинусное расстояние между двумя векторами ====================
+  private cosineDistance(vecA: number[], vecB: number[]): number {
+    let dot = 0,
+      magA = 0,
+      magB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+      dot += vecA[i] * vecB[i];
+      magA += vecA[i] * vecA[i];
+      magB += vecB[i] * vecB[i];
+    }
+    if (magA === 0 || magB === 0) return 1.0; // максимальное расстояние
+    const cos = dot / (Math.sqrt(magA) * Math.sqrt(magB));
+    // Косинусное расстояние = 1 - cos, диапазон [0, 2]
+    return 1 - cos;
+  }
+
+  // ==================== Force Layout ====================
+  public async applyForceLayout(
+    iterations: number = 100,
+    maxDistancePx: number = 500,
+    forceStrength: number = 0.05,
+    animationDelayMs: number = 16, // ~60 fps, если нужно анимировать
+  ) {
+    const model = this.selectBestModel();
+    if (!model) {
+      console.warn("Нет модели с эмбеддингами, force layout отменён");
+      return;
+    }
+
+    // Собираем векторы только для точек, у которых есть эмбеддинг выбранной модели
+    const pointsWithVec: { point: PointData; vec: number[] }[] = [];
+    for (const point of this.points) {
+      const embObj = point.embedding?.find((e) => e.model_name === model && e.embedding && e.embedding.length > 0);
+      if (embObj && embObj.embedding) {
+        pointsWithVec.push({ point, vec: embObj.embedding });
+      } else {
+        // Точка без эмбеддинга – не будет участвовать в силах (останется на месте)
+        console.log(`Точка ${point.id} не имеет эмбеддинга модели ${model}, будет зафиксирована`);
+      }
+    }
+
+    if (pointsWithVec.length < 2) {
+      console.warn("Недостаточно точек с эмбеддингами для force layout");
+      return;
+    }
+
+    // Предварительный расчёт максимального косинусного расстояния среди всех пар
+    let maxCosineDist = 0;
+    const n = pointsWithVec.length;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dist = this.cosineDistance(pointsWithVec[i].vec, pointsWithVec[j].vec);
+        if (dist > maxCosineDist) maxCosineDist = dist;
+      }
+    }
+    if (maxCosineDist === 0) maxCosineDist = 1; // fallback
+
+    // Функция для получения желаемого расстояния между двумя точками
+    const desiredDistance = (cosineDist: number): number => {
+      return (cosineDist / maxCosineDist) * maxDistancePx;
+    };
+
+    // Итеративный процесс
+    for (let iter = 0; iter < iterations; iter++) {
+      // Обновляем силы для всех пар
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const p1 = pointsWithVec[i].point;
+          const p2 = pointsWithVec[j].point;
+          const vec1 = pointsWithVec[i].vec;
+          const vec2 = pointsWithVec[j].vec;
+
+          const cosineDist = this.cosineDistance(vec1, vec2);
+          const targetDist = desiredDistance(cosineDist);
+
+          const dx = p1.x - p2.x;
+          const dy = p1.y - p2.y;
+          const currentDist = Math.hypot(dx, dy);
+          if (currentDist < 1e-5) continue;
+
+          const diff = currentDist - targetDist;
+          const force = diff * forceStrength;
+
+          const moveX = (dx / currentDist) * force;
+          const moveY = (dy / currentDist) * force;
+
+          // Перемещаем обе точки
+          p1.x -= moveX;
+          p1.y -= moveY;
+          p2.x += moveX;
+          p2.y += moveY;
+        }
+      }
+
+      // Небольшая коррекция границ: удерживаем точки в пределах viewBox
+      for (const item of pointsWithVec) {
+        const p = item.point;
+        p.x = Math.min(Math.max(p.x, 20), 780);
+        p.y = Math.min(Math.max(p.y, 20), 580);
+      }
+
+      // Обновляем рендер с анимацией (если задержка > 0)
+      if (animationDelayMs > 0 && (iter % 3 === 0 || iter === iterations - 1)) {
+        this.renderPoints(); // перерисовка позиций
+        await new Promise((resolve) => setTimeout(resolve, animationDelayMs));
+      }
+    }
+
+    // Финальный рендер
+    this.renderPoints();
+    console.log("Force layout завершён");
+  }
+
   private applyDragToGroups() {
     this.container.selectAll<SVGCircleElement, PointData>("g.point-group circle.point").call(this.dragBehavior);
   }
@@ -145,7 +297,6 @@ export class CanvasEngine {
 
   private Pointx(p: PointData) {
     return this.Pointx_1(p);
-    //await this.throttle.throttle(() => );
   }
 
   // ==================== Рендеринг точек с группами ====================
