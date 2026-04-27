@@ -5,6 +5,7 @@ import React from "react";
 
 // Импортируем глобальные стили для холста (Sass скомпилируется в CSS и вставится в HTML)
 import "./styles/canvas/main.scss";
+import { AppMediator } from "./core/AppMediator";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -18,8 +19,10 @@ uiDiv.id = "ui-container";
 app.appendChild(uiDiv);
 app.appendChild(canvasDiv);
 
+const mediator = new AppMediator();
+
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
-const engine = new CanvasEngine(canvasDiv);
+const engine = new CanvasEngine(canvasDiv, mediator);
 
 // Монтируем React UI
 const root = createRoot(uiDiv);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { CanvasEngine } from '../core/CanvasEngine';
 import styles from './ControlPanel.module.scss'; // CSS Modules
 
@@ -7,6 +7,23 @@ interface Props {
 }
 
 export const ControlPanel: React.FC<Props> = ({ engine }) => {
+
+  const mediator = engine.mediator;
+
+  const [temperature, setTemperature] = useState(mediator.temperature);
+  // const [autoZoom, setAutoZoom] = useState(mediator.autoZoom);
+
+  useEffect(() => {
+    const onTemp = ((e: CustomEvent) => setTemperature(e.detail)) as EventListener;
+    // const onZoom = (e: CustomEvent) => setAutoZoom(e.detail);
+    mediator.addEventListener('temperature', onTemp);
+    // mediator.addEventListener('autoZoom', onZoom);
+    return () => {
+      mediator.removeEventListener('temperature', onTemp);
+      // mediator.removeEventListener('autoZoom', onZoom);
+    };
+  }, [mediator]);
+
   return (
     <div className={styles.panel}>
       <button className={styles.button} onClick={() => engine.addPoint()}>
@@ -15,6 +32,7 @@ export const ControlPanel: React.FC<Props> = ({ engine }) => {
       <button className={styles.button} onClick={() => engine.clearPoints()}>
         Очистить
       </button>
+      <div>Температура: {temperature.toFixed(4)}</div>
     </div>
   );
 };

@@ -26,7 +26,7 @@ export class Program {
     // 1. Загружаем готовый openapi.json (если сгенерировали заранее)
 
     // 2. Подключаем Swagger UI по пути /api-docs
-    app.use("/docs", swaggerUi.serve, (rq: any, rs: any, n: any) => {
+    app.use("/api", swaggerUi.serve, (rq: any, rs: any, n: any) => {
       const swaggerDocument = JSON.parse(fs.readFileSync("./openapi.json", "utf8"));
       swaggerUi.setup(swaggerDocument)(rq, rs, n);
     });

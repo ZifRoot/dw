@@ -1,12 +1,15 @@
 import * as d3 from "d3";
 import { ZoomTransform } from "d3";
 import { accurateSum } from "../utils/data-utils";
+import { Throttler } from "../utils/throttler";
+import { AppMediator } from "./AppMediator";
 
 // =============================== Внутренние классы ===============================
 
 /// <summary>Точка на холсте (документ/чат).</summary>
 export class Point {
   public _groupElement?: SVGGElement;
+
   public id: string;
   public x: number;
   public y: number;
@@ -20,6 +23,12 @@ export class Point {
     this.x = x;
     this.y = y;
     this.labelOffset = labelOffset;
+  }
+  public get groupElement(): SVGGElement {
+    return this._groupElement!;
+  }
+  public set groupElement(value: SVGGElement) {
+    this._groupElement = value;
   }
 }
 
@@ -80,10 +89,8 @@ export class CanvasEngine {
   // Флаги состояния анимации
   private needsRepulsion = true;
   private needsEmbedding = false;
-  private repulsionStepsDone = 0;
-  private maxRepulsionSteps = 500;
   private repulsionStrength = 0.5;
-  private minDistancePx = 2000;
+  private minDistancePx = 10;
   private minDistanceSq = this.minDistancePx * this.minDistancePx;
 
   private pairs: Pair[] = [];
@@ -91,12 +98,20 @@ export class CanvasEngine {
   private maxDistancePx = 500;
   private iterationsPerFrame = 5;
   private smoothingFactor = 0.3;
-  private autoZoomEnabled = true;
+  private autoZoomEnabled = false;
 
   private coverage: Map<string, number> = new Map();
   private modelMaxCosine: Map<string, number> = new Map();
+  epsilon: number = 1e-6;
+  temperatureThreshold = 0.1;
+  repulsionTemperature: number = 0;
+  throttler: Throttler;
 
-  constructor(private element: HTMLElement) {
+  constructor(
+    private element: HTMLElement,
+    public mediator: AppMediator,
+  ) {
+    this.throttler = new Throttler(10, 10);
     this.transform = d3.zoomIdentity;
     this.initSvg();
     this.initGlobalDrag();
@@ -167,7 +182,7 @@ export class CanvasEngine {
     if (!this.draggedPoint) return;
     this.draggedPoint.x = x;
     this.draggedPoint.y = y;
-    const group = this.draggedPoint._groupElement;
+    const group = this.draggedPoint.groupElement;
     if (group) {
       d3.select(group).attr("transform", `translate(${x},${y})`);
     }
@@ -179,7 +194,6 @@ export class CanvasEngine {
       this.isDragging = false;
       event.sourceEvent.stopPropagation();
       this.needsRepulsion = true;
-      this.repulsionStepsDone = 0;
       this.needsEmbedding = false;
     }
   }
@@ -194,26 +208,29 @@ export class CanvasEngine {
   }
 
   private async fetchDocuments(): Promise<Point[]> {
-    const response = await fetch(`http://localhost:5173/api/documents`);
+    const response = await fetch(`/api/documents`);
     if (!response.ok) return [];
     const data = (await response.json()) as ChatSession[];
     return data.map((session) => this.createPointFromSession(session));
   }
 
   private createPointFromSession(session: ChatSession): Point {
-    return new Point(session.id, session.title, Math.random() * 800, Math.random() * 600);
+    return new Point(session.id, session.title, 300, 300, this.getOffsetBySide("right"));
   }
 
   private async loadEmbeddings(): Promise<void> {
     await Promise.all(this.points.map((p) => this.fetchEmbeddingForPoint(p)));
     this.updateModelStats();
     this.needsRepulsion = true;
-    this.repulsionStepsDone = 0;
     this.needsEmbedding = false;
   }
 
+  private async fetchEmbeddingForPoint7throttle(point: Point): Promise<void> {
+    return this.throttler.throttle(() => this.fetchEmbeddingForPoint(point));
+  }
+
   private async fetchEmbeddingForPoint(point: Point): Promise<void> {
-    const resp = await fetch(`http://localhost:5173/api/embeddings/${point.id}`);
+    const resp = await fetch(`/api/embeddings/${point.id}`);
     const data = (await resp.json()) as Embedding[];
     point.embedding = data;
   }
@@ -391,12 +408,17 @@ export class CanvasEngine {
     }
   }
 
+  private updateRepulsionTemperature(maxShift: number): void {
+    this.repulsionTemperature = maxShift / this.minDistancePx;
+    this.mediator.temperature = this.repulsionTemperature * 100;
+  }
+
   private processRepulsionStep(): void {
-    const collision = this.applyOneRepulsionStep();
+    const maxShift = this.applyOneRepulsionStep();
     this.renderPoints();
     if (this.autoZoomEnabled) this.fitZoomToPoints();
-    this.repulsionStepsDone++;
-    if (!collision || this.repulsionStepsDone >= this.maxRepulsionSteps) {
+    this.updateRepulsionTemperature(maxShift);
+    if (this.repulsionTemperature < this.temperatureThreshold) {
       this.finishRepulsion();
     }
   }
@@ -405,7 +427,6 @@ export class CanvasEngine {
     this.needsRepulsion = false;
     this.needsEmbedding = true;
     this.prepareEmbeddingPairs();
-    this.repulsionStepsDone = 0;
   }
 
   private processEmbeddingStep(): void {
@@ -416,33 +437,44 @@ export class CanvasEngine {
     this.renderPoints();
   }
 
-  private applyOneRepulsionStep(): boolean {
-    let collision = false;
+  private applyOneRepulsionStep(): number {
+    let maxShift = 0;
     for (let i = 0; i < this.points.length; i++) {
       for (let j = i + 1; j < this.points.length; j++) {
-        if (this.applyRepulsionToPair(this.points[i], this.points[j])) {
-          collision = true;
-        }
+        const shift = this.applyRepulsionToPair(this.points[i], this.points[j]);
+        if (shift > maxShift) maxShift = shift;
       }
     }
-    return collision;
+    return maxShift;
   }
 
-  private applyRepulsionToPair(p1: Point, p2: Point): boolean {
+  private applyRepulsionToPair(p1: Point, p2: Point): number {
     const dx = p1.x - p2.x;
     const dy = p1.y - p2.y;
     const distSq = dx * dx + dy * dy;
-    if (distSq >= this.minDistanceSq) return false;
+    if (distSq >= this.minDistanceSq) return 0;
     const dist = Math.sqrt(distSq);
     const overlap = this.minDistancePx - dist;
     const force = overlap * this.repulsionStrength;
+    let _ = this.mxy(dist, dx, dy, force);
+    p1.x += _.moveX;
+    p1.y += _.moveY;
+    p2.x -= _.moveX;
+    p2.y -= _.moveY;
+    return Math.hypot(_.moveX, _.moveY);
+  }
+
+  mxy(dist: number, dx: number, dy: number, force: number) {
+    if (dist < this.epsilon) {
+      const angle = Math.random() * 2 * Math.PI;
+      const r = this.minDistancePx / 2;
+      const moveX = Math.cos(angle) * r;
+      const moveY = Math.sin(angle) * r;
+      return { moveX, moveY };
+    }
     const moveX = (dx / dist) * force;
     const moveY = (dy / dist) * force;
-    p1.x += moveX;
-    p1.y += moveY;
-    p2.x -= moveX;
-    p2.y -= moveY;
-    return true;
+    return { moveX, moveY };
   }
 
   private fitZoomToPoints(): void {
@@ -513,7 +545,7 @@ export class CanvasEngine {
   ): void {
     const merged = enter.merge(groups);
     merged.each(function (d) {
-      d._groupElement = this;
+      d.groupElement = this;
     });
   }
 
@@ -592,7 +624,6 @@ export class CanvasEngine {
     this.iterationsPerFrame = perFrame;
     this.smoothingFactor = smooth;
     this.needsRepulsion = true;
-    this.repulsionStepsDone = 0;
     this.needsEmbedding = false;
   }
 
@@ -607,7 +638,6 @@ export class CanvasEngine {
     this.renderPoints();
     this.updateModelStats();
     this.needsRepulsion = true;
-    this.repulsionStepsDone = 0;
     this.needsEmbedding = false;
   }
 
