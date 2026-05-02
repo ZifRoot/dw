@@ -29,7 +29,7 @@ export function InitdrizzleDb() {
 }
 
 export function InitDb(): IRepository {
-  startAndWaitSync();
+  if (!startAndWaitSync()) return null!;
   return InitdrizzleDb();
 }
 
@@ -38,7 +38,7 @@ export function InitDbFast(): IRepository {
 }
 
 export async function InitDbAsync(): Promise<IRepository> {
-  await startAndWaitAsync();
+  if (!(await startAndWaitAsync())) return null!;
   return InitdrizzleDb();
 }
 // runWithPromiseAsync(main()).catch(console.error);

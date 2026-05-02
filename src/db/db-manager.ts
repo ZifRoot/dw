@@ -13,7 +13,7 @@ const CONFIG = {
   serviceName: "my-postgres",
   containerName: "my-postgres",
   image: "postgres:15",
-  hostPort: 5432,
+  hostPort: 6000,
   containerPort: 5432,
   user: "postgres",
   password: "postgres",
@@ -28,7 +28,7 @@ const COMPOSE_FILE = `${COMPOSE_FILE_EXT}.yaml`;
 
 function generateFilesSync() {
   generateEnvFileSync();
-  generateComposeFileAsync();
+  generateComposeFileSync();
 }
 
 async function generateFilesAsync() {
@@ -123,7 +123,7 @@ function generateComposeFileSync() {
 export function startContainerSync() {
   console.log("Starting PostgreSQL container (sync, no wait)...");
   try {
-    execSync(`docker-compose -f ${COMPOSE_FILE} up -d`, { stdio: "inherit" });
+    execSync(`docker compose -f ${COMPOSE_FILE} up -d`, { stdio: "inherit" });
     console.log("Container started.");
   } catch (error) {
     console.error("Failed to start container:", error);
@@ -142,54 +142,66 @@ export async function startContainerAsync() {
   }
 }
 
+export function IsReady() {
+  try {
+    const stdout = execSync(`docker compose -f ${COMPOSE_FILE} exec -T ${CONFIG.serviceName} pg_isready -U ${CONFIG.user}`, { encoding: "utf-8" });
+    if (stdout.includes("accepting connections")) {
+      console.log("Database is ready!");
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+export async function IsReadyAsync() {
+  try {
+    const { stdout } = await execAsync(`docker compose -f ${COMPOSE_FILE} exec -T ${CONFIG.serviceName} pg_isready -U ${CONFIG.user}`);
+    if (stdout.includes("accepting connections")) {
+      console.log("Database is ready!");
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
 // ========== Примитивы: ожидание готовности ==========
 export function waitForDatabaseReadySync(maxRetries = 30, delayMs = 2000) {
   console.log("Waiting for database to be ready (sync)...");
   for (let i = 0; i < maxRetries; i++) {
-    try {
-      const stdout = execSync(`docker-compose -f ${COMPOSE_FILE} exec -T ${CONFIG.serviceName} pg_isready -U ${CONFIG.user}`, { encoding: "utf-8" });
-      if (stdout.includes("accepting connections")) {
-        console.log("Database is ready!");
-        return;
-      }
-    } catch {
-      // ignore
-    }
+    if (IsReady()) return true;
     console.log(`Attempt ${i + 1}/${maxRetries}: Database not ready yet.`);
     execSync(`sleep ${delayMs / 1000}`);
   }
+  return false;
   throw new Error("Database did not become ready in time.");
 }
 
 export async function waitForDatabaseReadyAsync(maxRetries = 30, delayMs = 2000) {
   console.log("Waiting for database to be ready (async)...");
   for (let i = 0; i < maxRetries; i++) {
-    try {
-      const { stdout } = await execAsync(`docker-compose -f ${COMPOSE_FILE} exec -T ${CONFIG.serviceName} pg_isready -U ${CONFIG.user}`);
-      if (stdout.includes("accepting connections")) {
-        console.log("Database is ready!");
-        return;
-      }
-    } catch {
-      // ignore
-    }
+    if (await IsReadyAsync()) return true;
     console.log(`Attempt ${i + 1}/${maxRetries}: Database not ready yet.`);
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
+  return false;
   throw new Error("Database did not become ready in time.");
 }
 
 // ========== Примитивы: запуск + ожидание (комбинированные) ==========
 export function startAndWaitSync() {
+  if (IsReady()) return true;
   generateFilesSync();
   startContainerSync();
-  waitForDatabaseReadySync();
+  return waitForDatabaseReadySync();
 }
 
 export async function startAndWaitAsync() {
+  if (await IsReadyAsync()) return true;
   await generateFilesAsync();
   await startContainerAsync();
-  await waitForDatabaseReadyAsync();
+  return await waitForDatabaseReadyAsync();
 }
 
 // ========== Примитивы: остановка ==========

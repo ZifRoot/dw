@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Embedding API",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "API для работы с документами, фрагментами и эмбеддингами"
   },
   "servers": [
@@ -18,7 +18,7 @@
         "operationId": "getAllDocuments",
         "responses": {
           "200": {
-            "description": "Массив документов",
+            "description": "Массив документов с краткими сведениями",
             "content": {
               "application/json": {
                 "schema": {
@@ -52,7 +52,7 @@
     },
     "/document/{id}": {
       "get": {
-        "summary": "Получить документ по ID с фрагментами и моделями",
+        "summary": "Получить документ по ID с фрагментами, файлами и моделями",
         "operationId": "getDocumentById",
         "parameters": [
           {
@@ -89,7 +89,24 @@
                       }
                     },
                     "fragments": {
-                      "type": "array"
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "size_bytes": {
+                            "type": "integer"
+                          },
+                          "messageId": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     },
                     "messages": {
                       "type": "array"
@@ -98,6 +115,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Неверный формат ID"
           },
           "404": {
             "description": "Документ не найден"
@@ -132,6 +152,47 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Неверный ID"
+          },
+          "404": {
+            "description": "Документ не найден"
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
+    },
+    "/document/{id}/parse": {
+      "get": {
+        "summary": "Парсить документ",
+        "operationId": "getParseDocumentText",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Текст документа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Структура, возвращаемая parser.parse()"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный ID"
           },
           "404": {
             "description": "Документ не найден"
@@ -178,7 +239,7 @@
             }
           },
           "400": {
-            "description": "Неверный формат fragment_id"
+            "description": "Неверный формат fragment_id или ID сессии"
           },
           "404": {
             "description": "Фрагмент не найден"
@@ -190,6 +251,57 @@
       }
     },
     "/embeddings/{id}": {
+      "get": {
+        "summary": "Получить все эмбеддинги для документа",
+        "operationId": "getEmbeddings",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID сессии"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Массив эмбеддингов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "model_name": {
+                        "type": "string"
+                      },
+                      "dimension": {
+                        "type": "integer"
+                      },
+                      "processing_time_ms": {
+                        "type": "number"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверный ID"
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      },
       "post": {
         "summary": "Сохранить эмбеддинги для документа",
         "operationId": "postEmbeddings",
@@ -239,7 +351,7 @@
             }
           },
           "400": {
-            "description": "Некорректный запрос (не массив, пропущены поля)"
+            "description": "Некорректный запрос (не массив или пропущены поля)"
           },
           "404": {
             "description": "Документ не найден"
@@ -284,9 +396,19 @@
           "processing_time_ms"
         ],
         "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Игнорируется, т.к. ID сессии берётся из URL"
+          },
           "model_name": {
             "type": "string",
             "description": "Название модели эмбеддингов"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Опциональная временная метка"
           },
           "embedding": {
             "description": "Вектор эмбеддинга (не сохраняется, но ожидается в запросе)",
@@ -309,16 +431,6 @@
           "processing_time_ms": {
             "type": "number",
             "description": "Время обработки в миллисекундах"
-          },
-          "sessionId": {
-            "type": "string",
-            "description": "Не используется, т.к. ID сессии берётся из URL"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "description": "Опциональная временная метка"
           }
         }
       }

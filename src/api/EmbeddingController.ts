@@ -2,15 +2,20 @@ import { Router, Request, Response } from "express";
 import { IRepository } from "../db/IRepository";
 import { EmbeddingCreate } from "../db/models/EmbeddingCreate";
 import { Program } from "../program";
-
+import { HeadingCodeParser } from "mdforge";
 export class EmbeddingController {
   private router: Router;
-  private repo: IRepository;
+  headingCodeParser: HeadingCodeParser;
 
   constructor(private program: Program) {
-    this.repo = program.repository!;
+    //this.repo = program.repository!;
     this.router = Router();
+    this.headingCodeParser = new HeadingCodeParser();
     this.setupRoutes();
+  }
+
+  get repo(): IRepository {
+    return this.program.repository;
   }
 
   private setupRoutes() {
@@ -20,10 +25,14 @@ export class EmbeddingController {
     this.router.get("/document/:id", this.getDocumentById.bind(this));
     // GET /document/:id/text (legacy)
     this.router.get("/document/:id/text", this.getDocumentText.bind(this));
+
+    this.router.get("/document/:id/parse", this.getParseDocumentText.bind(this));
     // GET /document/:id/fragment/:fragment_id/text
     this.router.get("/document/:id/fragment/:fragment_id/text", this.getFragmentText.bind(this));
     // POST /embeddings/:id
     this.router.post("/embeddings/:id", this.postEmbeddings.bind(this));
+    // GET /embeddings/:id
+    this.router.get("/embeddings/:id", this.getEmbeddings.bind(this));
 
     this.router.get("/update", this.Update.bind(this));
   }
@@ -41,12 +50,12 @@ export class EmbeddingController {
   async getAllDocuments(req: Request, res: Response) {
     try {
       const sessions = await this.repo.findAllSessionsAll();
-      const result = [];
-      for (const session of sessions) {
-        const doc = await this.getSessionWithDetails1(session.id);
-        if (doc) result.push(doc);
-      }
-      res.json(result);
+      // const result = [];
+      // for (const session of sessions) {
+      //   const doc = await this.getSessionWithDetails1(session.id);
+      //   if (doc) result.push(doc);
+      // }
+      res.json(sessions);
     } catch (err) {
       console.error("Error in GET /documents:", err);
       res.status(500).json({ error: "Internal server error" });
@@ -102,6 +111,37 @@ export class EmbeddingController {
     }
   }
 
+  // GET /documents/:id/text (legacy) – возвращает весь текст сессии (склеенные фрагменты)
+  async getParseDocumentText(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res.status(400).send("id");
+      }
+      const session = await this.repo.findSessionById(id);
+      if (!session) {
+        return res.status(404).send("Document not found");
+      }
+
+      const messages = await this.repo.findAllMessages(id);
+      const texts: string[] = [];
+      for (const msg of messages) {
+        const fragments = await this.repo.findAllFragments(id, msg.messageId);
+        for (const frag of fragments) {
+          texts.push(frag.content);
+        }
+        // Файлы не включаем в текст
+      }
+
+      const fullText = texts.join("\n\n");
+      let result = this.headingCodeParser.parse(fullText);
+      res.json(result);
+    } catch (err) {
+      console.error("Error in GET /documents/:id/text:", err);
+      res.status(500).send("Internal server error");
+    }
+  }
+
   // GET /documents/:id/fragment/:fragment_id/text
   async getFragmentText(req: Request, res: Response) {
     try {
@@ -143,6 +183,22 @@ export class EmbeddingController {
     } catch (err) {
       console.error("Error in GET /documents/:id/fragment/:fragment_id/text:", err);
       res.status(500).send("Internal server error");
+    }
+  }
+
+  // GET /embeddings/:id
+  async getEmbeddings(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res.status(400).send("id");
+      }
+
+      const embeddings = await this.repo.findEmbeddingsBySession(id);
+      res.status(200).json(embeddings);
+    } catch (err) {
+      console.error("Error in POST /embeddings/:id:", err);
+      res.status(500).json({ error: "Internal server error" });
     }
   }
 
