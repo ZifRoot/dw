@@ -167,6 +167,7 @@ export function getHighResTime() {
 }
 
 export function accurateSum(arr: number[]): number {
+  return arr.reduce((a, b) => a + b, 0);
   // Работаем с копией, чтобы не портить исходный массив
   const data = arr.slice();
   // Сортировка по убыванию модуля (большие модули в начало)
@@ -190,4 +191,41 @@ export function accurateSum(arr: number[]): number {
     }
   }
   return data[0];
+}
+
+/// <summary>Статический логгер синхронных операций.</summary>
+export function logSyncStatic<T>(name: string, fn: () => T): T {
+  const start = performance.now();
+  const result = fn();
+  const duration = performance.now() - start;
+  console.log(`[${name}] завершено за ${duration.toFixed(2)} ms`);
+  return result;
+}
+
+/// <summary>Статический логгер асинхронных операций.</summary>
+export async function logAsyncStatic<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  console.log(`[${name}] начато`);
+  const start = performance.now();
+  const result = await fn();
+  const duration = performance.now() - start;
+  console.log(`[${name}] завершено за ${duration.toFixed(2)} ms`);
+  return result;
+}
+
+/// <summary>Декоратор для синхронных методов: логирует время выполнения.</summary>
+export function LogSync(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  const original = descriptor.value;
+  descriptor.value = function (...args: any[]) {
+    return logSyncStatic(propertyKey, () => original.apply(this, args));
+  };
+  return descriptor;
+}
+
+/// <summary>Декоратор для асинхронных методов: логирует время выполнения.</summary>
+export function LogAsync(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  const original = descriptor.value;
+  descriptor.value = async function (...args: any[]) {
+    return logAsyncStatic(propertyKey, () => original.apply(this, args));
+  };
+  return descriptor;
 }

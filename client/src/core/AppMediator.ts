@@ -2,6 +2,8 @@
 export class AppMediator extends EventTarget {
   private state = new Map<string, any>();
 
+  static PROGRESS = "progress";
+
   constructor() {
     super();
   }
@@ -20,31 +22,38 @@ export class AppMediator extends EventTarget {
   }
 
   /// <summary>Удобные геттеры/сеттеры для конкретных полей.</summary>
+  public get progress(): number {
+    return this.get(AppMediator.PROGRESS) ?? 0;
+  }
+  public set progress(value: number) {
+    this.set(AppMediator.PROGRESS, value);
+  }
+
   public get temperature(): number {
-    return this.get('temperature') ?? 0;
+    return this.get("temperature") ?? 0;
   }
   public set temperature(value: number) {
-    this.set('temperature', value);
+    this.set("temperature", value);
   }
 
   public get autoZoom(): boolean {
-    return this.get('autoZoom') ?? true;
+    return this.get("autoZoom") ?? true;
   }
   public set autoZoom(value: boolean) {
-    this.set('autoZoom', value);
+    this.set("autoZoom", value);
   }
 
   // ========== Команды (вызываются из UI) ==========
   public clearPoints(): void {
-    this.dispatchEvent(new Event('clear-points'));
+    this.dispatchEvent(new Event("clear-points"));
   }
 
   public startRepulsion(): void {
-    this.dispatchEvent(new Event('start-repulsion'));
+    this.dispatchEvent(new Event("start-repulsion"));
   }
 
   public setAutoZoom(enabled: boolean): void {
     this.autoZoom = enabled;
-    this.dispatchEvent(new CustomEvent('set-auto-zoom', { detail: enabled }));
+    this.dispatchEvent(new CustomEvent("set-auto-zoom", { detail: enabled }));
   }
 }

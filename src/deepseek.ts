@@ -3,7 +3,7 @@ import { getHighResTime } from "./utils/data-utils";
 import { Throttler } from "./utils/throttler";
 import { ThrottledMethod, InjectThrottle } from "./utils/throttler-decorators";
 
-let throttler = new Throttler(500, 800);
+let throttler = new Throttler(100, 300);
 
 @InjectThrottle(throttler)
 export class Deepseek {
