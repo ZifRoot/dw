@@ -67,7 +67,7 @@ export class Program {
   async UpdateEmbedding() {
     await this.CreateTasks();
 
-    await this.work();
+    await this.workEmbedding();
   }
 
   @SingleExecution
@@ -134,7 +134,7 @@ export class Program {
 
   @SingleExecution
   @LogExecution
-  private async work() {
+  private async workEmbedding() {
     while (this.TaskMap.size > 0) {
       let completed_Tasks = (
         await this.embeddingsApi.listTasksEmbeddingsGet({
