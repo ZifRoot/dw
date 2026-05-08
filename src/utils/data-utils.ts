@@ -238,7 +238,7 @@ export function mult(a: number[], b: number) {
   for (let i = 0; i < a.length; i++) {
     a[i] *= +b;
   }
-  return c;
+  return a;
 }
 
 export function div(a: number[], b: number) {

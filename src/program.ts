@@ -5,7 +5,7 @@ import { ChatSessions } from "./db/models/ChatSessions";
 import { MessageFile } from "./db/models/MessageFile";
 import { User } from "./db/models/User";
 import { Deepseek, credentials } from "./deepseek";
-import { dateStr, delay, div, groupToMap, groupToMapEm, safe, subtractSets, sum, sumA } from "./utils/data-utils";
+import { dateStr, delay, div, groupToMap, groupToMapEm, mult, safe, subtractSets, sum, sumA } from "./utils/data-utils";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import fs from "fs";
@@ -27,7 +27,7 @@ export class Program {
   modelApi: ModelsApi;
   embeddingsApi: EmbeddingsApi;
   TaskMap: Map<string, TaskX>;
-  SessionkMap: Map<string, TaskX[]>;
+  SessionMap: Map<string, TaskX[]>;
 
   async start() {
     await this.RepositoryAsync();
@@ -65,6 +65,7 @@ export class Program {
 
   @LogExecution
   async UpdateEmbedding() {
+    // await this.recoverEmbedding();
     await this.CreateTasks();
 
     await this.workEmbedding();
@@ -93,7 +94,7 @@ export class Program {
             sessions.map(async (session) => {
               let embs = await this.repository.findEmbeddingsBySession(session.id);
               let have_mods = embs.map((emb) => emb.model_name);
-              let wait_mods = (this.SessionkMap.get(session.id) ?? []).map((t) => t.model_name);
+              let wait_mods = (this.SessionMap.get(session.id) ?? []).map((t) => t.model_name);
               let model_news = subtractSets(subtractSets(modelNames, have_mods), wait_mods);
 
               return model_news.map((model_new) => ({ model_name: model_new, userid: user.id, sessionid: session.id }));
@@ -126,9 +127,9 @@ export class Program {
 
     for (const Task of Tasks) {
       this.TaskMap.set(Task.taskId, Task);
-      let ss = this.SessionkMap.get(Task.sessionid) ?? [];
+      let ss = this.SessionMap.get(Task.sessionid) ?? [];
       ss.push(Task);
-      this.SessionkMap.set(Task.sessionid, ss);
+      this.SessionMap.set(Task.sessionid, ss);
     }
   }
 
@@ -142,15 +143,18 @@ export class Program {
         })
       ).tasks;
       if (completed_Tasks.length == 0) {
-        delay(500);
+        await delay(500);
       }
       for (const completed_Task of completed_Tasks) {
         let task_local = this.TaskMap.get(completed_Task.taskId);
-        if (task_local == null) continue;
 
+        if (task_local == null) {
+          await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete({ taskId: completed_Task.taskId });
+          continue;
+        }
         this.TaskMap.delete(completed_Task.taskId);
 
-        var ts_sessions = this.SessionkMap.get(task_local.sessionid);
+        var ts_sessions = this.SessionMap.get(task_local.sessionid);
         if (ts_sessions == null) continue;
 
         let task = await this.embeddingsApi.getTaskEmbeddingsTaskIdGet({ taskId: task_local.taskId });
@@ -159,8 +163,9 @@ export class Program {
         await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete({ taskId: task_local.taskId });
 
         if (ts_sessions.every((t) => t.result != null)) {
-          let embedding = ts_sessions.reduce((r, c) => sumA(r, c.result!), [0]);
-          div(embedding, ts_sessions.length);
+          let embedding = ts_sessions.reduce((r, c) => sumA(r, mult(c.result!.slice(), c.len)), [0]);
+          let len = ts_sessions.reduce((r, c) => c.len + r, 0);
+          div(embedding, len);
 
           this.repository.createEmbedding(task_local.sessionid, {
             model_name: task.modelName,
@@ -170,7 +175,7 @@ export class Program {
             sessionId: task_local.sessionid,
             processing_time_ms: task.processingTimeMs!,
           });
-          this.SessionkMap.delete(task_local.sessionid);
+          this.SessionMap.delete(task_local.sessionid);
         }
       }
     }
@@ -306,7 +311,7 @@ export class Program {
 
   constructor() {
     this.TaskMap = new Map();
-    this.SessionkMap = new Map();
+    this.SessionMap = new Map();
     this.modelApi = new ModelsApi(new Configuration({ basePath: "http://localhost:8000" }));
     this.embeddingsApi = new EmbeddingsApi(new Configuration({ basePath: "http://localhost:8000" }));
   }
