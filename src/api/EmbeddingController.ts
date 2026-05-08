@@ -3,6 +3,7 @@ import { IRepository } from "../db/IRepository";
 import { EmbeddingCreate } from "../db/models/EmbeddingCreate";
 import { Program } from "../program";
 import { HeadingCodeParser } from "mdforge";
+import { safe } from "../utils/data-utils";
 export class EmbeddingController {
   private router: Router;
   headingCodeParser: HeadingCodeParser;
@@ -35,10 +36,16 @@ export class EmbeddingController {
     this.router.get("/embeddings/:id", this.getEmbeddings.bind(this));
 
     this.router.get("/update", this.Update.bind(this));
+    this.router.get("/update1", this.Update1.bind(this));
   }
 
   async Update(req: Request, res: Response) {
     this.program.Update();
+    res.json("OK");
+  }
+
+  async Update1(req: Request, res: Response) {
+    await safe(() => this.program.UpdateEmbedding());
     res.json("OK");
   }
 

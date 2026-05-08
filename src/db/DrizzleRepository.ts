@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, SQL } from "drizzle-orm";
 import { db_drizzle } from "./drizzle/drizzle-db";
 import {
   chatSessionsTable,
@@ -49,12 +49,13 @@ export class DrizzleRepository implements IRepository {
   }
 
   // ========== Фрагменты ==========
-  async findAllFragments(sessionId: string, messageId: number): Promise<MessageFragment[]> {
-    const items = await this.client
-      .select()
-      .from(messageFragmentsTable)
-      .where(and(eq(messageFragmentsTable.sessionId, sessionId), eq(messageFragmentsTable.messageId, messageId)))
-      .orderBy(messageFragmentsTable.fragmentOrder);
+  async findAllFragments(sessionId: string, messageId?: number): Promise<MessageFragment[]> {
+    let s: SQL<unknown> = eq(messageFragmentsTable.sessionId, sessionId);
+    if (messageId != null) {
+      s = and(s, eq(messageFragmentsTable.messageId, messageId))!;
+    }
+
+    const items = await this.client.select().from(messageFragmentsTable).where(s).orderBy(messageFragmentsTable.fragmentOrder);
 
     return items.map(
       (item) =>

@@ -175,3 +175,72 @@ export function getHighResTime() {
 
   return `${hh}:${mm}:${ss}.${ms}${micro}`;
 }
+
+export function subtractSets<T>(A: T[], B: T[]) {
+  let setB = new Set([...B]);
+  return [...new Set([...A].filter((x) => !setB.has(x)))];
+}
+
+export function groupToMap<T, K>(array: T[], getKey: (item: T) => K): Map<K, T[]> {
+  return array.reduce((map, item) => {
+    const key = getKey(item);
+    const group = map.get(key);
+    if (group) {
+      group.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+    return map;
+  }, new Map<K, T[]>());
+}
+
+export function groupToMapEm<T, K, Y>(array: T[], getKey: (item: T) => K, em: (items: T[]) => Y): Map<K, Y> {
+  let m = array.reduce((map, item) => {
+    const key = getKey(item);
+    const group = map.get(key);
+    if (group) {
+      group.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+    return map;
+  }, new Map<K, T[]>());
+  let ents = m.entries();
+
+  let map = new Map<K, Y>();
+  for (const ent of ents) {
+    map.set(ent[0], em(ent[1]));
+  }
+  return map;
+}
+
+export function sum(a: number[], b: number[]) {
+  let c = Array.from({ length: Math.max(a.length, b.length) }).map((_) => 0);
+  for (let i = 0; i < a.length; i++) {
+    c[i] += a[i];
+  }
+  for (let i = 0; i < b.length; i++) {
+    c[i] += b[i];
+  }
+  return c;
+}
+
+export function sumA(a: number[], b: number[]) {
+  a.length = Math.max(a.length, b.length);
+  for (let i = 0; i < b.length; i++) {
+    a[i] += b[i];
+  }
+  return a;
+}
+
+export function mult(a: number[], b: number) {
+  let c = Array.from({ length: a.length });
+  for (let i = 0; i < a.length; i++) {
+    a[i] *= +b;
+  }
+  return c;
+}
+
+export function div(a: number[], b: number) {
+  return mult(a, 1 / b);
+}

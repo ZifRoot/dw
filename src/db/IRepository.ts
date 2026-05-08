@@ -17,6 +17,7 @@ import { EmbeddingCreate } from "./models/EmbeddingCreate";
 
 export interface IRepository {
   // ========== Chat Sessions ==========
+  findAllSessionsAll(): Promise<ChatSessions[]>; // все сессии без фильтра по пользователю
   findAllSessions(userId: string): Promise<ChatSessions[]>;
   findSessionById(id: string): Promise<ChatSessions | null>;
   createSession(data: ChatSessionsCreate): Promise<ChatSessions>;
@@ -36,7 +37,7 @@ export interface IRepository {
   findAllFiles(): Promise<MessageFile[]>;
 
   // ========== Message Fragments ==========
-  findAllFragments(sessionId: string, messageId: number): Promise<MessageFragment[]>;
+  findAllFragments(sessionId: string, messageId?: number): Promise<MessageFragment[]>;
   findFragmentById(sessionId: string, messageId: number, fragmentId: number): Promise<MessageFragment | null>;
   createFragment(data: MessageFragmentCreate): Promise<MessageFragment>;
   createManyFragments(data: MessageFragmentCreate[]): Promise<number>;
@@ -61,7 +62,6 @@ export interface IRepository {
   createManyEmbeddings(sessionId: string, data: EmbeddingCreate[]): Promise<number>;
 
   // ========== Дополнительно для кластеризатора ==========
-  findAllSessionsAll(): Promise<ChatSessions[]>; // все сессии без фильтра по пользователю
 
   findAllFragmentsShrort(sessionId: string, messageId: number): Promise<MessageFragment[]>;
 }
