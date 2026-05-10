@@ -25,7 +25,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "docker:up": "ts-node src/db/db-manager.ts up",
-    "docker:down": "ts-node src/db/db-manager.ts down"
+    "docker:down": "ts-node src/db/db-manager.ts down",
+    "generate-api": "cd ./generators/embedder && openapi-generator-cli batch ./configs/fetch.json ./configs/node.json ./configs/axios.json"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -42,6 +43,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",
+    "axios": "^1.16.0",
     "better-sqlite3": "^12.6.2",
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",

@@ -36,7 +36,7 @@ export class EmbeddingController {
     this.router.get("/embeddings/:id", this.getEmbeddings.bind(this));
 
     this.router.get("/update", this.Update.bind(this));
-    this.router.get("/update1", this.Update1.bind(this));
+    this.router.get("/update1", this.UpdateEmbedding.bind(this));
   }
 
   async Update(req: Request, res: Response) {
@@ -44,7 +44,7 @@ export class EmbeddingController {
     res.json("OK");
   }
 
-  async Update1(req: Request, res: Response) {
+  async UpdateEmbedding(req: Request, res: Response) {
     await safe(() => this.program.UpdateEmbedding());
     res.json("OK");
   }

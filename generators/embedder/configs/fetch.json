@@ -1,5 +1,5 @@
 {
-    "inputSpec": "http://localhost:8000/openapi.json",
+    "inputSpec": "./specs/openapi.json",
     "outputDir": "./../../src/clients/embedder/fetch",
     "generatorName": "typescript-fetch"
 }

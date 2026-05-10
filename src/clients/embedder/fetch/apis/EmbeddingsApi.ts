@@ -137,7 +137,7 @@ export class EmbeddingsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Удаление задачи (только из памяти).
+     * Удаляет задачу (только незавершённые и не выполняющиеся).
      * Delete Task
      */
     async deleteTaskEmbeddingsTaskIdDeleteRaw(requestParameters: DeleteTaskEmbeddingsTaskIdDeleteRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
@@ -148,7 +148,7 @@ export class EmbeddingsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Удаление задачи (только из памяти).
+     * Удаляет задачу (только незавершённые и не выполняющиеся).
      * Delete Task
      */
     async deleteTaskEmbeddingsTaskIdDelete(requestParameters: DeleteTaskEmbeddingsTaskIdDeleteRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {

@@ -10,9 +10,10 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import fs from "fs";
 import path from "path";
-import { Configuration, ModelsApi, EmbeddingsApi } from "./clients/embedder/fetch";
+import { Configuration, ModelsApi, EmbeddingsApi } from "./clients/embedder/axios";
 import { SingleExecution } from "./utils/single-runner";
 import { LogExecution } from "./utils/logger";
+import http from "node:http";
 
 interface TaskX {
   taskId: string;
@@ -28,6 +29,7 @@ export class Program {
   embeddingsApi: EmbeddingsApi;
   TaskMap: Map<string, TaskX>;
   SessionMap: Map<string, TaskX[]>;
+  apiAgent: http.Agent;
 
   async start() {
     await this.RepositoryAsync();
@@ -79,7 +81,7 @@ export class Program {
       console.error("null repository");
       return;
     }
-    let models = (await this.modelApi.getModelsModelsGet()).models;
+    let models = (await this.modelApi.getModelsModelsGet()).data.models;
 
     let modelNames = models.map((m) => m.name);
 
@@ -116,9 +118,8 @@ export class Program {
 
           return await Promise.all(
             contents.map(async (content) => {
-              let task = await this.embeddingsApi.createTaskEmbeddingsPost({ computeRequest: { modelName: x.model_name, text: content } });
-              task.taskId;
-              return { taskId: task.taskId, len: content.length, sessionid: x.sessionid, model_name: x.model_name };
+              let task = (await this.embeddingsApi.createTaskEmbeddingsPost({ model_name: x.model_name, text: content })).data;
+              return { taskId: task.task_id, len: content.length, sessionid: x.sessionid, model_name: x.model_name };
             }),
           );
         }),
@@ -137,30 +138,26 @@ export class Program {
   @LogExecution
   private async workEmbedding() {
     while (this.TaskMap.size > 0) {
-      let completed_Tasks = (
-        await this.embeddingsApi.listTasksEmbeddingsGet({
-          statusFilter: "completed",
-        })
-      ).tasks;
+      let completed_Tasks = (await this.embeddingsApi.listTasksEmbeddingsGet("completed")).data.tasks;
       if (completed_Tasks.length == 0) {
         await delay(500);
       }
       for (const completed_Task of completed_Tasks) {
-        let task_local = this.TaskMap.get(completed_Task.taskId);
+        let task_local = this.TaskMap.get(completed_Task.task_id);
 
         if (task_local == null) {
-          await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete({ taskId: completed_Task.taskId });
+          await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(completed_Task.task_id);
           continue;
         }
-        this.TaskMap.delete(completed_Task.taskId);
+        this.TaskMap.delete(completed_Task.task_id);
 
         var ts_sessions = this.SessionMap.get(task_local.sessionid);
         if (ts_sessions == null) continue;
 
-        let task = await this.embeddingsApi.getTaskEmbeddingsTaskIdGet({ taskId: task_local.taskId });
+        let task = (await this.embeddingsApi.getTaskEmbeddingsTaskIdGet(task_local.taskId)).data;
 
         task_local.result = task.result!;
-        await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete({ taskId: task_local.taskId });
+        await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(task_local.taskId);
 
         if (ts_sessions.every((t) => t.result != null)) {
           let embedding = ts_sessions.reduce((r, c) => sumA(r, mult(c.result!.slice(), c.len)), [0]);
@@ -168,12 +165,12 @@ export class Program {
           div(embedding, len);
 
           this.repository.createEmbedding(task_local.sessionid, {
-            model_name: task.modelName,
+            model_name: task.model_name,
             dimension: embedding.length,
             embedding: embedding,
             createdAt: new Date(Date.now()),
             sessionId: task_local.sessionid,
-            processing_time_ms: task.processingTimeMs!,
+            processing_time_ms: task.processing_time_ms!,
           });
           this.SessionMap.delete(task_local.sessionid);
         }
@@ -312,7 +309,33 @@ export class Program {
   constructor() {
     this.TaskMap = new Map();
     this.SessionMap = new Map();
-    this.modelApi = new ModelsApi(new Configuration({ basePath: "http://localhost:8000" }));
-    this.embeddingsApi = new EmbeddingsApi(new Configuration({ basePath: "http://localhost:8000" }));
+    // Агент для http (на localhost:8000)
+    this.apiAgent = new http.Agent({
+      keepAlive: true,
+      maxSockets: 50, // макс. одновременных соединений к одному хосту
+      maxFreeSockets: 10, // сколько свободных держать открытыми
+      timeout: 60000, // таймаут на установку соединения
+      keepAliveMsecs: 1000,
+    });
+
+    // Единый keep‑alive агент
+    this.apiAgent = new http.Agent({
+      keepAlive: true,
+      maxSockets: 50,
+      maxFreeSockets: 10,
+      timeout: 60000,
+      keepAliveMsecs: 1000,
+    });
+
+    // Одна конфигурация для всех API
+    const config = new Configuration({
+      basePath: "http://localhost:8000",
+      baseOptions: {
+        httpAgent: this.apiAgent, // ✅ полностью типизировано
+      },
+    });
+
+    this.modelApi = new ModelsApi(config);
+    this.embeddingsApi = new EmbeddingsApi(config);
   }
 }

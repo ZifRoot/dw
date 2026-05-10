@@ -26,6 +26,7 @@ import {
   User,
   UserCreate,
 } from "./models";
+import { LogExecution } from "../utils/logger";
 
 type PgTx = PgTransaction<any, any, any>;
 
@@ -738,6 +739,7 @@ export class DrizzleRepository implements IRepository {
     }
   }
 
+  @LogExecution
   async createEmbedding(sessionId: string, data: EmbeddingCreate, tx?: PgTransaction<any, any, any>): Promise<Embedding> {
     const execute = async (db: typeof db_drizzle | PgTransaction<any, any, any>) => {
       const embedding = new Embedding({

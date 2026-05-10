@@ -7,6 +7,9 @@
     "paths": {
         "/models": {
             "get": {
+                "tags": [
+                    "Models"
+                ],
                 "summary": "Get Models",
                 "description": "Список моделей с их статусами.",
                 "operationId": "get_models_models_get",
@@ -26,6 +29,9 @@
         },
         "/models/{model_name}/load": {
             "post": {
+                "tags": [
+                    "Models"
+                ],
                 "summary": "Load Model",
                 "description": "Загружает модель в память GPU.",
                 "operationId": "load_model_models__model_name__load_post",
@@ -66,6 +72,9 @@
         },
         "/models/{model_name}/unload": {
             "post": {
+                "tags": [
+                    "Models"
+                ],
                 "summary": "Unload Model",
                 "description": "Выгружает модель из памяти.",
                 "operationId": "unload_model_models__model_name__unload_post",
@@ -106,6 +115,9 @@
         },
         "/embeddings": {
             "post": {
+                "tags": [
+                    "Embeddings"
+                ],
                 "summary": "Create Task",
                 "description": "Создаёт задачу на вычисление эмбеддинга.",
                 "operationId": "create_task_embeddings_post",
@@ -143,12 +155,14 @@
                 }
             },
             "get": {
+                "tags": [
+                    "Embeddings"
+                ],
                 "summary": "List Tasks",
-                "description": "Список всех задач (опционально фильтр по статусу).",
                 "operationId": "list_tasks_embeddings_get",
                 "parameters": [
                     {
-                        "name": "status",
+                        "name": "status_filter",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -160,7 +174,7 @@
                                     "type": "null"
                                 }
                             ],
-                            "title": "Status"
+                            "title": "Status Filter"
                         }
                     }
                 ],
@@ -190,6 +204,9 @@
         },
         "/embeddings/{task_id}": {
             "get": {
+                "tags": [
+                    "Embeddings"
+                ],
                 "summary": "Get Task",
                 "description": "Получение информации о задаче.",
                 "operationId": "get_task_embeddings__task_id__get",
@@ -228,8 +245,11 @@
                 }
             },
             "delete": {
+                "tags": [
+                    "Embeddings"
+                ],
                 "summary": "Delete Task",
-                "description": "Удаление задачи (только из памяти).",
+                "description": "Удаляет задачу (только незавершённые и не выполняющиеся).",
                 "operationId": "delete_task_embeddings__task_id__delete",
                 "parameters": [
                     {
