@@ -26,7 +26,8 @@
     "db:studio": "drizzle-kit studio",
     "docker:up": "ts-node src/db/db-manager.ts up",
     "docker:down": "ts-node src/db/db-manager.ts down",
-    "generate-api": "cd ./generators/embedder && openapi-generator-cli batch ./configs/fetch.json ./configs/node.json ./configs/axios.json"
+    "generate-api": "cd ./generators/embedder && openapi-generator-cli batch ./configs/fetch.json ./configs/node.json ./configs/axios.json",
+    "ddd": "cd ddd && mdforge split http://localhost:8081/api/document/dd363e2e-0f1a-479d-8b74-ffc33dbcfd1d/fragment/msg_36_frag_3/text ."
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -47,7 +48,7 @@
     "better-sqlite3": "^12.6.2",
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
-    "mdforge": "file:../mdforge/mdforge-0.7.0.tgz",
+    "mdforge": "file:../mdforge/mdforge-0.10.0.tgz",
     "pg": "^8.20.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0",

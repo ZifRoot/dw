@@ -93,7 +93,7 @@ export class ModelData {
       let pair = this.pointModels.map((B) => new Pair(A, B, this.modelName, cosineDistance(A.vector, B.vector), 0));
       pair.sort((a, b) => a.cosineDist - b.cosineDist);
 
-      this.pairs.push(...pair.slice(1, 4));
+      this.pairs.push(...pair.slice(1, 3));
       if (this.view()) {
         yield { progress: i / this.pointModels.length, done: false };
       }
