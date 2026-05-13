@@ -1,7 +1,6 @@
 import * as d3 from "d3";
 import { ZoomTransform } from "d3";
-import { accurateSum, delay, LogAsync, LogSync } from "../utils/data-utils";
-import { Throttler } from "../utils/throttler";
+import { delay, LogAsync, LogSync } from "../utils/data-utils";
 import { AppMediator } from "./AppMediator";
 import { Point } from "./Point";
 import { PointModel } from "./PointModel";
@@ -9,6 +8,7 @@ import { Pair } from "./Pair";
 import { ChatSession } from "./ChatSession";
 import { Embedding } from "./Embedding";
 import { ModelData } from "./ModelData";
+import { PointPosition, PointPositionDB } from "./PointPositionDB";
 
 // =============================== CanvasEngine ===============================
 
@@ -30,7 +30,7 @@ export class CanvasEngine {
   public minDistanceSq = this.minDistancePx * this.minDistancePx;
 
   public forceStrength = 0.05;
-  public maxDistancePx = 5000;
+  public maxDistancePx = 50000;
   public iterationsPerFrame = 100;
   public smoothingFactor = 0.6;
   public autoZoomEnabled = false;
@@ -48,15 +48,15 @@ export class CanvasEngine {
   epsilon: number = 1e-6;
   public temperatureThreshold = 0.2;
   public repulsionTemperature: number = 0;
-  public throttler: Throttler;
   modelsMap: Map<string, ModelData> = new Map();
   allModelsGen: Generator<{ progress: number; done: boolean }, void, unknown> | null = null;
+  public positionDB: PointPositionDB | null = null;
 
   constructor(
     public element: HTMLElement,
     public mediator: AppMediator,
   ) {
-    this.throttler = new Throttler(10, 10);
+
     this.transform = d3.zoomIdentity;
     this.initSvg();
     this.initGlobalDrag();
@@ -65,6 +65,33 @@ export class CanvasEngine {
     this.startAnimationLoop();
   }
 
+  public async loadPositionsAsync(): Promise<boolean> {
+    if (!this.positionDB) return false;
+    const saved = await this.positionDB.loadAll();
+    if (saved.length === 0) return false;
+
+    for (const item of saved) {
+      const point = this.points.find((p) => p.id === item.id);
+      if (point) {
+        point.x = item.x;
+        point.y = item.y;
+      }
+    }
+    return true;
+  }
+
+  public async savePositionsAsync(): Promise<void> {
+    if (!this.positionDB) return;
+    const data = this.points.map(
+      (p) =>
+        ({
+          id: p.id,
+          x: p.x,
+          y: p.y,
+        }) as PointPosition,
+    );
+    await this.positionDB.saveAll(data);
+  }
   // ========== 1. Инициализация ==========
 
   public initSvg(): void {
@@ -155,7 +182,9 @@ export class CanvasEngine {
   // ========== 3. Загрузка данных ==========
   @LogAsync
   public async addInitialPoints(): Promise<void> {
+    this.positionDB = await PointPositionDB.init();
     this.points.push(...(await this.fetchDocuments()));
+    await this.loadPositionsAsync();
     this.needsRepulsion = true;
     this.renderPoints();
     await this.loadEmbeddings();
@@ -182,7 +211,7 @@ export class CanvasEngine {
   @LogSync
   public updateModelStats(): void {
     this.coverage = this.getComputeCoverage();
-    this.topModelNames = this.selectTopModels(1);
+    this.topModelNames = [this.selectTopModels(2)[1]];
     this.initModels(this.topModelNames);
 
     for (const point of this.points) {
@@ -272,7 +301,7 @@ export class CanvasEngine {
     const dy = p1.y - p2.y;
     const curDist = Math.hypot(dx, dy);
     if (curDist < 1e-5) return { newP1: { x: p1.x, y: p1.y }, newP2: { x: p2.x, y: p2.y } };
-    const diff = Math.min(curDist - Math.pow(targetDist, 1.5), 0);
+    const diff = Math.max(curDist - targetDist, 0);
     const force = diff * strength;
     const moveX = (dx / curDist) * force;
     const moveY = (dy / curDist) * force;
@@ -283,7 +312,7 @@ export class CanvasEngine {
   }
 
   public applyDisplacement(pair: Pair): void {
-    const { newP1, newP2 } = this.computeDisplacement(pair.p1.point, pair.p2.point, pair.targetDistancePx, this.forceStrength);
+    const { newP1, newP2 } = this.computeDisplacement(pair.p1.point, pair.p2.point, pair.targetDistancePx * 3, this.forceStrength);
     this.smoothMove(pair.p1.point, newP1);
     this.smoothMove(pair.p2.point, newP2);
   }
@@ -320,7 +349,7 @@ export class CanvasEngine {
     }
     let processedPairs_l = 0;
     for (const model of models) {
-      const gen = model.processInSteps(maxPx, maxTimeMs);
+      const gen = model.processInSteps(maxPx);
       const modelTotalPairs = (model.pointModels.length * (model.pointModels.length - 1)) / 2;
       let result;
       do {
@@ -337,6 +366,8 @@ export class CanvasEngine {
     }
 
     this.pairs = models.flatMap((m) => m.pairs);
+    yield { progress: 0.9, done: false };
+    this.pairs.sort((a, b) => a.cosineDist - b.cosineDist);
     yield { progress: 1, done: true };
   }
 
@@ -386,12 +417,13 @@ export class CanvasEngine {
   public finishRepulsion(): void {
     this.needsRepulsion = false;
     this.needsEmbedding = true;
+    this.savePositionsAsync().catch(console.error);
     // this.prepareEmbeddingPairs();
   }
 
   public processEmbeddingStep(): void {
     for (let i = 0; i < this.iterationsPerFrame; i++) {
-      const idx = Math.floor(Math.random() * this.pairs.length);
+      const idx = Math.floor((Math.random() * this.pairs.length));
       this.applyDisplacement(this.pairs[idx]);
     }
     this.renderPoints();

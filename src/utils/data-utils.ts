@@ -226,7 +226,12 @@ export function sum(a: number[], b: number[]) {
 }
 
 export function sumA(a: number[], b: number[]) {
+  let al = a.length;
   a.length = Math.max(a.length, b.length);
+  for (let i = al; i < a.length; i++) {
+    a[i] = 0;
+  }
+
   for (let i = 0; i < b.length; i++) {
     a[i] += b[i];
   }

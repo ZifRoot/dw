@@ -5,14 +5,14 @@ import { ChatSessions } from "./db/models/ChatSessions";
 import { MessageFile } from "./db/models/MessageFile";
 import { User } from "./db/models/User";
 import { Deepseek, credentials } from "./deepseek";
-import { dateStr, delay, div, groupToMap, groupToMapEm, mult, safe, subtractSets, sum, sumA } from "./utils/data-utils";
+import { dateStr, delay, div, mult, safe, subtractSets, sumA } from "./utils/data-utils";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import fs from "fs";
 import path from "path";
-import { Configuration, ModelsApi, EmbeddingsApi } from "./clients/embedder/axios";
+import { Configuration, ModelsApi, EmbeddingsApi, TaskShortResponse } from "./clients/embedder/axios";
 import { SingleExecution } from "./utils/single-runner";
-import { LogExecution } from "./utils/logger";
+import { Log, LogParam, Safe } from "./utils/logger";
 import http from "node:http";
 
 interface TaskX {
@@ -65,7 +65,7 @@ export class Program {
     await this.ExecUsers();
   }
 
-  @LogExecution
+  @Log
   async UpdateEmbedding() {
     // await this.recoverEmbedding();
     await this.CreateTasks();
@@ -74,7 +74,7 @@ export class Program {
   }
 
   @SingleExecution
-  @LogExecution
+  @Log
   async CreateTasks() {
     await this.RepositoryAsync();
     if (!this.repository) {
@@ -107,7 +107,7 @@ export class Program {
     );
     let xs = _x.flatMap((_) => _);
 
-    xs.sort((a, b) => a.model_name.localeCompare(b.model_name));
+    xs.sort((a, b) => a.sessionid.localeCompare(b.sessionid));
 
     var Tasks = (
       await Promise.all(
@@ -135,50 +135,70 @@ export class Program {
   }
 
   @SingleExecution
-  @LogExecution
+  @Log
   private async workEmbedding() {
     while (this.TaskMap.size > 0) {
-      let completed_Tasks = (await this.embeddingsApi.listTasksEmbeddingsGet("completed")).data.tasks;
-      if (completed_Tasks.length == 0) {
+      if (!(await this.workEmbeddingStep())) {
         await delay(500);
-      }
-      for (const completed_Task of completed_Tasks) {
-        let task_local = this.TaskMap.get(completed_Task.task_id);
-
-        if (task_local == null) {
-          await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(completed_Task.task_id);
-          continue;
-        }
-        this.TaskMap.delete(completed_Task.task_id);
-
-        var ts_sessions = this.SessionMap.get(task_local.sessionid);
-        if (ts_sessions == null) continue;
-
-        let task = (await this.embeddingsApi.getTaskEmbeddingsTaskIdGet(task_local.taskId)).data;
-
-        task_local.result = task.result!;
-        await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(task_local.taskId);
-
-        if (ts_sessions.every((t) => t.result != null)) {
-          let embedding = ts_sessions.reduce((r, c) => sumA(r, mult(c.result!.slice(), c.len)), [0]);
-          let len = ts_sessions.reduce((r, c) => c.len + r, 0);
-          div(embedding, len);
-
-          this.repository.createEmbedding(task_local.sessionid, {
-            model_name: task.model_name,
-            dimension: embedding.length,
-            embedding: embedding,
-            createdAt: new Date(Date.now()),
-            sessionId: task_local.sessionid,
-            processing_time_ms: task.processing_time_ms!,
-          });
-          this.SessionMap.delete(task_local.sessionid);
-        }
       }
     }
   }
 
-  @LogExecution
+  @Safe
+  async workEmbeddingStep() {
+    let completed_Tasks = (await this.embeddingsApi.listTasksEmbeddingsGet("completed")).data.tasks;
+    if (completed_Tasks.length == 0) {
+      return 0;
+    }
+    for (const completed_Task of completed_Tasks) {
+      await this.workTask(completed_Task);
+    }
+    return 1;
+  }
+
+  @LogParam
+  async workTask(completed_Task: TaskShortResponse) {
+    let task_local = this.TaskMap.get(completed_Task.task_id);
+
+    if (task_local == null) {
+      console.log("task miss");
+      await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(completed_Task.task_id);
+      return;
+    }
+    this.TaskMap.delete(completed_Task.task_id);
+
+    var ts_sessions = this.SessionMap.get(task_local.sessionid);
+    if (ts_sessions == null) {
+      console.log("session miss");
+      return;
+    }
+
+    let count_ts = ts_sessions.reduce((r, c) => (r += +(c.result != null)), 0);
+    console.log(`${count_ts}/${ts_sessions.length}`);
+
+    let task = (await this.embeddingsApi.getTaskEmbeddingsTaskIdGet(task_local.taskId)).data;
+
+    task_local.result = task.result!;
+    await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(task_local.taskId);
+
+    if (ts_sessions.every((t) => t.result != null)) {
+      let embedding = ts_sessions.reduce((r, c) => sumA(r, mult(c.result!.slice(), c.len)), [0]);
+      let len = ts_sessions.reduce((r, c) => c.len + r, 0);
+      div(embedding, len);
+
+      await this.repository.createEmbedding(task_local.sessionid, {
+        model_name: task.model_name,
+        dimension: embedding.length,
+        embedding: embedding,
+        createdAt: new Date(Date.now()),
+        sessionId: task_local.sessionid,
+        processing_time_ms: task.processing_time_ms!,
+      });
+      this.SessionMap.delete(task_local.sessionid);
+    }
+  }
+
+  @Log
   async ExecUsers() {
     await this.RepositoryAsync();
     if (!this.repository) {
@@ -202,7 +222,7 @@ export class Program {
     await this.FilesUser(deepseek, user);
   }
 
-  @LogExecution
+  @Log
   private async FilesUser(deepseek: Deepseek, user: User) {
     if (!this.repository) {
       console.error("null repository");
@@ -248,7 +268,7 @@ export class Program {
     return mf;
   }
 
-  @LogExecution
+  @Log
   private async FetchUser(deepseek: Deepseek, user: User, all: boolean) {
     if (!this.repository) {
       console.error("null repository");
@@ -296,12 +316,12 @@ export class Program {
     await this.repository.createMessagesBizData(user.id, his);
   }
 
-  @LogExecution
+  @Log
   Repository() {
     return (this.repository = this.repository || InitDb());
   }
 
-  @LogExecution
+  @Log
   async RepositoryAsync() {
     return (this.repository = this.repository || (await InitDbAsync()));
   }

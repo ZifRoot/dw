@@ -24,11 +24,13 @@ export function createLoggedRunner<TArgs extends any[], TReturn>(
 export function createLoggedMethodRunner<This, Args extends any[], Return>(
   fn: (this: This, ...args: Args) => Promise<Return> | Return,
   label?: string,
+  param = false,
 ): (this: This, ...args: Args) => Promise<Return> {
   const logLabel = label || fn.name || "anonymous";
 
   return async function (this: This, ...args: Args): Promise<Return> {
-    console.log(`[${logLabel}] запустилась`);
+    const param_str = param ? ` | ${JSON.stringify(args)}` : "";
+    console.log(`[${logLabel}] запустилась${param_str}`);
     const start = performance.now();
 
     try {
@@ -44,6 +46,20 @@ export function createLoggedMethodRunner<This, Args extends any[], Return>(
   };
 }
 
+export function saveR<This, Args extends any[], Return>(
+  fn: (this: This, ...args: Args) => Promise<Return> | Return,
+): (this: This, ...args: Args) => Promise<Return> {
+  return async function (this: This, ...args: Args): Promise<Return> {
+    try {
+      const result = await fn.apply(this, args);
+      return result;
+    } catch (error) {
+      console.error(error);
+    }
+    return null as Return;
+  };
+}
+
 export function LogExecutionName(label?: string) {
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
@@ -52,8 +68,20 @@ export function LogExecutionName(label?: string) {
   };
 }
 
-export function LogExecution(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+export function Log(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
   const originalMethod = descriptor.value;
   // Просто оборачиваем оригинальный метод через соответствующую утилиту
-  descriptor.value = createLoggedMethodRunner(originalMethod, propertyKey);
+  descriptor.value = createLoggedMethodRunner(originalMethod, propertyKey, false);
+}
+
+export function LogParam(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  const originalMethod = descriptor.value;
+  // Просто оборачиваем оригинальный метод через соответствующую утилиту
+  descriptor.value = createLoggedMethodRunner(originalMethod, propertyKey, true);
+}
+
+export function Safe(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  const originalMethod = descriptor.value;
+  // Просто оборачиваем оригинальный метод через соответствующую утилиту
+  descriptor.value = saveR(originalMethod);
 }

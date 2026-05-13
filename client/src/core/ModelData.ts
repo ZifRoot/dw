@@ -15,15 +15,19 @@ export class ModelData {
   public weight = 1;
   public pointModels: PointModel[] = [];
   public pairs: Pair[] = [];
-  public maxCosine = 0;
+  public maxCosine = 1;
 
   private stage = ModelStage.Raw;
-  private rawPairs: { i: number; j: number }[] = [];
+  // private rawPairs: { i: number; j: number }[] = [];
   lastMaxPx: number;
+  maxTimeMs: number;
+  start: number;
 
   constructor(modelName: string) {
     this.modelName = modelName;
     this.lastMaxPx = -Infinity;
+    this.maxTimeMs = 100;
+    this.start = 0;
   }
 
   /// <summary>Добавляет точку с вектором в модель.</summary>
@@ -38,18 +42,25 @@ export class ModelData {
 
   /// <summary>Генерирует порцию сырых пар. Возвращает количество сгенерированных.</summary>
   public buildRawPairs(): void {
-    const n = this.pointModels.length;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        this.rawPairs.push({ i, j });
-      }
-    }
+    // const n = this.pointModels.length;
+    // for (let i = 0; i < n; i++) {
+    //   for (let j = i + 1; j < n; j++) {
+    //     this.rawPairs.push({ i, j });
+    //   }
+    // }
     this.stage = ModelStage.Cosine;
   }
 
   public computeAllCosines(): void {
     this.maxCosine = Number.NEGATIVE_INFINITY;
-    for (const { i, j } of this.rawPairs) {
+    const n = this.pointModels.length;
+    let rawPairs: { i: number; j: number }[] = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        rawPairs.push({ i, j });
+      }
+    }
+    for (const { i, j } of rawPairs) {
       const cos = cosineDistance(this.pointModels[i].vector, this.pointModels[j].vector);
       const p1 = this.pointModels[i];
       const p2 = this.pointModels[j];
@@ -74,27 +85,31 @@ export class ModelData {
   }
 
   /// <summary>Генератор для пошагового вычисления косинусов и масштабирования.</summary>
-  public *processInSteps(maxPx: number, maxTimeMs = 8): Generator<{ progress: number; done: boolean }, void, unknown> {
-    this.buildRawPairs(); // строим сырые пары прямо здесь
-    const total = this.rawPairs.length;
-    let processed = 0;
-    let start = performance.now();
+  public *processInSteps(maxPx: number): Generator<{ progress: number; done: boolean }, void, unknown> {
+    // this.buildRawPairs(); // строим сырые пары прямо здесь
+    for (let i = 0; i < this.pointModels.length; i++) {
+      const A = this.pointModels[i];
 
-    for (const { i, j } of this.rawPairs) {
-      const cos = cosineDistance(this.pointModels[i].vector, this.pointModels[j].vector);
-      const pair = new Pair(this.pointModels[i], this.pointModels[j], this.modelName, cos, 0);
-      this.pairs.push(pair);
-      if (cos > this.maxCosine) this.maxCosine = cos;
-      processed++;
+      let pair = this.pointModels.map((B) => new Pair(A, B, this.modelName, cosineDistance(A.vector, B.vector), 0));
+      pair.sort((a, b) => a.cosineDist - b.cosineDist);
 
-      if (processed % 1000 === 0 && performance.now() - start > maxTimeMs) {
-        yield { progress: processed / total, done: false };
-        start = performance.now();
+      this.pairs.push(...pair.slice(1, 4));
+      if (this.view()) {
+        yield { progress: i / this.pointModels.length, done: false };
       }
     }
-    this.rawPairs = []; // освобождаем память
+
     // Масштабирование – быстрая операция, выполняем сразу
     this.scaleAllTargets(maxPx);
     yield { progress: 1, done: true };
+  }
+
+  view(): boolean {
+    let now = performance.now();
+    if (now - this.maxTimeMs > this.start) {
+      this.start = now;
+      return true;
+    }
+    return false;
   }
 }
