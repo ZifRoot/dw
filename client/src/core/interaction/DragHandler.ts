@@ -1,29 +1,23 @@
 import * as d3 from "d3";
-import { ZoomTransform } from "d3";
 import { Point } from "../Point";
+import { CanvasRenderer } from "../renderer/CanvasRenderer";
 
-type GetTransformFn = () => ZoomTransform;
-type SetDraggedPointFn = (point: Point | null) => void;
-type SetDraggingFn = (dragging: boolean) => void;
-type UpdatePointFn = (x: number, y: number) => void;
-type OnDragEndFn = () => void;
-
-/**
- * Обрабатывает глобальное перетаскивание (drag) на SVG.
- */
 export class DragHandler {
   private dragBehavior: d3.DragBehavior<SVGSVGElement, unknown, any>;
+  public draggedPoint: Point | null = null;
+  public isDragging = false;
+  public onDragEndCallback: (() => void) | null = null;
 
   constructor(
     private svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
-    private getTransform: GetTransformFn,
-    private setDraggedPoint: SetDraggedPointFn,
-    private setDragging: SetDraggingFn,
-    private updatePoint: UpdatePointFn,
-    private onDragEnd: OnDragEndFn,
+    private renderer: CanvasRenderer,
   ) {
     this.dragBehavior = d3
       .drag<SVGSVGElement, unknown>()
+      .filter((event) => {
+        const target = event.target as HTMLElement;
+        return target.tagName === "circle";
+      })
       .on("start", this.onDragStart.bind(this))
       .on("drag", this.onDrag.bind(this))
       .on("end", this.onDragEnd.bind(this));
@@ -32,7 +26,7 @@ export class DragHandler {
 
   private findPointUnderCursor(event: d3.D3DragEvent<SVGSVGElement, unknown, any>): Point | null {
     let target = event.sourceEvent.target as HTMLElement;
-    const svgNode = this.svg.node();
+    const svgNode = this.svg.node() as any as HTMLElement;
     while (target && target !== svgNode && target.tagName !== "circle") {
       target = target.parentNode as HTMLElement;
     }
@@ -42,29 +36,41 @@ export class DragHandler {
   }
 
   private onDragStart(event: d3.D3DragEvent<SVGSVGElement, unknown, any>): void {
+    if (this.draggedPoint) return;
     const point = this.findPointUnderCursor(event);
     if (!point) return;
-    this.setDraggedPoint(point);
-    this.setDragging(true);
+    this.draggedPoint = point;
+    this.isDragging = true;
     event.sourceEvent.stopPropagation();
     event.sourceEvent.preventDefault();
   }
 
   private onDrag(event: d3.D3DragEvent<SVGSVGElement, unknown, any>): void {
+    if (!this.draggedPoint || !this.renderer.transform) return;
     const svgNode = this.svg.node();
     if (!svgNode) return;
     const [mx, my] = d3.pointer(event.sourceEvent, svgNode);
-    const transform = this.getTransform();
-    const [invX, invY] = transform.invert([mx, my]);
-    this.updatePoint(invX, invY);
+    const [invX, invY] = this.renderer.transform.invert([mx, my]);
+    this.updateDraggedPoint(invX, invY);
     event.sourceEvent.stopPropagation();
     event.sourceEvent.preventDefault();
   }
 
   private onDragEnd(event: d3.D3DragEvent<SVGSVGElement, unknown, any>): void {
-    this.setDraggedPoint(null);
-    this.setDragging(false);
-    this.onDragEnd();
-    event.sourceEvent.stopPropagation();
+    if (this.draggedPoint) {
+      this.draggedPoint = null;
+      this.isDragging = false;
+      event.sourceEvent.stopPropagation();
+      if (this.onDragEndCallback) this.onDragEndCallback();
+    }
+  }
+
+  private updateDraggedPoint(x: number, y: number): void {
+    if (!this.draggedPoint) return;
+    this.draggedPoint.x = x;
+    this.draggedPoint.y = y;
+    if (this.draggedPoint.groupElement) {
+      d3.select(this.draggedPoint.groupElement).attr("transform", `translate(${x},${y})`);
+    }
   }
 }

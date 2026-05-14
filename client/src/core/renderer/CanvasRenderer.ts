@@ -9,7 +9,7 @@ import { Point } from "../Point";
 export class CanvasRenderer {
   public svg!: d3.Selection<SVGSVGElement, unknown, null, undefined>;
   public container!: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private transform: ZoomTransform;
+  public transform: ZoomTransform;
 
   constructor(private element: HTMLElement) {
     this.transform = d3.zoomIdentity;
@@ -58,24 +58,13 @@ export class CanvasRenderer {
       .attr("class", "point-group")
       .attr("transform", (d) => `translate(${d.x},${d.y})`);
 
-    groups
-      .append("circle")
-      .attr("class", "point")
-      .attr("cx", 0)
-      .attr("cy", 0)
-      .attr("r", 15)
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 2)
-      .attr("fill", "#3b82f6");
+    groups.append("circle").attr("class", "point").attr("cx", 0).attr("cy", 0).attr("r", 15);
 
     groups
       .append("text")
       .attr("class", "point-label")
       .attr("x", (d) => d.labelOffset?.dx ?? 8)
       .attr("y", (d) => d.labelOffset?.dy ?? 4)
-      .attr("dy", "0.35em")
-      .style("font-size", "12px")
-      .style("fill", "#fff")
       .text((d) => d.text);
 
     return groups;
@@ -121,7 +110,7 @@ export class CanvasRenderer {
 
     this.container
       .selectAll<SVGTextElement, any>("text.point-label")
-      .style("font-size", `${12 * scaleInv}px`)
+      .style("font-size", `${20 * scaleInv}px`)
       .attr("x", (d) => (d.labelOffset?.dx ?? 12) * scaleInv)
       .attr("y", (d) => (d.labelOffset?.dy ?? 4) * scaleInv);
   }

@@ -23,7 +23,7 @@ export class ModelManager {
 
   public async updateModelStats(points: Point[], embeddingsStore: Map<string, Embedding[]>): Promise<void> {
     this.coverage = this.computeCoverage(embeddingsStore);
-    this.topModelNames = [this.selectTopModels(2)[1]]; // берём вторую модель – магия
+    this.topModelNames = ["sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"]; // берём вторую модель – магия
     this.initModels(this.topModelNames);
 
     for (const point of points) {

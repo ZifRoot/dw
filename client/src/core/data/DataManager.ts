@@ -44,7 +44,7 @@ export class DataManager {
       const response = await fetch(`/api/documents`);
       if (!response.ok) return [];
       const data = (await response.json()) as ChatSession[];
-      return data.map((session) => new Point(session.id, session.title, 300, 300, "left"));
+      return data.map((session) => new Point(session.id, session.title, 300, 300, "right"));
     } catch (err) {
       console.error("fetchDocuments error", err);
       return [];

@@ -34,7 +34,7 @@ export class CanvasEngine {
   public autoZoomEnabled = false;
   public forceStrength = 0.05;
   public maxDistancePx = 50000;
-  public iterationsPerFrame = 100;
+  public iterationsPerFrame = 10;
   public smoothingFactor = 0.06;
 
   constructor(
