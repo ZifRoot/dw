@@ -1,3 +1,7 @@
+.git
+.gitignore
+txt/*
+postgres_db
 # Logs
 logs
 *.log

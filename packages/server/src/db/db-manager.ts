@@ -22,7 +22,7 @@ const CONFIG = {
 };
 
 const ENV_FILE = path.join(process.cwd(), ".env");
-const COMPOSE_DIR = path.join(process.cwd(), "db");
+const COMPOSE_DIR = path.join(process.cwd(), "postgres_db");
 const COMPOSE_FILE_EXT = path.join(COMPOSE_DIR, "docker-compose");
 const COMPOSE_FILE = `${COMPOSE_FILE_EXT}.yaml`;
 

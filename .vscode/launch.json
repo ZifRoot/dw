@@ -1,6 +1,96 @@
 {
   "version": "0.2.0",
+  "compounds": [
+    {
+      "name": "Fullstack Debug",
+      "configurations": [
+        "Debug: Server only (TS-Node)",
+        "Debug: Client only (Vite)"
+      ],
+      "stopAll": true
+    }
+  ],
   "configurations": [
+    {
+      "name": "Dev: Server (TS-Node)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "cwd": "${workspaceFolder}/src/server",
+      "preLaunchTask": "dev:server",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/src/server/**/*.js"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/server/**",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "name": "Dev: Client (Vite + Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/client/src",
+      "breakOnLoad": true,
+      "preLaunchTask": "dev:client",
+      "userDataDir": "${workspaceFolder}/.vscode/chrome-debug-profile",
+      "sourceMapPathOverrides": {
+        "webpack:///src/*": "${webRoot}/*",
+        "webpack:///./src/*": "${webRoot}/*"
+      }
+    },
+
+    {
+      "name": "Prod: Server (built)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["dist/index.js"],
+      "cwd": "${workspaceFolder}/server",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build:server",
+      "outFiles": ["${workspaceFolder}/server/dist/**/*.js"]
+    },
+    {
+      "name": "Prod: Client (static preview)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:4173",
+      "webRoot": "${workspaceFolder}/client/dist",
+      "preLaunchTask": "start:client",
+      "breakOnLoad": true
+    },
+    {
+      "name": "Prod: Fullstack (build + run)",
+      "type": "compound",
+      "configurations": ["Prod: Server", "Prod: Client"],
+      "stopAll": true,
+      "preLaunchTask": "build:all"
+    },
+    {
+      "name": "Clean & Rebuild: Fullstack",
+      "type": "compound",
+      "configurations": ["Prod: Server", "Prod: Client"],
+      "stopAll": true,
+      "preLaunchTask": "rebuild:all"
+    },
+    {
+      "name": "Debug: Server only (TS-Node)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "preLaunchTask": "dev:server"
+    },
+    {
+      "name": "Debug: Client only (Vite)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/src/client",
+      "preLaunchTask": "dev:client"
+    },
     {
       "name": "Launch via ts-node (dev)",
       "type": "node",
@@ -14,22 +104,6 @@
         "NODE_ENV": "development"
       },
       "sourceMaps": true,
-      "skipFiles": ["<node_internals>/**"]
-    },
-    {
-      "name": "Launch compiled (production)",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/dist/index.js",
-      "cwd": "${workspaceFolder}",
-      "protocol": "inspector",
-      "internalConsoleOptions": "openOnSessionStart",
-      "preLaunchTask": "tsc: build",
-      "env": {
-        "NODE_ENV": "production"
-      },
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "skipFiles": ["<node_internals>/**"]
     }
   ]
