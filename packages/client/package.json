@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "vite --mode development",
+    "build:debug": "vite build --mode development",
+    "build:release": "vite build --mode production",
+    "preview": "vite preview --port 4173",
+    "build": "npm run build:release",
+    "prod": "npm run build:release && npm run preview"
   },
   "dependencies": {
     "d3": "^7.8.5",

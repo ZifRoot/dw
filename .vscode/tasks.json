@@ -84,7 +84,7 @@
         "pattern": { "regexp": "^(.*)$" },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": ".*Server running on http://localhost:5000.*",
+          "beginsPattern": ".*Server running on http://localhost:.*",
           "endsPattern": ".*listening.*"
         }
       },
@@ -102,7 +102,7 @@
         "pattern": { "regexp": "^(.*)$" },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": ".*Local:.*http://localhost:4173.*",
+          "beginsPattern": ".*Local:.*http://localhost:.*",
           "endsPattern": ".*press h to show help.*"
         }
       },
