@@ -25,6 +25,7 @@ export function createLoggedMethodRunner<This, Args extends any[], Return>(
   fn: (this: This, ...args: Args) => Promise<Return> | Return,
   label?: string,
   param = false,
+  safe = false,
 ): (this: This, ...args: Args) => Promise<Return> {
   const logLabel = label || fn.name || "anonymous";
 
@@ -41,6 +42,7 @@ export function createLoggedMethodRunner<This, Args extends any[], Return>(
     } catch (error) {
       const duration = (performance.now() - start).toFixed(2);
       console.error(`[${logLabel}] ошибка через ${duration}ms`, error);
+      if (safe) return null as Return;
       throw error;
     }
   };
@@ -72,6 +74,18 @@ export function Log(target: any, propertyKey: string, descriptor: PropertyDescri
   const originalMethod = descriptor.value;
   // Просто оборачиваем оригинальный метод через соответствующую утилиту
   descriptor.value = createLoggedMethodRunner(originalMethod, propertyKey, false);
+}
+
+export function LogSafe(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  const originalMethod = descriptor.value;
+  // Просто оборачиваем оригинальный метод через соответствующую утилиту
+  descriptor.value = createLoggedMethodRunner(originalMethod, propertyKey, false, true);
+}
+
+export function LogParamSafe(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  const originalMethod = descriptor.value;
+  // Просто оборачиваем оригинальный метод через соответствующую утилиту
+  descriptor.value = createLoggedMethodRunner(originalMethod, propertyKey, true, true);
 }
 
 export function LogParam(target: any, propertyKey: string, descriptor: PropertyDescriptor) {

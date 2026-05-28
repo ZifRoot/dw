@@ -1,10 +1,13 @@
 {
+  "version": "0.2.0",
+
   "configurations": [
     {
       "name": "Debug: Server",
       "type": "node",
       "request": "attach",
       "port": 9229,
+      "restart": true,
       "preLaunchTask": "debug:server"
     },
     {
@@ -12,6 +15,7 @@
       "type": "chrome",
       "request": "launch",
       "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/packages/client/src",
       "preLaunchTask": "debug:client"
     },
     {
@@ -26,6 +30,7 @@
       "type": "chrome",
       "request": "launch",
       "url": "http://localhost:4173",
+      "webRoot": "${workspaceFolder}/packages/client/dist",
       "preLaunchTask": "release:client"
     }
   ],

@@ -1,0 +1,6 @@
+{
+  "npmName": "todo-client-sdk",
+  "npmVersion": "1.0.0",
+  "withInterfaces": true,
+  "supportsES6": true
+}

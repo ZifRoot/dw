@@ -1,5 +1,3 @@
-// import { EmbeddingPipeline } from "./getEmbeddings";
-
 import { Program } from "./program";
 
 Main();

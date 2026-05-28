@@ -1,58 +1,31 @@
 {
-  "name": "deepseek-w",
+  "name": "server",
   "version": "1.0.0",
-  "description": "To make it easy for you to get started with GitLab, here's a list of recommended next steps.",
-  "homepage": "https://gitlab.com/yakov.norev/deepseek-w#readme",
-  "bugs": {
-    "url": "https://gitlab.com/yakov.norev/deepseek-w/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+ssh://git@gitlab.com/yakov.norev/deepseek-w.git"
-  },
-  "license": "ISC",
-  "author": "",
-  "type": "commonjs",
-  "main": "index.js",
+  "private": true,
+  "main": "dist/index.js",
   "scripts": {
-    "build": "npm run build-client && npm run build-server",
-    "build-server": "tsc",    
-    "build-watch": "tsc --watch",
-    "start": "node dist/index.js",
-    "dev": "nodemon --exec ts-node src/index.ts",
-    "debug": "ts-node --inspect src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "docker:up": "ts-node src/db/db-manager.ts up",
     "docker:down": "ts-node src/db/db-manager.ts down",
-    "generate-api": "cd ./generators/embedder && openapi-generator-cli batch ./configs/fetch.json ./configs/node.json ./configs/axios.json",
-    "ddd": "cd ddd && mdforge split http://localhost:8081/api/document/dd363e2e-0f1a-479d-8b74-ffc33dbcfd1d/fragment/msg_36_frag_3/text ."
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.3.3",
-    "@types/pg": "^8.18.0",
-    "@types/swagger-ui-express": "^4.1.8",
-    "drizzle-kit": "^0.31.9",
-    "nodemon": "^3.1.14",
-    "prisma": "^7.4.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "debug": "ts-node --inspect=9229 -r tsconfig-paths/register src/index.ts",
+    "build:release": "tsc -p tsconfig.release.json",
+    "release:server": "node dist/index.js"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.4.2",
-    "@prisma/client": "^7.4.2",
-    "axios": "^1.16.0",
-    "better-sqlite3": "^12.6.2",
-    "drizzle-orm": "^0.45.1",
+    "@hono/node-server": "^2.0.4",
+    "@hono/zod-openapi": "^1.4.0",
     "express": "^5.2.1",
-    "mdforge": "file:../mdforge/mdforge-0.10.0.tgz",
-    "pg": "^8.20.0",
+    "hono": "^4.12.19",
     "swagger-ui-express": "^5.0.1",
-    "uuid": "^13.0.0",
-    "yaml": "^2.8.2"
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.1",
+    "@types/swagger-ui-express": "^4.1.8",
+    "dotenv": "^17.4.2"
   }
 }

@@ -1,4 +1,3 @@
-import { EmbeddingController } from "./api/EmbeddingController";
 import { InitDb, InitDbAsync } from "./db/Initdb";
 import { IRepository } from "./db/IRepository";
 import { ChatSessions } from "./db/models/ChatSessions";
@@ -7,13 +6,13 @@ import { User } from "./db/models/User";
 import { Deepseek, credentials } from "./deepseek";
 import { dateStr, delay, div, mult, safe, subtractSets, sumA } from "./utils/data-utils";
 import express from "express";
-import swaggerUi from "swagger-ui-express";
-import fs from "fs";
 import path from "path";
 import { Configuration, ModelsApi, EmbeddingsApi, TaskShortResponse } from "./clients/embedder/axios";
 import { SingleExecution } from "./utils/single-runner";
-import { Log, LogParam, Safe } from "./utils/logger";
+import { LogParamSafe, LogSafe } from "./utils/logger";
 import http from "node:http";
+import { IProgram } from "./iprogram";
+import { createExpressApp } from "./controllers";
 
 interface TaskX {
   taskId: string;
@@ -23,7 +22,7 @@ interface TaskX {
   result?: number[];
 }
 
-export class Program {
+export class Program implements IProgram {
   repository!: IRepository;
   modelApi: ModelsApi;
   embeddingsApi: EmbeddingsApi;
@@ -37,16 +36,7 @@ export class Program {
     const app = express();
     app.use(express.json());
 
-    const embeddingController = new EmbeddingController(this);
-    app.use("/api", embeddingController.getRouter());
-
-    // 1. Загружаем готовый openapi.json (если сгенерировали заранее)
-
-    // 2. Подключаем Swagger UI по пути /api-docs
-    app.use("/api", swaggerUi.serve, (rq: any, rs: any, n: any) => {
-      const swaggerDocument = JSON.parse(fs.readFileSync("./openapi.json", "utf8"));
-      swaggerUi.setup(swaggerDocument)(rq, rs, n);
-    });
+    createExpressApp(this, app);
 
     let clientPath = path.join(process.cwd(), "client", "dist");
 
@@ -61,11 +51,12 @@ export class Program {
     console.log("repository ready");
   }
 
+  @LogSafe
   async Update() {
     await this.ExecUsers();
   }
 
-  @Log
+  @LogSafe
   async UpdateEmbedding() {
     // await this.recoverEmbedding();
     await this.CreateTasks();
@@ -74,7 +65,7 @@ export class Program {
   }
 
   @SingleExecution
-  @Log
+  @LogSafe
   async CreateTasks() {
     await this.RepositoryAsync();
     if (!this.repository) {
@@ -135,7 +126,7 @@ export class Program {
   }
 
   @SingleExecution
-  @Log
+  @LogSafe
   private async workEmbedding() {
     while (this.TaskMap.size > 0) {
       if (!(await this.workEmbeddingStep())) {
@@ -144,7 +135,7 @@ export class Program {
     }
   }
 
-  @Safe
+  @LogSafe
   async workEmbeddingStep() {
     let completed_Tasks = (await this.embeddingsApi.listTasksEmbeddingsGet("completed")).data.tasks;
     if (completed_Tasks.length == 0) {
@@ -156,7 +147,7 @@ export class Program {
     return 1;
   }
 
-  @LogParam
+  @LogParamSafe
   async workTask(completed_Task: TaskShortResponse) {
     let task_local = this.TaskMap.get(completed_Task.task_id);
 
@@ -198,7 +189,7 @@ export class Program {
     }
   }
 
-  @Log
+  @LogSafe
   async ExecUsers() {
     await this.RepositoryAsync();
     if (!this.repository) {
@@ -222,7 +213,7 @@ export class Program {
     await this.FilesUser(deepseek, user);
   }
 
-  @Log
+  @LogSafe
   private async FilesUser(deepseek: Deepseek, user: User) {
     if (!this.repository) {
       console.error("null repository");
@@ -268,7 +259,7 @@ export class Program {
     return mf;
   }
 
-  @Log
+  @LogSafe
   private async FetchUser(deepseek: Deepseek, user: User, all: boolean) {
     if (!this.repository) {
       console.error("null repository");
@@ -316,12 +307,12 @@ export class Program {
     await this.repository.createMessagesBizData(user.id, his);
   }
 
-  @Log
+  @LogSafe
   Repository() {
     return (this.repository = this.repository || InitDb());
   }
 
-  @Log
+  @LogSafe
   async RepositoryAsync() {
     return (this.repository = this.repository || (await InitDbAsync()));
   }
@@ -357,5 +348,8 @@ export class Program {
 
     this.modelApi = new ModelsApi(config);
     this.embeddingsApi = new EmbeddingsApi(config);
+  }
+  repo() {
+    return this.repository;
   }
 }

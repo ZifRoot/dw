@@ -30,23 +30,12 @@ export default defineConfig(({ mode }) => {
     },
     plugins,
     build: {
-      rollupOptions: isProd
-        ? {
-            external: ["react", "react-dom/client", "d3"],
-            output: {
-              globals: {
-                react: "React",
-                "react-dom/client": "ReactDOM",
-                d3: "d3",
-              },
-            },
-          }
-        : undefined,
+      sourcemap: mode === "production" ? false : true,
     },
-    optimizeDeps: isProd
-      ? {
-          exclude: ["react", "react-dom/client", "d3"],
-        }
-      : undefined,
+    resolve: {
+      alias: {
+        "@shared": "../shared/src",
+      },
+    },
   };
 });

@@ -1,112 +1,65 @@
 {
   "version": "2.0.0",
   "tasks": [
-    // ========== DEBUG (отладка) ==========
     {
       "label": "debug:server",
-      "type": "npm",
-      "script": "debug:server",
-      "path": "${workspaceFolder}",
+      "type": "shell",
+      "command": "npm run debug:server",
       "isBackground": true,
       "problemMatcher": {
-        "pattern": { "regexp": "^(.*)$" },
+        "pattern": { "regexp": "^.*$" },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": ".*Server running on http://localhost:.*",
-          "endsPattern": ".*listening.*"
+          "beginsPattern": ".*",
+          "endsPattern": ".*"
         }
-      },
-      "presentation": { "reveal": "always", "panel": "dedicated" }
+      }
     },
     {
       "label": "debug:client",
-      "type": "npm",
-      "script": "debug:client",
-      "path": "${workspaceFolder}",
+      "type": "shell",
+      "command": "npm run debug:client",
       "isBackground": true,
       "problemMatcher": {
-        "pattern": { "regexp": "^(.*)$" },
+        "pattern": { "regexp": "^.*$" },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": "VITE v\\d+\\.\\d+\\.\\d+",
-          "endsPattern": "ready in \\d+ms"
+          "beginsPattern": ".*",
+          "endsPattern": ".*"
         }
-      },
-      "presentation": { "reveal": "always", "panel": "dedicated" }
+      }
     },
-
-    // ========== GENERATE (для API) ==========
-    {
-      "label": "generate:server",
-      "type": "npm",
-      "script": "generate:server",
-      "path": "${workspaceFolder}",
-      "problemMatcher": []
-    },
-    {
-      "label": "generate:client",
-      "type": "npm",
-      "script": "generate:client",
-      "path": "${workspaceFolder}",
-      "problemMatcher": []
-    },
-
-    // ========== BUILD (release) ==========
     {
       "label": "build:server:release",
-      "type": "npm",
-      "script": "build:server:release",
-      "path": "${workspaceFolder}",
-      "dependsOn": ["generate:server"],
-      "dependsOrder": "sequence",
-      "problemMatcher": ["$tsc"]
+      "type": "shell",
+      "command": "npm run build:server:release"
     },
     {
       "label": "build:client:release",
-      "type": "npm",
-      "script": "build:client:release",
-      "path": "${workspaceFolder}",
-      "dependsOn": ["generate:client"],
-      "dependsOrder": "sequence",
-      "problemMatcher": ["$tsc"]
+      "type": "shell",
+      "command": "npm run build:client:release"
     },
-
-    // ========== RELEASE (запуск скомпилированного кода) ==========
     {
       "label": "release:server",
-      "type": "npm",
-      "script": "release:server",
-      "path": "${workspaceFolder}",
-      "isBackground": true,
-      "dependsOn": ["build:server:release"],
-      "dependsOrder": "sequence",
-      "problemMatcher": {
-        "pattern": { "regexp": "^(.*)$" },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": ".*Server running on http://localhost:.*",
-          "endsPattern": ".*listening.*"
-        }
-      },
-      "presentation": { "reveal": "always", "panel": "dedicated" }
+      "type": "shell",
+      "command": "npm run release:server",
+      "dependsOn": ["build:server:release"]
     },
     {
       "label": "release:client",
-      "type": "npm",
-      "script": "release:client",
-      "path": "${workspaceFolder}",
-      "isBackground": true,
-      "dependsOn": ["build:client:release"],
-      "dependsOrder": "sequence",
-      "problemMatcher": {
-        "pattern": { "regexp": "^(.*)$" },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": ".*Local:.*http://localhost:.*",
-          "endsPattern": ".*press h to show help.*"
-        }
-      },
-      "presentation": { "reveal": "always", "panel": "dedicated" }
+      "type": "shell",
+      "command": "npm run release:client",
+      "dependsOn": ["build:client:release"]
+    },
+    {
+      "label": "generate:server",
+      "type": "shell",
+      "command": "npm run generate:server"
+    },
+    {
+      "label": "generate:client",
+      "type": "shell",
+      "command": "npm run generate:client"
     }
   ]
 }
