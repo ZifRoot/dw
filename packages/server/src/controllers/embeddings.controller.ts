@@ -1,8 +1,7 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
-import { BaseController, ErrorResponseSchema, ParamsIdSchema } from "./base.controller";
+import { BaseController, ParamsIdSchema } from "./base.controller";
 import type { EmbeddingCreate } from "../db/models/EmbeddingCreate";
-import { Program } from "src/program";
 import { IProgram } from "src/iprogram";
 
 export const EmbeddingDtoSchema = z.object({

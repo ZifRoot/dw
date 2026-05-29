@@ -12,7 +12,7 @@ export default defineConfig({
 
   // Учетные данные БД (лучше брать из .env)
   dbCredentials: {
-    url: "postgresql://postgres:postgres@localhost:5432/mydb?schema=public",
+    url: "postgresql://postgres:postgres@localhost:6000/mydb?schema=public",
     // schema: "public", // <-- вот это важно
   },
 
