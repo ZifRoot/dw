@@ -1,4 +1,4 @@
-import { toDate } from "../../utils/data-utils";
+import { toDate } from "@utils/date-utils";
 import { ChatMessageCreate } from "./ChatMessageCreate";
 
 export class ChatMessage {
@@ -18,7 +18,7 @@ export class ChatMessage {
   public hasPendingFragment: boolean;
   public autoContinue: boolean;
 
-  constructor(data: ChatMessageCreate ) {
+  constructor(data: ChatMessageCreate) {
     this.sessionId = data.sessionId;
     this.messageId = data.message_id;
     this.parentMessageId = data.parent_id ?? null;

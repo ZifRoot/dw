@@ -28,6 +28,8 @@ import {
 } from "./models";
 import { Log } from "../utils/logger";
 
+import "@utils/array-uniqueBy";
+
 type PgTx = PgTransaction<any, any, any>;
 
 export class DrizzleRepository implements IRepository {

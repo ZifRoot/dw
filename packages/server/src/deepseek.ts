@@ -1,13 +1,11 @@
 import { ChatSessionBase, FileResponse, MessagesResponse, SessionsResponse } from "./db/resp";
-import { getHighResTime } from "./utils/data-utils";
-import { Throttler } from "./utils/throttler";
-import { ThrottledMethod, InjectThrottle } from "./utils/throttler-decorators";
+import { getHighResTime } from "@utils/date-utils";
+import { ThrottledMethod, CreateThrottle } from "@utils/throttler-decorators";
 
-let throttler = new Throttler(100, 300);
-
-@InjectThrottle(throttler)
+@CreateThrottle(100, 300)
 export class Deepseek {
   headers: Headers;
+  baseUrl: URL;
 
   async fetch_page_all(): Promise<ChatSessionBase[]> {
     let updated_at: number | null = null;
@@ -67,9 +65,7 @@ export class Deepseek {
   }
 
   async fetch_page_resp(updated_at?: number | null) {
-    //https://chat.deepseek.com/api/v0/chat_session/fetch_page?lte_cursor.pinned=false&lte_cursor.updated_at=1770623753.319
-
-    let url = new URL("https://chat.deepseek.com/api/v0/chat_session/fetch_page");
+    let url = new URL("chat_session/fetch_page", this.baseUrl);
     if (updated_at != null) {
       url.searchParams.append("lte_cursor.updated_at", updated_at.toString());
       url.searchParams.append("lte_cursor.pinned", "false");
@@ -80,7 +76,7 @@ export class Deepseek {
   }
 
   async history_messages_resp(chat_session_id: string, version: number | null) {
-    let url = new URL("https://chat.deepseek.com/api/v0/chat/history_messages");
+    let url = new URL("chat/history_messages", this.baseUrl);
     url.searchParams.append("chat_session_id", chat_session_id);
     if (version != null) {
       url.searchParams.append("cache_version", `${version}`);
@@ -96,7 +92,7 @@ export class Deepseek {
       file_id = `file-${file_id}`;
     }
 
-    let url = new URL("https://chat.deepseek.com/api/v0/file/preview");
+    let url = new URL("file/preview", this.baseUrl);
     url.searchParams.append("file_id", file_id);
     url.searchParams.append("chat_session_id", chat_session_id);
     url.searchParams.append("message_id", `${message_id}`);
@@ -118,6 +114,7 @@ export class Deepseek {
   }
 
   constructor(user: credentials) {
+    this.baseUrl = new URL("https://chat.deepseek.com/api/v0/");
     this.headers = {
       accept: "*/*",
       "accept-language": "ru,en-US;q=0.9,en;q=0.8",

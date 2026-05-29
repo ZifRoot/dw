@@ -18,8 +18,7 @@
       "@embedder": ["src/clients/embedder/axios"],
       "@utils/*": ["src/utils/*"],
       "@models/*": ["src/db/models/*"]
-    },
-    "references": [{ "path": "../shared" }]
+    }
   },
   "include": ["src/**/*"]
 }

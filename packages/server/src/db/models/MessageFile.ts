@@ -1,5 +1,6 @@
-import { normalizeUUID, toDate } from "../../utils/data-utils";
+import { toDate } from "@utils/date-utils";
 import { MessageFileCreate } from "./MessageFileCreate";
+import { normalizeUUID } from "@utils/uuid";
 
 export class MessageFile {
   public id: string;

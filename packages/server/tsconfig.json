@@ -1,1 +1,1 @@
-{ "extends": "./tsconfig.debug.json" }
+{ "extends": "./tsconfig.debug.json", "references": [{ "path": "../shared" }] }

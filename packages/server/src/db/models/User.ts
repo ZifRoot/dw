@@ -1,4 +1,4 @@
-import { normalizeUUID } from "../../utils/data-utils";
+import { normalizeUUID } from "@utils/uuid";
 import { UserCreate } from "./UserCreate";
 
 /**

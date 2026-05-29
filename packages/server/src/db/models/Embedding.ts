@@ -1,4 +1,4 @@
-import { toDate } from "../../utils/data-utils";
+import { toDate } from "@utils/date-utils";
 import { EmbeddingCreate } from "./EmbeddingCreate";
 
 export class Embedding {
