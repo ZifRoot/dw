@@ -20,6 +20,7 @@ interface TaskX {
   sessionid: string;
   model_name: string;
   result?: number[];
+  processing_time_ms?: number;
 }
 
 export class Program implements IProgram {
@@ -164,17 +165,20 @@ export class Program implements IProgram {
       return;
     }
 
-    let count_ts = ts_sessions.reduce((r, c) => (r += +(c.result != null)), 0);
-    console.log(`${count_ts}/${ts_sessions.length}`);
-
     let task = (await this.embeddingsApi.getTaskEmbeddingsTaskIdGet(task_local.taskId)).data;
 
     task_local.result = task.result!;
+    task_local.processing_time_ms = task.processing_time_ms ?? undefined;
+
+    let ts_sessions_complited = ts_sessions.filter((t) => t.result != null);
+
+    console.log(`${ts_sessions_complited.length}/${ts_sessions.length}`);
+
     await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(task_local.taskId);
 
-    if (ts_sessions.every((t) => t.result != null)) {
-      let embedding = ts_sessions.reduce((r, c) => sumA(r, mult(c.result!.slice(), c.len)), [0]);
-      let len = ts_sessions.reduce((r, c) => c.len + r, 0);
+    if (ts_sessions_complited.length == ts_sessions.length) {
+      let embedding = ts_sessions_complited.reduce((r, c) => sumA(r, mult(c.result!.slice(), c.len)), [0]);
+      let len = ts_sessions_complited.reduce((r, c) => c.len + r, 0);
       div(embedding, len);
 
       await this.repository.createEmbedding(task_local.sessionid, {
@@ -183,7 +187,7 @@ export class Program implements IProgram {
         embedding: embedding,
         createdAt: new Date(Date.now()),
         sessionId: task_local.sessionid,
-        processing_time_ms: task.processing_time_ms!,
+        processing_time_ms: ts_sessions_complited.map((a) => a.processing_time_ms ?? 0).reduce((r, c) => r + c, 0),
       });
       this.SessionMap.delete(task_local.sessionid);
     }
