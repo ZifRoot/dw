@@ -1,4 +1,3 @@
-import http from "node:http";
 import express from "express";
 import path from "path";
 
@@ -12,33 +11,20 @@ import { Deepseek, credentials } from "./deepseek";
 import { IProgram } from "./iprogram";
 import { createExpressApp } from "./controllers";
 
-import { Configuration, ModelsApi, EmbeddingsApi, TaskShortResponse } from "@embedder";
 import { SingleExecution } from "@utils/single-runner";
-import { LogParamSafe, LogSafe } from "@utils/logger";
-import { delay, safe, subtractSets } from "@utils/data-utils";
+import { LogSafe, Safe } from "@utils/logger";
 import { dateStr } from "@utils/date-utils";
-import { div, mult, sumA } from "@utils/vector";
+import { Embedder } from "./Embedder";
 
-interface TaskX {
-  taskId: string;
-  len: number;
-  sessionid: string;
-  model_name: string;
-  result?: number[];
-  processing_time_ms?: number;
-}
 
 export class Program implements IProgram {
   repository!: IRepository;
-  modelApi: ModelsApi;
-  embeddingsApi: EmbeddingsApi;
-  TaskMap: Map<string, TaskX>;
-  SessionMap: Map<string, TaskX[]>;
-  apiAgent: http.Agent;
+  embedder!: Embedder;
 
   async start() {
     await this.RepositoryAsync();
 
+    this.embedder = new Embedder(this.repo());
     const app = express();
     app.use(express.json());
 
@@ -64,137 +50,7 @@ export class Program implements IProgram {
 
   @LogSafe
   async UpdateEmbedding() {
-    // await this.recoverEmbedding();
-    await this.CreateTasks();
-
-    await this.workEmbedding();
-  }
-
-  @SingleExecution
-  @LogSafe
-  async CreateTasks() {
-    await this.RepositoryAsync();
-    if (!this.repository) {
-      console.error("null repository");
-      return;
-    }
-    let models = (await this.modelApi.getModelsModelsGet()).data.models;
-
-    let modelNames = models.map((m) => m.name);
-
-    console.log(models);
-
-    let users = await this.repository.findAllUsers();
-    let _x = await Promise.all(
-      users.map(async (user) => {
-        let sessions = await this.repository.findAllSessions(user.id);
-        return (
-          await Promise.all(
-            sessions.map(async (session) => {
-              let embs = await this.repository.findEmbeddingsBySession(session.id);
-              let have_mods = embs.map((emb) => emb.model_name);
-              let wait_mods = (this.SessionMap.get(session.id) ?? []).map((t) => t.model_name);
-              let model_news = subtractSets(subtractSets(modelNames, have_mods), wait_mods);
-
-              return model_news.map((model_new) => ({ model_name: model_new, userid: user.id, sessionid: session.id }));
-            }),
-          )
-        ).flatMap((a) => a);
-      }),
-    );
-    let xs = _x.flatMap((_) => _);
-
-    xs.sort((a, b) => a.sessionid.localeCompare(b.sessionid));
-
-    var Tasks = (
-      await Promise.all(
-        xs.map(async (x) => {
-          let frags = await this.repository.findAllFragments(x.sessionid);
-
-          let contents = frags.filter((f) => f.type == "RESPONSE").map((f) => f.content);
-
-          return await Promise.all(
-            contents.map(async (content) => {
-              let task = (await this.embeddingsApi.createTaskEmbeddingsPost({ model_name: x.model_name, text: content })).data;
-              return { taskId: task.task_id, len: content.length, sessionid: x.sessionid, model_name: x.model_name };
-            }),
-          );
-        }),
-      )
-    ).flatMap((_) => _);
-
-    for (const Task of Tasks) {
-      this.TaskMap.set(Task.taskId, Task);
-      let ss = this.SessionMap.get(Task.sessionid) ?? [];
-      ss.push(Task);
-      this.SessionMap.set(Task.sessionid, ss);
-    }
-  }
-
-  @SingleExecution
-  @LogSafe
-  private async workEmbedding() {
-    while (this.TaskMap.size > 0) {
-      if (!(await this.workEmbeddingStep())) {
-        await delay(500);
-      }
-    }
-  }
-
-  @LogSafe
-  async workEmbeddingStep() {
-    let completed_Tasks = (await this.embeddingsApi.listTasksEmbeddingsGet("completed")).data.tasks;
-    if (completed_Tasks.length == 0) {
-      return 0;
-    }
-    for (const completed_Task of completed_Tasks) {
-      await this.workTask(completed_Task);
-    }
-    return 1;
-  }
-
-  @LogParamSafe
-  async workTask(completed_Task: TaskShortResponse) {
-    let task_local = this.TaskMap.get(completed_Task.task_id);
-
-    if (task_local == null) {
-      console.log("task miss");
-      await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(completed_Task.task_id);
-      return;
-    }
-    this.TaskMap.delete(completed_Task.task_id);
-
-    var ts_sessions = this.SessionMap.get(task_local.sessionid);
-    if (ts_sessions == null) {
-      console.log("session miss");
-      return;
-    }
-
-    let task = (await this.embeddingsApi.getTaskEmbeddingsTaskIdGet(task_local.taskId)).data;
-    await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(task_local.taskId);
-
-    task_local.result = task.result!;
-    task_local.processing_time_ms = task.processing_time_ms ?? undefined;
-
-    let ts_sessions_complited = ts_sessions.filter((t) => t.result != null);
-
-    console.log(`${ts_sessions_complited.length}/${ts_sessions.length}`);
-
-    if (ts_sessions_complited.length == ts_sessions.length) {
-      let embedding = ts_sessions_complited.reduce((r, c) => sumA(r, mult(c.result!.slice(), c.len)), [0]);
-      let len = ts_sessions_complited.reduce((r, c) => c.len + r, 0);
-      div(embedding, len);
-
-      await this.repository.createEmbedding(task_local.sessionid, {
-        model_name: task.model_name,
-        dimension: embedding.length,
-        embedding: embedding,
-        createdAt: new Date(Date.now()),
-        sessionId: task_local.sessionid,
-        processing_time_ms: ts_sessions_complited.map((a) => a.processing_time_ms ?? 0).reduce((r, c) => r + c, 0),
-      });
-      this.SessionMap.delete(task_local.sessionid);
-    }
+    await this.embedder.Update();
   }
 
   @SingleExecution
@@ -250,15 +106,12 @@ export class Program implements IProgram {
 
     console.log(`Файлов для скачевания ${files.length} будет скачено ${files.length}`);
 
-    let filesAs = files.map((file) => this.file_2(deepseek, file));
+    let filesAs = files.map((file) => this.file_1(deepseek, file));
 
     await Promise.all(filesAs);
   }
 
-  private async file_2(deepseek: Deepseek, file: MessageFile) {
-    return safe(() => this.file_1(deepseek, file));
-  }
-
+  @Safe
   private async file_1(deepseek: Deepseek, file: MessageFile) {
     console.log(`Качаю ${file.file_name} | байт ${file.file_size}`);
     let text = await deepseek.file(file.id, file.sessionId, file.messageId);
@@ -298,13 +151,10 @@ export class Program implements IProgram {
         return diff;
       });
 
-    await Promise.all(sessions_for_update.map((s) => this.user_2(s, deepseek, user)));
+    await Promise.all(sessions_for_update.map((s) => this.user_1(s, deepseek, user)));
   }
 
-  private async user_2(s: { in_session: ChatSessions; db_session: ChatSessions | undefined }, deepseek: Deepseek, user: User) {
-    return safe(() => this.user_1(s, deepseek, user));
-  }
-
+  @Safe
   private async user_1(s: { in_session: ChatSessions; db_session: ChatSessions | undefined }, deepseek: Deepseek, user: User) {
     let session = s.db_session ?? s.in_session;
     console.log(
@@ -326,38 +176,7 @@ export class Program implements IProgram {
     return (this.repository = this.repository || (await InitDbAsync()));
   }
 
-  constructor() {
-    this.TaskMap = new Map();
-    this.SessionMap = new Map();
-    // Агент для http (на localhost:8000)
-    this.apiAgent = new http.Agent({
-      keepAlive: true,
-      maxSockets: 50, // макс. одновременных соединений к одному хосту
-      maxFreeSockets: 10, // сколько свободных держать открытыми
-      timeout: 60000, // таймаут на установку соединения
-      keepAliveMsecs: 1000,
-    });
-
-    // Единый keep‑alive агент
-    this.apiAgent = new http.Agent({
-      keepAlive: true,
-      maxSockets: 50,
-      maxFreeSockets: 10,
-      timeout: 60000,
-      keepAliveMsecs: 1000,
-    });
-
-    // Одна конфигурация для всех API
-    const config = new Configuration({
-      basePath: "http://localhost:8000",
-      baseOptions: {
-        httpAgent: this.apiAgent, // ✅ полностью типизировано
-      },
-    });
-
-    this.modelApi = new ModelsApi(config);
-    this.embeddingsApi = new EmbeddingsApi(config);
-  }
+  constructor() {}
   repo() {
     return this.repository;
   }
