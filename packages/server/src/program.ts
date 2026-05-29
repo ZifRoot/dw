@@ -1,18 +1,23 @@
-import { InitDb, InitDbAsync } from "./db/Initdb";
-import { IRepository } from "./db/IRepository";
-import { ChatSessions } from "./db/models/ChatSessions";
-import { MessageFile } from "./db/models/MessageFile";
-import { User } from "./db/models/User";
-import { Deepseek, credentials } from "./deepseek";
-import { dateStr, delay, div, mult, safe, subtractSets, sumA } from "./utils/data-utils";
+import http from "node:http";
 import express from "express";
 import path from "path";
-import { Configuration, ModelsApi, EmbeddingsApi, TaskShortResponse } from "./clients/embedder/axios";
-import { SingleExecution } from "./utils/single-runner";
-import { LogParamSafe, LogSafe } from "./utils/logger";
-import http from "node:http";
+
+import { InitDb, InitDbAsync } from "./db/Initdb";
+import { IRepository } from "./db/IRepository";
+import { ChatSessions } from "@models/ChatSessions";
+import { MessageFile } from "@models/MessageFile";
+import { User } from "@models/User";
+import { Deepseek, credentials } from "./deepseek";
+
 import { IProgram } from "./iprogram";
 import { createExpressApp } from "./controllers";
+
+import { Configuration, ModelsApi, EmbeddingsApi, TaskShortResponse } from "@embedder";
+import { SingleExecution } from "@utils/single-runner";
+import { LogParamSafe, LogSafe } from "@utils/logger";
+import { delay, safe, subtractSets } from "@utils/data-utils";
+import { dateStr } from "@utils/date-utils";
+import { div, mult, sumA } from "@utils/vector";
 
 interface TaskX {
   taskId: string;
@@ -166,6 +171,7 @@ export class Program implements IProgram {
     }
 
     let task = (await this.embeddingsApi.getTaskEmbeddingsTaskIdGet(task_local.taskId)).data;
+    await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(task_local.taskId);
 
     task_local.result = task.result!;
     task_local.processing_time_ms = task.processing_time_ms ?? undefined;
@@ -173,8 +179,6 @@ export class Program implements IProgram {
     let ts_sessions_complited = ts_sessions.filter((t) => t.result != null);
 
     console.log(`${ts_sessions_complited.length}/${ts_sessions.length}`);
-
-    await this.embeddingsApi.deleteTaskEmbeddingsTaskIdDelete(task_local.taskId);
 
     if (ts_sessions_complited.length == ts_sessions.length) {
       let embedding = ts_sessions_complited.reduce((r, c) => sumA(r, mult(c.result!.slice(), c.len)), [0]);
@@ -193,6 +197,7 @@ export class Program implements IProgram {
     }
   }
 
+  @SingleExecution
   @LogSafe
   async ExecUsers() {
     await this.RepositoryAsync();

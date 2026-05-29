@@ -24,7 +24,10 @@ export function createSingleCallGuard<This, Args extends any[], Return>(
 ): (this: This, ...args: Args) => Promise<Return> {
   return function (this: This, ...args: Args): Promise<Return> {
     const existing: Promise<Return> | undefined = (this as any)[storageKey];
-    if (existing) return existing;
+    if (existing) {
+      console.warn(`SingleCallGuard ${storageKey.toString()}`);
+      return existing;
+    }
 
     const promise = fn.apply(this, args);
     (this as any)[storageKey] = promise;

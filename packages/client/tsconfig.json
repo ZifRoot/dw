@@ -1,3 +1,4 @@
 {
+  "ignoreDeprecations": "6.0",
   "extends": "./tsconfig.debug.json"
 }

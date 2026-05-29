@@ -33,10 +33,11 @@ function createHonoApp(program: IProgram): OpenAPIHono {
       version: "1.0.0",
       description: "Автоматическая документация из Zod схем",
     },
+    servers: [{ url: "/api" }],
   });
 
   // Swagger UI (традиционный)
-  app.get("/docs", swaggerUI({ url: "/openapi.json" }));
+  app.get("/docs", swaggerUI({ url: "/api/openapi.json" }));
 
   // // Scalar UI (альтернативная красивая документация)
   // app.get(
@@ -60,7 +61,7 @@ export function createExpressApp(program: IProgram, expressApp: Express): Expres
 
   // Монтируем Hono как middleware на корневой путь (или можно на /api)
   // Используем getRequestListener, чтобы превратить Hono.fetch в обработчик Express
-  expressApp.use("/", getRequestListener(honoApp.fetch));
+  expressApp.use("/api", getRequestListener(honoApp.fetch));
 
   // При желании можно добавить другие Express-мидлвары, например, статику
   // expressApp.use(express.static("public"));
