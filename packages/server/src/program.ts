@@ -16,7 +16,6 @@ import { LogSafe, Safe } from "@utils/logger";
 import { dateStr } from "@utils/date-utils";
 import { Embedder } from "./Embedder";
 
-
 export class Program implements IProgram {
   repository!: IRepository;
   embedder!: Embedder;
@@ -30,7 +29,7 @@ export class Program implements IProgram {
 
     createExpressApp(this, app);
 
-    let clientPath = path.join(process.cwd(), "client", "dist");
+    let clientPath = path.join(process.cwd(), "..", "client", "dist");
 
     app.use(express.static(clientPath));
 

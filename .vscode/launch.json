@@ -1,6 +1,17 @@
 {
   "version": "0.2.0",
-
+  "compounds": [
+    {
+      "name": "Debug Fullstack",
+      "configurations": ["Debug: Server", "Debug: Client"],
+      "stopAll": true
+    },
+    {
+      "name": "Release Fullstack",
+      "configurations": ["Release: Server", "Release: Client"],
+      "stopAll": true
+    }
+  ],
   "configurations": [
     {
       "name": "Debug: Server",
@@ -32,18 +43,6 @@
       "url": "http://localhost:4173",
       "webRoot": "${workspaceFolder}/packages/client/dist",
       "preLaunchTask": "release:client"
-    }
-  ],
-  "compounds": [
-    {
-      "name": "Debug Fullstack",
-      "configurations": ["Debug: Server", "Debug: Client"],
-      "stopAll": true
-    },
-    {
-      "name": "Release Fullstack",
-      "configurations": ["Release: Server", "Release: Client"],
-      "stopAll": true
     }
   ]
 }

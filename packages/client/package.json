@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 3000",
+    "debug": "vite --port 3000",
+    "release": "npm run build:release && npm run run:release",
     "build:release": "vite build --mode production",
+    "run:release": "npm run preview",
     "preview": "vite preview --port 4173"
   },
   "dependencies": {
