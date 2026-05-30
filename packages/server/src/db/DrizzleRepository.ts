@@ -26,9 +26,7 @@ import {
   User,
   UserCreate,
 } from "./models";
-import { Log } from "../utils/logger";
-
-import "@utils/array-uniqueBy";
+import { Log } from "@utils/logger";
 
 type PgTx = PgTransaction<any, any, any>;
 

@@ -153,3 +153,5 @@ models/*
 example/*
 
 /example/*
+packages/client/src/shared/*
+packages/server/src/shared/*

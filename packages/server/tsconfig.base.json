@@ -1,7 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "types": ["node"],
     "target": "ES2020",
     "lib": ["es2022", "DOM"],
@@ -15,10 +14,10 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "paths": {
-      "@shared/*": ["../shared/src/*"],
       "@embedder": ["src/clients/embedder/axios"],
-      "@utils/*": ["src/utils/*"],
-      "@models/*": ["src/db/models/*"]
+      "@utils/*": ["src/shared/utils/*"],
+      "@models/*": ["src/db/models/*"],
+      "@shared/*": ["../shared/src/*"] 
     }
   },
   "include": ["src/**/*"]

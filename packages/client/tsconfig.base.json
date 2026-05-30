@@ -18,7 +18,7 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["../shared/src/*"]
+      "@utils/*": ["src/shared/utils/*"]
     }
   },
   "include": ["src"]

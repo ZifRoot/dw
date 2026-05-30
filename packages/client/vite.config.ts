@@ -1,12 +1,13 @@
-import { defineConfig } from "vite";
+import { defineConfig, PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import importMapPlugin from "vite-plugin-importmap";
+import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig(({ mode }) => {
   const isProd = mode === "production" && false;
 
   // Плагин import map используем только в production
-  const plugins = [react()];
+  const plugins: PluginOption[] = [react(), tsconfigPaths()];
   if (isProd) {
     plugins.unshift(
       importMapPlugin({

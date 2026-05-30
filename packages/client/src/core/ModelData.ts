@@ -1,7 +1,7 @@
+import { cosineDistance } from "@utils/vector";
 import { Pair } from "./Pair";
 import { Point } from "./Point";
 import { PointModel } from "./PointModel";
-import { cosineDistance } from "./utils";
 
 export enum ModelStage {
   Raw = "raw",
