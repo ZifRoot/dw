@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
           "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
           d3: "https://esm.sh/d3@7.8.5",
         },
-      }),
+      }) as PluginOption,
     );
   }
 

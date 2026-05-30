@@ -1,6 +1,8 @@
 // =============================== Внутренние классы ===============================
 /// <summary>Точка на холсте (документ/чат).</summary>
 
+import { toDate } from "@utils/date-utils";
+
 export class Point {
   public _groupElement?: SVGGElement;
 
@@ -9,8 +11,9 @@ export class Point {
   public y: number;
   public text: string;
   public labelOffset?: { dx: number; dy: number };
+  public updated_at: number;
 
-  constructor(id: string, text: string, x: number, y: number, labelOffset?: { dx: number; dy: number } | string) {
+  constructor(id: string, text: string, x: number, y: number, labelOffset: { dx: number; dy: number } | string, updated_at: number | Date | string) {
     this.id = id;
     this.text = text;
     this.x = x;
@@ -20,6 +23,7 @@ export class Point {
     } else {
       this.labelOffset = labelOffset;
     }
+    this.updated_at = toDate(updated_at)?.getTime() ?? Date.now();
   }
   public get groupElement(): SVGGElement {
     return this._groupElement!;

@@ -35,7 +35,7 @@ export class DataManager {
 
   public async savePositionsAsync(points: Point[]): Promise<void> {
     if (!this.positionDB) return;
-    const data = points.map((p) => ({ id: p.id, x: p.x, y: p.y }) as PointPosition);
+    const data = points.map((p) => ({ id: p.id, x: p.x, y: p.y, title: p.text, updated_at: p.updated_at }) as PointPosition);
     await this.positionDB.saveAll(data);
   }
 
@@ -44,7 +44,7 @@ export class DataManager {
       const response = await fetch(`/api/documents`);
       if (!response.ok) return [];
       const data = (await response.json()) as ChatSession[];
-      return data.map((session) => new Point(session.id, session.title, 300, 300, "right"));
+      return data.map((session) => new Point(session.id, session.title, 300, 300, "right", session.updated_at));
     } catch (err) {
       console.error("fetchDocuments error", err);
       return [];

@@ -5,6 +5,8 @@ export interface PointPosition {
   id: string;
   x: number;
   y: number;
+  title: string;
+  updated_at: number;
 }
 
 export class PointPositionDB {

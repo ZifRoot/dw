@@ -39,10 +39,22 @@ export class ItemWithFormattedDate {
   }
 }
 
-export function toDate(value: number | Date | null | undefined): Date | null {
+export function toDate(value: number | Date | null | string | undefined): Date | null {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return value;
-  return new Date(value * 1000);
+  if (typeof value === "number") {
+    return new Date(value);
+    // return new Date(value * 1000);
+  }
+  if (typeof value === "string") {
+    let date = new Date(value);
+    // Если строка пустая или невалидная – сразу возвращаем null
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    return date;
+  }
+  return null;
 }
 
 export function dateStr(value: Date | number | null | undefined): string {
