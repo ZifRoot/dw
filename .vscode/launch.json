@@ -1,36 +1,48 @@
 {
   "version": "0.2.0",
-  "configurations": [
+  "compounds": [
     {
-      "name": "Launch via ts-node (dev)",
-      "type": "node",
-      "request": "launch",
-      "runtimeArgs": ["-r", "ts-node/register"],
-      "args": ["${workspaceFolder}/src/index.ts"],
-      "cwd": "${workspaceFolder}",
-      "protocol": "inspector",
-      "internalConsoleOptions": "openOnSessionStart",
-      "env": {
-        "NODE_ENV": "development"
-      },
-      "sourceMaps": true,
-      "skipFiles": ["<node_internals>/**"]
+      "name": "Debug Fullstack",
+      "configurations": ["Debug: Server", "Debug: Client"],
+      "stopAll": true
     },
     {
-      "name": "Launch compiled (production)",
+      "name": "Release Fullstack",
+      "configurations": ["Release: Server", "Release: Client"],
+      "stopAll": true
+    }
+  ],
+  "configurations": [
+    {
+      "name": "Debug: Server",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "preLaunchTask": "debug:server"
+    },
+    {
+      "name": "Debug: Client",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/packages/client/src",
+      "preLaunchTask": "debug:client"
+    },
+    {
+      "name": "Release: Server",
       "type": "node",
       "request": "launch",
-      "program": "${workspaceFolder}/dist/index.js",
-      "cwd": "${workspaceFolder}",
-      "protocol": "inspector",
-      "internalConsoleOptions": "openOnSessionStart",
-      "preLaunchTask": "tsc: build",
-      "env": {
-        "NODE_ENV": "production"
-      },
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "skipFiles": ["<node_internals>/**"]
+      "program": "${workspaceFolder}/packages/server/dist/index.js",
+      "preLaunchTask": "release:server"
+    },
+    {
+      "name": "Release: Client",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:4173",
+      "webRoot": "${workspaceFolder}/packages/client/dist",
+      "preLaunchTask": "release:client"
     }
   ]
 }

@@ -1,0 +1,9 @@
+services:
+  openapi-generator:
+    image: openapitools/openapi-generator-cli
+    volumes:
+      - ./configs:/configs
+      - ./../../src/clients:/results
+    command: generate -c /configs/config.yaml
+    # auto_remove: true   # эмулирует флаг --rm: удаляет контейнер после остановки
+    restart: "no"       # явно отключаем перезапуск

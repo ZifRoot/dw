@@ -1,0 +1,1 @@
+.\embedder\generate.ps1

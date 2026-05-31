@@ -1,3 +1,7 @@
+.git
+.gitignore
+txt/*
+postgres_db
 # Logs
 logs
 *.log
@@ -147,3 +151,7 @@ db/data/*
 /src/generated/prisma
 models/*
 example/*
+
+/example/*
+packages/client/src/shared/*
+packages/server/src/shared/*

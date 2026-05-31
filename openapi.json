@@ -383,6 +383,28 @@
           }
         }
       }
+    },
+    "/update1": {
+      "get": {
+        "summary": "Запустить принудительное обновление ",
+        "operationId": "updateData1",
+        "responses": {
+          "200": {
+            "description": "Обновление запущено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "example": "OK"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ошибка сервера"
+          }
+        }
+      }
     }
   },
   "components": {

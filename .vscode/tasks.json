@@ -2,29 +2,64 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "tsc: build",
+      "label": "debug:server",
       "type": "shell",
-      "command": "npm",
-      "args": ["run", "build"],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "problemMatcher": ["$tsc"],
-      "presentation": {
-        "reveal": "silent"
+      "command": "npm run debug:server",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^.*$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": ".*"
+        }
       }
     },
     {
-      "label": "tsc: watch",
+      "label": "debug:client",
       "type": "shell",
-      "command": "npm",
-      "args": ["run", "build-watch"],
-      "group": "build",
-      "problemMatcher": ["$tsc-watch"],
-      "presentation": {
-        "reveal": "silent"
+      "command": "npm run debug:client",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^.*$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": ".*"
+        }
       }
+    },
+    {
+      "label": "build:server:release",
+      "type": "shell",
+      "command": "npm run build:server:release"
+    },
+    {
+      "label": "build:client:release",
+      "type": "shell",
+      "command": "npm run build:client:release"
+    },
+    {
+      "label": "release:server",
+      "type": "shell",
+      "command": "npm run release:server",
+      "dependsOn": ["build:server:release"]
+    },
+    {
+      "label": "release:client",
+      "type": "shell",
+      "command": "npm run release:client",
+      "dependsOn": ["build:client:release"]
+    },
+    {
+      "label": "generate:server",
+      "type": "shell",
+      "command": "npm run generate:server"
+    },
+    {
+      "label": "generate:client",
+      "type": "shell",
+      "command": "npm run generate:client"
     }
   ]
 }
