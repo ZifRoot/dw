@@ -18,7 +18,6 @@ export class ModelData {
   public maxCosine = 1;
 
   private stage = ModelStage.Raw;
-  // private rawPairs: { i: number; j: number }[] = [];
   lastMaxPx: number;
   maxTimeMs: number;
   start: number;
@@ -38,17 +37,6 @@ export class ModelData {
   /// <summary>Проверяет, завершена ли обработка модели.</summary>
   public isDone(): boolean {
     return this.stage === ModelStage.Done;
-  }
-
-  /// <summary>Генерирует порцию сырых пар. Возвращает количество сгенерированных.</summary>
-  public buildRawPairs(): void {
-    // const n = this.pointModels.length;
-    // for (let i = 0; i < n; i++) {
-    //   for (let j = i + 1; j < n; j++) {
-    //     this.rawPairs.push({ i, j });
-    //   }
-    // }
-    this.stage = ModelStage.Cosine;
   }
 
   public computeAllCosines(): void {

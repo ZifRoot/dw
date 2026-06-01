@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         "/api": {
-          target: "http://localhost:8081", // Адрес вашего бэкенда
+          target: "http://100.123.252.125:8081/", // Адрес вашего бэкенда
           changeOrigin: true,
         },
       },

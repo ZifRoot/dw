@@ -1,12 +1,18 @@
 const DB_NAME = "CanvasPositions";
 const STORE_NAME = "points";
 
+export interface EMB {
+  model: string;
+  value: number[];
+}
+
 export interface PointPosition {
   id: string;
   x: number;
   y: number;
   title: string;
   updated_at: number;
+  embs: EMB[];
 }
 
 export class PointPositionDB {

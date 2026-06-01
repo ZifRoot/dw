@@ -2,7 +2,6 @@ import * as d3 from "d3";
 import { ZoomTransform } from "d3";
 import { AppMediator } from "./AppMediator";
 import { Point } from "./Point";
-import { PointPositionDB } from "./PointPositionDB";
 import { CanvasRenderer } from "./renderer/CanvasRenderer";
 import { RepulsionEngine } from "./physics/RepulsionEngine";
 import { EmbeddingEngine } from "./physics/EmbeddingEngine";
@@ -80,7 +79,6 @@ export class CanvasEngine {
   }
 
   private async loadData(): Promise<void> {
-    this.dataManager.positionDB = await PointPositionDB.init();
     this.points = await this.dataManager.fetchDocuments();
     await this.dataManager.loadPositionsAsync(this.points);
     await this.dataManager.loadEmbeddings(this.points);

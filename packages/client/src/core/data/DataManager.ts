@@ -8,8 +8,14 @@ import { PointPosition, PointPositionDB } from "../PointPositionDB";
  * Обработка ошибок минимальна (только консоль), без UI.
  */
 export class DataManager {
-  public positionDB: PointPositionDB | null = null;
+  public _db: PointPositionDB | null = null;
   private embeddingsStore = new Map<string, Embedding[]>();
+
+  public db: PointPositionDB
+
+  constructor() {
+    PointPositionDB.init().then((p) => (this._db = p));
+  }
 
   public getEmbeddingsStore(): Map<string, Embedding[]> {
     return this.embeddingsStore;
@@ -20,8 +26,8 @@ export class DataManager {
   }
 
   public async loadPositionsAsync(points: Point[]): Promise<boolean> {
-    if (!this.positionDB) return false;
-    const saved = await this.positionDB.loadAll();
+    if (!this._db) return false;
+    const saved = await this._db.loadAll();
     if (saved.length === 0) return false;
     for (const item of saved) {
       const point = points.find((p) => p.id === item.id);
@@ -34,9 +40,18 @@ export class DataManager {
   }
 
   public async savePositionsAsync(points: Point[]): Promise<void> {
-    if (!this.positionDB) return;
-    const data = points.map((p) => ({ id: p.id, x: p.x, y: p.y, title: p.text, updated_at: p.updated_at }) as PointPosition);
-    await this.positionDB.saveAll(data);
+    if (!this._db) return;
+    const data = points.map(
+      (p) =>
+        ({
+          id: p.id,
+          x: p.x,
+          y: p.y,
+          title: p.text,
+          updated_at: p.updated_at,
+        } as PointPosition)
+    );
+    await this._db.saveAll(data);
   }
 
   public async fetchDocuments(): Promise<Point[]> {
@@ -44,7 +59,17 @@ export class DataManager {
       const response = await fetch(`/api/documents`);
       if (!response.ok) return [];
       const data = (await response.json()) as ChatSession[];
-      return data.map((session) => new Point(session.id, session.title, 300, 300, "right", session.updated_at));
+      return data.map(
+        (session) =>
+          new Point(
+            session.id,
+            session.title,
+            300,
+            300,
+            "right",
+            session.updated_at
+          )
+      );
     } catch (err) {
       console.error("fetchDocuments error", err);
       return [];
@@ -52,7 +77,6 @@ export class DataManager {
   }
 
   public async loadEmbeddings(points: Point[]): Promise<void> {
-    this.embeddingsStore.clear();
     await Promise.all(points.map((p) => this.fetchEmbeddingForPoint(p)));
   }
 

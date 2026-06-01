@@ -1,0 +1,16 @@
+.gitignore
+.npmignore
+api.ts
+base.ts
+common.ts
+configuration.ts
+docs/ActionsApi.md
+docs/DocumentIdGet200Response.md
+docs/DocumentsApi.md
+docs/DocumentsGet200ResponseInner.md
+docs/DocumentsGet500Response.md
+docs/EmbeddingsApi.md
+docs/EmbeddingsIdPost200Response.md
+docs/EmbeddingsIdPostRequestInner.md
+git_push.sh
+index.ts
