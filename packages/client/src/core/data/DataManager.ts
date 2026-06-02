@@ -1,6 +1,10 @@
+import {
+  Configuration,
+  DocumentsApi,
+  EmbeddingsApi,
+  EmbeddingsIdGet200ResponseInner,
+} from "src/clients/dew/fetch";
 import { Point } from "../Point";
-import { ChatSession } from "../ChatSession";
-import { Embedding } from "../Embedding";
 import { PointPosition, PointPositionDB } from "../PointPositionDB";
 
 /**
@@ -10,10 +14,20 @@ import { PointPosition, PointPositionDB } from "../PointPositionDB";
 export class DataManager {
   public _db: PointPositionDB | null = null;
   private embeddingsStore = new Map<string, Embedding[]>();
+  documentsApi: DocumentsApi;
+  embeddingsApi: EmbeddingsApi;
 
-  public db: PointPositionDB
+  get db() {
+    return this._db;
+  }
 
   constructor() {
+    const config = new Configuration({
+      basePath: "http://100.123.252.125:8081/",
+    });
+
+    this.documentsApi = new DocumentsApi(config);
+    this.embeddingsApi = new EmbeddingsApi(config);
     PointPositionDB.init().then((p) => (this._db = p));
   }
 
@@ -56,10 +70,8 @@ export class DataManager {
 
   public async fetchDocuments(): Promise<Point[]> {
     try {
-      const response = await fetch(`/api/documents`);
-      if (!response.ok) return [];
-      const data = (await response.json()) as ChatSession[];
-      return data.map(
+      let docs = await this.documentsApi.documentsGet();
+      return docs.map(
         (session) =>
           new Point(
             session.id,
@@ -67,7 +79,7 @@ export class DataManager {
             300,
             300,
             "right",
-            session.updated_at
+            session.updatedAt
           )
       );
     } catch (err) {
@@ -82,9 +94,10 @@ export class DataManager {
 
   private async fetchEmbeddingForPoint(point: Point): Promise<void> {
     try {
+      let embs = await this.embeddingsApi.embeddingsIdGet({ id: point.id });
       const resp = await fetch(`/api/embeddings/${point.id}`);
       if (!resp.ok) return;
-      const data = (await resp.json()) as Embedding[];
+      const data = (await resp.json()) as EmbeddingsIdGet200ResponseInner[];
       this.embeddingsStore.set(point.id, data);
     } catch (err) {
       console.error(`fetchEmbeddingForPoint ${point.id} error`, err);

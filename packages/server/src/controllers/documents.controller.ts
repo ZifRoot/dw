@@ -12,6 +12,18 @@ const ChatSessionSchema = z.object({
   updated_at: z.string(),
   user_id: z.string().nullable(),
 });
+
+
+export const updateatSchema = z.object({
+  updated_at: z
+    .date()
+    .nullable()
+    .openapi({
+      param: { name: "updateat", in: "query" },
+      example: "session-123",
+    }),
+});
+
 const ChatSessionsArraySchema = z.array(ChatSessionSchema);
 
 export class DocumentsController extends BaseController {
@@ -29,6 +41,7 @@ export class DocumentsController extends BaseController {
         method: "get",
         path: "/documents",
         tags: ["Documents"],
+        request: { params: ParamsIdSchema },
         responses: {
           200: { description: "Список сессий", content: { "application/json": { schema: ChatSessionsArraySchema } } },
           500: { description: "Ошибка", content: { "application/json": { schema: ErrorResponseSchema } } },

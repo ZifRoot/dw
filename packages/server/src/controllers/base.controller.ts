@@ -12,6 +12,13 @@ export const ParamsIdSchema = z.object({
     .min(1)
     .openapi({ param: { name: "id", in: "path" }, example: "session-123" }),
 });
+
+export const updateatSchema  = z.object({
+  id: z
+    .date()
+    .optional()
+    .openapi({ param: { name: "updateat", in: "query" }, example: "session-123" }),
+});
 export type ParamsId = z.infer<typeof ParamsIdSchema>;
 
 export const ParamsFragmentSchema = z.object({

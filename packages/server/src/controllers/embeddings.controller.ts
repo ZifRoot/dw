@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import { BaseController, ParamsIdSchema } from "./base.controller";
-import type { EmbeddingCreate } from "../db/models/EmbeddingCreate";
+import type { EmbeddingCreate } from "@models/EmbeddingCreate";
 import { IProgram } from "src/iprogram";
 
 export const EmbeddingDtoSchema = z.object({
@@ -42,7 +42,7 @@ export class EmbeddingsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "post",
-        path: "/embeddings/:id",
+        path: "/embedding/:id",
         tags: ["Embeddings"],
         request: {
           params: ParamsIdSchema,
@@ -86,7 +86,7 @@ export class EmbeddingsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/embeddings/:id",
+        path: "/embedding/:id",
         tags: ["Embeddings"],
         request: { params: ParamsIdSchema },
         responses: {
