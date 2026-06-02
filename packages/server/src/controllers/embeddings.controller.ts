@@ -14,7 +14,10 @@ export const EmbeddingDtoSchema = z.object({
 export type EmbeddingDto = z.infer<typeof EmbeddingDtoSchema>;
 
 const EmbeddingsArrayDtoSchema = z.array(EmbeddingDtoSchema);
-const SuccessResponseSchema = z.object({ status: z.string(), received: z.number() });
+const SuccessResponseSchema = z.object({
+  status: z.string(),
+  received: z.number(),
+});
 
 export class EmbeddingsController extends BaseController {
   public router = new OpenAPIHono();
@@ -41,9 +44,19 @@ export class EmbeddingsController extends BaseController {
         method: "post",
         path: "/embeddings/:id",
         tags: ["Embeddings"],
-        request: { params: ParamsIdSchema, body: { content: { "application/json": { schema: EmbeddingsArrayDtoSchema } } } },
+        request: {
+          params: ParamsIdSchema,
+          body: {
+            content: {
+              "application/json": { schema: EmbeddingsArrayDtoSchema },
+            },
+          },
+        },
         responses: {
-          200: { description: "Сохранено", content: { "application/json": { schema: SuccessResponseSchema } } },
+          200: {
+            description: "Сохранено",
+            content: { "application/json": { schema: SuccessResponseSchema } },
+          },
           400: { description: "Неверный запрос" },
           404: { description: "Сессия не найдена" },
           500: { description: "Ошибка" },
@@ -55,14 +68,19 @@ export class EmbeddingsController extends BaseController {
           const session = await this.repo.findSessionById(id);
           if (!session) return c.json({ error: "Document not found" }, 404);
           const embeddingsDto = c.req.valid("json");
-          const embeddingsCreate = embeddingsDto.map((dto) => this.dtoToEmbeddingCreate(dto));
-          const count = await this.repo.createManyEmbeddings(id, embeddingsCreate);
+          const embeddingsCreate = embeddingsDto.map((dto) =>
+            this.dtoToEmbeddingCreate(dto)
+          );
+          const count = await this.repo.createManyEmbeddings(
+            id,
+            embeddingsCreate
+          );
           return c.json({ status: "ok", received: count }, 200);
         } catch (err) {
           console.error(err);
           return c.json({ error: "Internal server error" }, 500);
         }
-      },
+      }
     );
 
     this.router.openapi(
@@ -72,7 +90,12 @@ export class EmbeddingsController extends BaseController {
         tags: ["Embeddings"],
         request: { params: ParamsIdSchema },
         responses: {
-          200: { description: "Список эмбеддингов", content: { "application/json": { schema: z.array(z.unknown()) } } },
+          200: {
+            description: "Список эмбеддингов",
+            content: {
+              "application/json": { schema: EmbeddingsArrayDtoSchema },
+            },
+          },
           500: { description: "Ошибка" },
         },
       }),
@@ -85,7 +108,7 @@ export class EmbeddingsController extends BaseController {
           console.error(err);
           return c.json({ error: "Internal server error" }, 500);
         }
-      },
+      }
     );
   }
 }
