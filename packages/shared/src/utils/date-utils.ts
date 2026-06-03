@@ -43,8 +43,9 @@ export function toDate(value: number | Date | null | string | undefined): Date |
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return value;
   if (typeof value === "number") {
-    return new Date(value);
-    // return new Date(value * 1000);
+    if (value < 0) return null;
+    let date = new Date(value * 1000);
+    return date.getFullYear() > new Date().getFullYear() + 5 ? new Date(value) : date;
   }
   if (typeof value === "string") {
     let date = new Date(value);
