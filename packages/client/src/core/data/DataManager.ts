@@ -5,7 +5,7 @@ import {
   EmbeddingsIdGet200ResponseInner,
 } from "src/clients/dew/fetch";
 import { Point } from "../Point";
-import { PointPosition, PointPositionDB } from "../PointPositionDB";
+import { PointPosition, PointPositionDB } from "./PointPositionDB";
 
 /**
  * Загрузка/сохранение документов, эмбеддингов, позиций.
