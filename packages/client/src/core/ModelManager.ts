@@ -2,7 +2,7 @@ import { Point } from "./Point";
 import { ModelData } from "./ModelData";
 import { Pair } from "./Pair";
 import { AppMediator } from "./AppMediator";
-import { Embedding } from "../Embedding";
+import { EmbeddingTable } from "./data/CanvasPositions";
 
 /**
  * Управляет моделями, покрытием, генерацией пар.
@@ -21,7 +21,7 @@ export class ModelManager {
 
   constructor(private mediator: AppMediator) {}
 
-  public async updateModelStats(points: Point[], embeddingsStore: Map<string, Embedding[]>): Promise<void> {
+  public async updateModelStats(points: Point[], embeddingsStore: Map<string, EmbeddingTable[]>): Promise<void> {
     this.coverage = this.computeCoverage(embeddingsStore);
     this.topModelNames = ["sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"]; // берём вторую модель – магия
     this.initModels(this.topModelNames);
@@ -31,8 +31,8 @@ export class ModelManager {
       if (!embList) continue;
       for (const emb of embList) {
         const model = this.modelsMap.get(emb.model_name);
-        if (model && emb.embedding) {
-          model.addPointRef(point, emb.embedding);
+        if (model && emb) {
+          model.addPointRef(point, emb.value);
         }
       }
     }
@@ -42,7 +42,7 @@ export class ModelManager {
     this.processingCompleted = false;
   }
 
-  private computeCoverage(embeddingsStore: Map<string, Embedding[]>): Map<string, number> {
+  private computeCoverage(embeddingsStore: Map<string, EmbeddingTable[]>): Map<string, number> {
     const coverage = new Map<string, number>();
     for (const [, embList] of embeddingsStore) {
       for (const emb of embList) {
