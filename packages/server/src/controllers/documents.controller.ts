@@ -41,7 +41,6 @@ export class DocumentsController extends BaseController {
         method: "get",
         path: "/documents",
         tags: ["Documents"],
-        request: { params: ParamsIdSchema },
         responses: {
           200: { description: "Список сессий", content: { "application/json": { schema: ChatSessionsArraySchema } } },
           500: { description: "Ошибка", content: { "application/json": { schema: ErrorResponseSchema } } },
