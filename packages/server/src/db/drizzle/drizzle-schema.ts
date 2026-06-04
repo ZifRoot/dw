@@ -385,3 +385,20 @@ export const modelMedianSpeedView = pgView("model_median_speed", {
     GROUP BY session_throughput.model_name
   `,
 );
+
+// model_speeds
+export const modelSpeedsView = pgView("model_speeds", {
+  model_name: varchar("model_name"),
+  avg_bytes_per_ms: real("avg_bytes_per_ms"),
+  median_bytes_per_ms: real("median_bytes_per_ms"),
+  min_bytes_per_ms: real("min_bytes_per_ms"),
+}).as(
+  sql`
+    SELECT COALESCE(avg.model_name, med.model_name) AS model_name,
+           avg.avg_bytes_per_ms,
+           med.median_bytes_per_ms,
+           LEAST(COALESCE(avg.avg_bytes_per_ms, med.median_bytes_per_ms), COALESCE(med.median_bytes_per_ms, avg.avg_bytes_per_ms)) AS min_bytes_per_ms
+    FROM model_avg_speed avg
+    FULL JOIN model_median_speed med ON avg.model_name::text = med.model_name::text
+  `,
+);

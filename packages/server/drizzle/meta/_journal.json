@@ -29,6 +29,13 @@
       "when": 1780567078464,
       "tag": "0003_melted_pixie",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780567260891,
+      "tag": "0004_giant_santa_claus",
+      "breakpoints": true
     }
   ]
 }
