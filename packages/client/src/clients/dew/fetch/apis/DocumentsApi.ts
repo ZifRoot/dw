@@ -46,10 +46,6 @@ export interface DocumentIdTextGetRequest {
     id: string;
 }
 
-export interface DocumentsGetRequest {
-    id: string;
-}
-
 /**
  * 
  */
@@ -250,21 +246,13 @@ export class DocumentsApi extends runtime.BaseAPI {
     /**
      * Creates request options for documentsGet without sending the request
      */
-    async documentsGetRequestOpts(requestParameters: DocumentsGetRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['id'] == null) {
-            throw new runtime.RequiredError(
-                'id',
-                'Required parameter "id" was null or undefined when calling documentsGet().'
-            );
-        }
-
+    async documentsGetRequestOpts(): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
 
         const headerParameters: runtime.HTTPHeaders = {};
 
 
         let urlPath = `/documents`;
-        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {
             path: urlPath,
@@ -276,8 +264,8 @@ export class DocumentsApi extends runtime.BaseAPI {
 
     /**
      */
-    async documentsGetRaw(requestParameters: DocumentsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<DocumentsGet200ResponseInner>>> {
-        const requestOptions = await this.documentsGetRequestOpts(requestParameters);
+    async documentsGetRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<DocumentsGet200ResponseInner>>> {
+        const requestOptions = await this.documentsGetRequestOpts();
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(DocumentsGet200ResponseInnerFromJSON));
@@ -285,8 +273,8 @@ export class DocumentsApi extends runtime.BaseAPI {
 
     /**
      */
-    async documentsGet(requestParameters: DocumentsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<DocumentsGet200ResponseInner>> {
-        const response = await this.documentsGetRaw(requestParameters, initOverrides);
+    async documentsGet(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<DocumentsGet200ResponseInner>> {
+        const response = await this.documentsGetRaw(initOverrides);
         return await response.value();
     }
 

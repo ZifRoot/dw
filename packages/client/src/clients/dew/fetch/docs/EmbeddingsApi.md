@@ -99,7 +99,7 @@ async function example() {
 
   const body = {
     // Date (optional)
-    updateat: 2026-06-04T13:10:07.935Z,
+    updateat: 2026-06-04T13:37:40.560Z,
     // string (optional)
     modelname: model name,
   } satisfies EmbeddingsQueryGetRequest;
