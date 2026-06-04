@@ -1,5 +1,5 @@
 @echo off
-set URL="http://100.123.252.125:8081/api/openapi.json"
+set URL="http://localhost:8081/api/openapi.json"
 set TARGET=".\specs\openapi.json"
 set TEMP=%TARGET%.tmp
 
