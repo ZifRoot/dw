@@ -44,10 +44,4 @@ export class CanvasPositions extends Database {
     this.points = this.createTable<PointTable>(pointsConfig);
     this.embeddings = this.createTable<EmbeddingTable>(embeddingsConfig);
   }
-
-  static async Open(): Promise<CanvasPositions> {
-    let c = new CanvasPositions();
-    await c.open();
-    return c;
-  }
 }

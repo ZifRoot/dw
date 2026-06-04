@@ -16,9 +16,9 @@ export interface ITableInfo {
 }
 
 export interface IDatabase {
-  open(): Promise<IDatabase>;
+  open(): Promise<IDBDatabase>;
   close(): Promise<void>;
-  transaction(storeNames: string | string[], mode: IDBTransactionMode): IDBTransaction;
+  // transaction(storeNames: string | string[], mode: IDBTransactionMode): Promise<IDBTransaction>;
   put<T>(storeName: string, item: T): Promise<void>;
   putMany<T>(storeName: string, items: T[]): Promise<void>;
   get<T>(storeName: string, key: IDBValidKey): Promise<T | undefined>;
@@ -43,6 +43,7 @@ export abstract class Database implements IDatabase {
   private dbName: string;
   private version: number;
   private registeredTables: ITableInfo[] = [];
+  private promise_db?: Promise<IDBDatabase>;
 
   constructor(dbName: string, version: number) {
     this.dbName = dbName;
@@ -59,14 +60,15 @@ export abstract class Database implements IDatabase {
     return table;
   }
 
-  async open(): Promise<IDatabase> {
-    return new Promise<IDatabase>((resolve, reject) => {
+  async open(): Promise<IDBDatabase> {
+    return this.promise_db ?? (this.promise_db = this._open());
+  }
+
+  private _open() {
+    return new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve(this);
-      };
+      request.onsuccess = () => resolve(request.result);
       request.onupgradeneeded = () => this.onupgradeneeded(request);
     });
   }
@@ -96,18 +98,18 @@ export abstract class Database implements IDatabase {
     }
   }
 
-  transaction(storeNames: string | string[], mode: IDBTransactionMode): IDBTransaction {
-    if (!this.db) throw new Error("Database not open");
+  protected async transaction(storeNames: string | string[], mode: IDBTransactionMode): Promise<IDBTransaction> {
+    this.db = await this.open();
     return this.db.transaction(storeNames, mode);
   }
 
-  private getObjectStore(storeName: string, mode: IDBTransactionMode): IDBObjectStore {
-    const tx = this.transaction(storeName, mode);
+  protected async getObjectStore(storeName: string, mode: IDBTransactionMode): Promise<IDBObjectStore> {
+    const tx = await this.transaction(storeName, mode);
     return tx.objectStore(storeName);
   }
 
   async put<T>(storeName: string, item: T): Promise<void> {
-    const store = this.getObjectStore(storeName, "readwrite");
+    const store = await this.getObjectStore(storeName, "readwrite");
     return new Promise((resolve, reject) => {
       const request = store.put(item);
       request.onerror = () => reject(request.error);
@@ -116,8 +118,8 @@ export abstract class Database implements IDatabase {
   }
 
   async putMany<T>(storeName: string, items: T[]): Promise<void> {
-    const tx = this.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
+    const tx = await this.transaction(storeName, "readwrite");
+    const store = await tx.objectStore(storeName);
     return new Promise((resolve, reject) => {
       for (const item of items) {
         store.put(item);
@@ -128,7 +130,7 @@ export abstract class Database implements IDatabase {
   }
 
   async get<T>(storeName: string, key: IDBValidKey): Promise<T | undefined> {
-    const store = this.getObjectStore(storeName, "readonly");
+    const store = await this.getObjectStore(storeName, "readonly");
     return new Promise((resolve, reject) => {
       const request = store.get(key);
       request.onerror = () => reject(request.error);
@@ -137,7 +139,7 @@ export abstract class Database implements IDatabase {
   }
 
   async getAll<T>(storeName: string): Promise<T[]> {
-    const store = this.getObjectStore(storeName, "readonly");
+    const store = await this.getObjectStore(storeName, "readonly");
     return new Promise((resolve, reject) => {
       const request = store.getAll();
       request.onerror = () => reject(request.error);
@@ -146,7 +148,7 @@ export abstract class Database implements IDatabase {
   }
 
   async delete(storeName: string, key: IDBValidKey): Promise<void> {
-    const store = this.getObjectStore(storeName, "readwrite");
+    const store = await this.getObjectStore(storeName, "readwrite");
     return new Promise((resolve, reject) => {
       const request = store.delete(key);
       request.onerror = () => reject(request.error);
@@ -155,7 +157,7 @@ export abstract class Database implements IDatabase {
   }
 
   async clear(storeName: string): Promise<void> {
-    const store = this.getObjectStore(storeName, "readwrite");
+    const store = await this.getObjectStore(storeName, "readwrite");
     return new Promise((resolve, reject) => {
       const request = store.clear();
       request.onerror = () => reject(request.error);
