@@ -60,7 +60,7 @@ export interface IRepository {
   findEmbeddingBySessionAndModel(sessionId: string, modelName: string): Promise<Embedding | null>;
   createEmbedding(sessionId: string, data: EmbeddingCreate): Promise<Embedding>;
   createManyEmbeddings(sessionId: string, data: EmbeddingCreate[]): Promise<number>;
-  findEmbeddingsByDate(createdAt: Date): Promise<Embedding[]> ;
+  findEmbeddingsByDate(createdAt?: Date, modelname?: string): Promise<Embedding[]>;
 
   // ========== Дополнительно для кластеризатора ==========
 

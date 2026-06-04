@@ -21,11 +21,15 @@ const SuccessResponseSchema = z.object({
   received: z.number(),
 });
 
-export const updateAtSchema = z.object({
+export const embQuerySchema = z.object({
   updateat: z.coerce
     .date()
     .optional()
     .openapi({ param: { name: "updateat", in: "query" }, example: new Date().toISOString() }),
+  modelname: z
+    .string()
+    .optional()
+    .openapi({ param: { name: "modelname", in: "query" }, example: "model name" }),
 });
 
 export class EmbeddingsController extends BaseController {
@@ -81,7 +85,7 @@ export class EmbeddingsController extends BaseController {
         method: "get",
         path: "/embeddings/query",
         tags: ["Embeddings"],
-        request: { query: updateAtSchema },
+        request: { query: embQuerySchema },
         responses: {
           200: {
             description: "Список эмбеддингов",
@@ -94,12 +98,11 @@ export class EmbeddingsController extends BaseController {
       }),
       async (c) => {
         try {
-          const { updateat } = c.req.valid("query");
+          const { updateat, modelname } = c.req.valid("query");
           if (!updateat) {
             return c.json({ error: "updateat" }, 400);
           }
-          let updateat1 = toDate(updateat as any)!;
-          const embeddings = await this.repo.findEmbeddingsByDate(updateat1);
+          const embeddings = await this.repo.findEmbeddingsByDate(toDate(updateat as any) ?? undefined, modelname);
           return c.json(embeddings, 200);
         } catch (err) {
           console.error(err);

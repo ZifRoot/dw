@@ -14,9 +14,9 @@ export class Embedding {
     this.sessionId = data.sessionId;
     this.model_name = data.model_name;
     this.createdAt = data.createdAt ? toDate(data.createdAt)! : new Date();
-    this.dimension = data.dimension;
+    this.dimension = data.dimension ?? 0;
     this.processing_time_ms = data.processing_time_ms;
-    this.embedding = [];
+    this.embedding = null;
     if (Array.isArray(data.embedding)) {
       this.embedding = data.embedding.map((a) => +a);
     }
