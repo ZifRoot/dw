@@ -8,13 +8,13 @@ docs/DocumentsApi.md
 docs/DocumentsGet200ResponseInner.md
 docs/DocumentsGet500Response.md
 docs/EmbeddingsApi.md
-docs/EmbeddingsIdGet200ResponseInner.md
-docs/EmbeddingsIdPost200Response.md
+docs/EmbeddingsPost200Response.md
+docs/EmbeddingsSessionIdGet200ResponseInner.md
 index.ts
 models/DocumentIdGet200Response.ts
 models/DocumentsGet200ResponseInner.ts
 models/DocumentsGet500Response.ts
-models/EmbeddingsIdGet200ResponseInner.ts
-models/EmbeddingsIdPost200Response.ts
+models/EmbeddingsPost200Response.ts
+models/EmbeddingsSessionIdGet200ResponseInner.ts
 models/index.ts
 runtime.ts

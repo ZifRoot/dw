@@ -14,23 +14,27 @@
 
 import * as runtime from '../runtime';
 import {
-    type EmbeddingsIdGet200ResponseInner,
-    EmbeddingsIdGet200ResponseInnerFromJSON,
-    EmbeddingsIdGet200ResponseInnerToJSON,
-} from '../models/EmbeddingsIdGet200ResponseInner';
+    type EmbeddingsPost200Response,
+    EmbeddingsPost200ResponseFromJSON,
+    EmbeddingsPost200ResponseToJSON,
+} from '../models/EmbeddingsPost200Response';
 import {
-    type EmbeddingsIdPost200Response,
-    EmbeddingsIdPost200ResponseFromJSON,
-    EmbeddingsIdPost200ResponseToJSON,
-} from '../models/EmbeddingsIdPost200Response';
+    type EmbeddingsSessionIdGet200ResponseInner,
+    EmbeddingsSessionIdGet200ResponseInnerFromJSON,
+    EmbeddingsSessionIdGet200ResponseInnerToJSON,
+} from '../models/EmbeddingsSessionIdGet200ResponseInner';
 
-export interface EmbeddingsIdGetRequest {
-    id: string;
+export interface EmbeddingsPostRequest {
+    embeddingsSessionIdGet200ResponseInner?: Array<EmbeddingsSessionIdGet200ResponseInner>;
 }
 
-export interface EmbeddingsIdPostRequest {
+export interface EmbeddingsQueryGetRequest {
+    updateat?: Date | null;
+    modelname?: string;
+}
+
+export interface EmbeddingsSessionIdGetRequest {
     id: string;
-    embeddingsIdGet200ResponseInner?: Array<EmbeddingsIdGet200ResponseInner>;
 }
 
 /**
@@ -39,13 +43,94 @@ export interface EmbeddingsIdPostRequest {
 export class EmbeddingsApi extends runtime.BaseAPI {
 
     /**
-     * Creates request options for embeddingsIdGet without sending the request
+     * Creates request options for embeddingsPost without sending the request
      */
-    async embeddingsIdGetRequestOpts(requestParameters: EmbeddingsIdGetRequest): Promise<runtime.RequestOpts> {
+    async embeddingsPostRequestOpts(requestParameters: EmbeddingsPostRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/embeddings/`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: requestParameters['embeddingsSessionIdGet200ResponseInner']!.map(EmbeddingsSessionIdGet200ResponseInnerToJSON),
+        };
+    }
+
+    /**
+     */
+    async embeddingsPostRaw(requestParameters: EmbeddingsPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<EmbeddingsPost200Response>> {
+        const requestOptions = await this.embeddingsPostRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => EmbeddingsPost200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async embeddingsPost(requestParameters: EmbeddingsPostRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EmbeddingsPost200Response> {
+        const response = await this.embeddingsPostRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for embeddingsQueryGet without sending the request
+     */
+    async embeddingsQueryGetRequestOpts(requestParameters: EmbeddingsQueryGetRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['updateat'] != null) {
+            queryParameters['updateat'] = (requestParameters['updateat'] as any).toISOString();
+        }
+
+        if (requestParameters['modelname'] != null) {
+            queryParameters['modelname'] = requestParameters['modelname'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/embeddings/query`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async embeddingsQueryGetRaw(requestParameters: EmbeddingsQueryGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<EmbeddingsSessionIdGet200ResponseInner>>> {
+        const requestOptions = await this.embeddingsQueryGetRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(EmbeddingsSessionIdGet200ResponseInnerFromJSON));
+    }
+
+    /**
+     */
+    async embeddingsQueryGet(requestParameters: EmbeddingsQueryGetRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<EmbeddingsSessionIdGet200ResponseInner>> {
+        const response = await this.embeddingsQueryGetRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for embeddingsSessionIdGet without sending the request
+     */
+    async embeddingsSessionIdGetRequestOpts(requestParameters: EmbeddingsSessionIdGetRequest): Promise<runtime.RequestOpts> {
         if (requestParameters['id'] == null) {
             throw new runtime.RequiredError(
                 'id',
-                'Required parameter "id" was null or undefined when calling embeddingsIdGet().'
+                'Required parameter "id" was null or undefined when calling embeddingsSessionIdGet().'
             );
         }
 
@@ -54,7 +139,7 @@ export class EmbeddingsApi extends runtime.BaseAPI {
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/embeddings/:id`;
+        let urlPath = `/embeddings/session/:id`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {
@@ -67,63 +152,17 @@ export class EmbeddingsApi extends runtime.BaseAPI {
 
     /**
      */
-    async embeddingsIdGetRaw(requestParameters: EmbeddingsIdGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<EmbeddingsIdGet200ResponseInner>>> {
-        const requestOptions = await this.embeddingsIdGetRequestOpts(requestParameters);
+    async embeddingsSessionIdGetRaw(requestParameters: EmbeddingsSessionIdGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<EmbeddingsSessionIdGet200ResponseInner>>> {
+        const requestOptions = await this.embeddingsSessionIdGetRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(EmbeddingsIdGet200ResponseInnerFromJSON));
+        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(EmbeddingsSessionIdGet200ResponseInnerFromJSON));
     }
 
     /**
      */
-    async embeddingsIdGet(requestParameters: EmbeddingsIdGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<EmbeddingsIdGet200ResponseInner>> {
-        const response = await this.embeddingsIdGetRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * Creates request options for embeddingsIdPost without sending the request
-     */
-    async embeddingsIdPostRequestOpts(requestParameters: EmbeddingsIdPostRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['id'] == null) {
-            throw new runtime.RequiredError(
-                'id',
-                'Required parameter "id" was null or undefined when calling embeddingsIdPost().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        headerParameters['Content-Type'] = 'application/json';
-
-
-        let urlPath = `/embeddings/:id`;
-        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
-
-        return {
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-            body: requestParameters['embeddingsIdGet200ResponseInner']!.map(EmbeddingsIdGet200ResponseInnerToJSON),
-        };
-    }
-
-    /**
-     */
-    async embeddingsIdPostRaw(requestParameters: EmbeddingsIdPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<EmbeddingsIdPost200Response>> {
-        const requestOptions = await this.embeddingsIdPostRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => EmbeddingsIdPost200ResponseFromJSON(jsonValue));
-    }
-
-    /**
-     */
-    async embeddingsIdPost(requestParameters: EmbeddingsIdPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EmbeddingsIdPost200Response> {
-        const response = await this.embeddingsIdPostRaw(requestParameters, initOverrides);
+    async embeddingsSessionIdGet(requestParameters: EmbeddingsSessionIdGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<EmbeddingsSessionIdGet200ResponseInner>> {
+        const response = await this.embeddingsSessionIdGetRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

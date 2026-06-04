@@ -283,7 +283,7 @@ No authorization required
 
 ## documentsGet
 
-> Array&lt;DocumentsGet200ResponseInner&gt; documentsGet()
+> Array&lt;DocumentsGet200ResponseInner&gt; documentsGet(id)
 
 
 
@@ -300,8 +300,13 @@ async function example() {
   console.log("🚀 Testing  SDK...");
   const api = new DocumentsApi();
 
+  const body = {
+    // string
+    id: session-123,
+  } satisfies DocumentsGetRequest;
+
   try {
-    const data = await api.documentsGet();
+    const data = await api.documentsGet(body);
     console.log(data);
   } catch (error) {
     console.error(error);
@@ -314,7 +319,10 @@ example().catch(console.error);
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` |  | [Defaults to `undefined`] |
 
 ### Return type
 
