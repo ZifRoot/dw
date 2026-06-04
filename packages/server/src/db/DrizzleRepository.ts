@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, SQL } from "drizzle-orm";
+import { eq, and, sql, desc, SQL, lt, gt } from "drizzle-orm";
 import { db_drizzle } from "./drizzle/drizzle-db";
 import {
   chatSessionsTable,
@@ -696,6 +696,12 @@ export class DrizzleRepository implements IRepository {
     const db = tx || this.client;
     const items = await db.select().from(embeddingsTable).where(eq(embeddingsTable.sessionId, sessionId)).orderBy(desc(embeddingsTable.createdAt)); // по желанию
 
+    return items.map((item) => new Embedding({ ...item }));
+  }
+
+  async findEmbeddingsByDate(createdAt: Date, tx?: PgTransaction<any, any, any>): Promise<Embedding[]> {
+    const db = tx || this.client;
+    const items = await db.select().from(embeddingsTable).where(gt(embeddingsTable.createdAt, createdAt)).orderBy(desc(embeddingsTable.createdAt)); // по желанию
     return items.map((item) => new Embedding({ ...item }));
   }
 
