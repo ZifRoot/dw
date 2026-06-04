@@ -8,4 +8,4 @@ const pool = new Pool({
 // 2. Инициализируем Drizzle
 // Передаем схему в опциях, чтобы работал автокомплит для связей (если будут)
 
-export const db_drizzle = drizzle(pool, { schema });
+export const db_drizzle = drizzle(pool, { schema, logger: true });
