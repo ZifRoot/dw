@@ -36,6 +36,13 @@
       "when": 1780567260891,
       "tag": "0004_giant_santa_claus",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780567315901,
+      "tag": "0005_oval_giant_man",
+      "breakpoints": true
     }
   ]
 }

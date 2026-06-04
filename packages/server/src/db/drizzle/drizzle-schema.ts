@@ -402,3 +402,26 @@ export const modelSpeedsView = pgView("model_speeds", {
     FULL JOIN model_median_speed med ON avg.model_name::text = med.model_name::text
   `,
 );
+
+// model_processed_stats
+export const modelProcessedStatsView = pgView("model_processed_stats", {
+  model_name: varchar("model_name"),
+  processed_bytes: integer("processed_bytes"),
+  total_time_ms: integer("total_time_ms"),
+  avg_bytes_per_ms: real("avg_bytes_per_ms"),
+  median_bytes_per_ms: real("median_bytes_per_ms"),
+  speed_bytes_per_ms: real("speed_bytes_per_ms"),
+}).as(
+  sql`
+    SELECT e.model_name,
+           sum(sts.total_bytes) AS processed_bytes,
+           sum(e.processing_time_ms) AS total_time_ms,
+           s.avg_bytes_per_ms,
+           s.median_bytes_per_ms,
+           s.min_bytes_per_ms AS speed_bytes_per_ms
+    FROM embeddings e
+    JOIN session_total_size sts ON e.session_id = sts.session_id
+    LEFT JOIN model_speeds s ON e.model_name::text = s.model_name::text
+    GROUP BY e.model_name, s.avg_bytes_per_ms, s.median_bytes_per_ms, s.min_bytes_per_ms
+  `,
+);
