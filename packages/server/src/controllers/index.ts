@@ -37,7 +37,7 @@ function createHonoApp(program: IProgram): OpenAPIHono {
   });
 
   // Swagger UI (традиционный)
-  app.get("/docs", swaggerUI({ url: "/api/openapi.json" }));
+  app.get("/", swaggerUI({ url: "/api/openapi.json" }));
 
   // // Scalar UI (альтернативная красивая документация)
   // app.get(

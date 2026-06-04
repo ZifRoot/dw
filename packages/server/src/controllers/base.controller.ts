@@ -13,7 +13,7 @@ export const ParamsIdSchema = z.object({
     .openapi({ param: { name: "id", in: "path" }, example: "session-123" }),
 });
 
-export const updateatSchema  = z.object({
+export const updateatSchema = z.object({
   id: z
     .date()
     .optional()
