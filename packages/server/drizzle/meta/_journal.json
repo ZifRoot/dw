@@ -15,6 +15,13 @@
       "when": 1780564318449,
       "tag": "0001_smooth_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780566588650,
+      "tag": "0002_modern_shriek",
+      "breakpoints": true
     }
   ]
 }
