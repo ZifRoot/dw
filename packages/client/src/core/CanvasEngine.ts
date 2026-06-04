@@ -49,25 +49,10 @@ export class CanvasEngine {
     this.dataManager = new DataManager();
     this.modelManager = new ModelManager(mediator);
 
-    this.dragHandler = new DragHandler(
-      this.renderer.getSvg(),
-      this.renderer.getTransform.bind(this.renderer),
-      (point: Point | null) => {
-        this.draggedPoint = point;
-      },
-      () => {
-        this.isDragging = true;
-      },
-      (x: number, y: number) => {
-        if (this.draggedPoint) this.updateDraggedPoint(x, y);
-      },
-      () => {
-        this.draggedPoint = null;
-        this.isDragging = false;
-        this.needsRepulsion = true;
-        this.needsEmbedding = false;
-      },
-    );
+    this.dragHandler = new DragHandler(this.renderer.getSvg(), this.renderer);
+    //  this.dragHandler.onDragEndCallback=
+
+    // \
 
     this.init();
   }
@@ -79,9 +64,7 @@ export class CanvasEngine {
   }
 
   private async loadData(): Promise<void> {
-    this.points = await this.dataManager.fetchDocuments();
-    await this.dataManager.loadPositionsAsync(this.points);
-    await this.dataManager.loadEmbeddings(this.points);
+    this.points = await this.dataManager.syncAll();
     this.renderer.renderPoints(this.points);
     await this.modelManager.updateModelStats(this.points, this.dataManager.getEmbeddingsStore());
     this.modelManager.startDoublePush(); // запускаем двойной толкач генератора
