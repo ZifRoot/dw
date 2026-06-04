@@ -156,7 +156,7 @@ export const embeddingsTable = pgTable(
       .notNull()
       .references(() => chatSessionsTable.id, { onDelete: "cascade" }),
     model_name: varchar("model_name", { length: 80 }).notNull(), // ограничение 50 символов
-    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     dimension: integer("dimension").notNull(),
     processing_time_ms: real("processing_time_ms").notNull(),
     embedding: jsonb("embedding_vector"),
