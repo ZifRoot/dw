@@ -425,3 +425,44 @@ export const modelProcessedStatsView = pgView("model_processed_stats", {
     GROUP BY e.model_name, s.avg_bytes_per_ms, s.median_bytes_per_ms, s.min_bytes_per_ms
   `,
 );
+
+// model_remaining_time
+export const modelRemainingTimeView = pgView("model_remaining_time", {
+  model_name: varchar("model_name"),
+  pending_bytes: integer("pending_bytes"),
+  processed_bytes: integer("processed_bytes"),
+  total_time_ms: integer("total_time_ms"),
+  speed_bytes_per_ms: real("speed_bytes_per_ms"),
+  avg_bytes_per_ms: real("avg_bytes_per_ms"),
+  median_bytes_per_ms: real("median_bytes_per_ms"),
+  remaining_time_ms: real("remaining_time_ms"),
+  remaining_time_human: text("remaining_time_human"),
+}).as(
+  sql`
+    SELECT pb.model_name,
+           pb.pending_bytes,
+           ps.processed_bytes,
+           ps.total_time_ms,
+           ps.speed_bytes_per_ms,
+           ps.avg_bytes_per_ms,
+           ps.median_bytes_per_ms,
+           CASE
+               WHEN ps.speed_bytes_per_ms IS NOT NULL AND ps.speed_bytes_per_ms > 0::double precision 
+               THEN pb.pending_bytes::double precision / ps.speed_bytes_per_ms
+               ELSE NULL::double precision
+           END AS remaining_time_ms,
+           CASE
+               WHEN ps.speed_bytes_per_ms IS NOT NULL AND ps.speed_bytes_per_ms > 0::double precision 
+               THEN ( SELECT format('%s days %s hours %s minutes %s seconds %s ms'::text, 
+                                     (t.ms / 86400000)::text, 
+                                     (t.ms % 86400000::bigint / 3600000)::text, 
+                                     (t.ms % 3600000::bigint / 60000)::text, 
+                                     (t.ms % 60000::bigint / 1000)::text, 
+                                     (t.ms % 1000::bigint)::text) AS format
+                      FROM ( SELECT (pb.pending_bytes::double precision / ps.speed_bytes_per_ms)::bigint AS ms) t)
+               ELSE NULL::text
+           END AS remaining_time_human
+    FROM model_pending_bytes pb
+    LEFT JOIN model_processed_stats ps ON pb.model_name::text = ps.model_name::text
+  `,
+);

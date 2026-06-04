@@ -43,6 +43,13 @@
       "when": 1780567315901,
       "tag": "0005_oval_giant_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780567353245,
+      "tag": "0006_strong_inertia",
+      "breakpoints": true
     }
   ]
 }
