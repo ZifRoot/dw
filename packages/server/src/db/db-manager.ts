@@ -68,9 +68,8 @@ async function generateEnvFileAsync() {
     console.log(`✅ Created ${ENV_FILE}`);
   }
 }
-// ========== Вспомогательная генерация compose-файла ==========
-async function generateComposeFileAsync() {
-  await fs.mkdir(COMPOSE_DIR, { recursive: true });
+
+function makeComposeFile() {
   const composeConfig = {
     version: "3.8",
     services: {
@@ -88,6 +87,13 @@ async function generateComposeFileAsync() {
       },
     },
   };
+  return composeConfig;
+}
+
+// ========== Вспомогательная генерация compose-файла ==========
+async function generateComposeFileAsync() {
+  await fs.mkdir(COMPOSE_DIR, { recursive: true });
+  const composeConfig = makeComposeFile();
   // Записываем JSON-файл с красивым форматированием
   await fs.writeFile(`${COMPOSE_FILE_EXT}.yaml`, yaml.stringify(composeConfig));
   // await fs.writeFile(`${COMPOSE_FILE_EXT}.json`, JSON.stringify(composeConfig, null, 2));
@@ -97,23 +103,7 @@ async function generateComposeFileAsync() {
 
 function generateComposeFileSync() {
   fsSync.mkdirSync(COMPOSE_DIR, { recursive: true });
-  const composeConfig = {
-    version: "3.8",
-    services: {
-      [CONFIG.serviceName]: {
-        image: CONFIG.image,
-        container_name: CONFIG.containerName,
-        restart: "unless-stopped",
-        ports: [`${CONFIG.hostPort}:${CONFIG.containerPort}`],
-        environment: {
-          POSTGRES_USER: CONFIG.user,
-          POSTGRES_PASSWORD: CONFIG.password,
-          POSTGRES_DB: CONFIG.database,
-        },
-        volumes: [`${CONFIG.volumeDir}:/var/lib/postgresql/data`],
-      },
-    },
-  };
+  const composeConfig = makeComposeFile();
   fsSync.writeFileSync(`${COMPOSE_FILE_EXT}.yaml`, yaml.stringify(composeConfig));
   // fsSync.writeFileSync(`${COMPOSE_FILE_EXT}.json`, JSON.stringify(composeConfig, null, 2));
   console.log(`Generated ${COMPOSE_FILE}`);
