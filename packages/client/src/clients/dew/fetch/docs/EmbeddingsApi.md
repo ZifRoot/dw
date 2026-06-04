@@ -6,7 +6,7 @@ All URIs are relative to */api*
 |------------- | ------------- | -------------|
 | [**embeddingsPost**](EmbeddingsApi.md#embeddingspost) | **POST** /embeddings/ |  |
 | [**embeddingsQueryGet**](EmbeddingsApi.md#embeddingsqueryget) | **GET** /embeddings/query |  |
-| [**embeddingsSessionIdGet**](EmbeddingsApi.md#embeddingssessionidget) | **GET** /embeddings/session/:id |  |
+| [**embeddingsSessionIdGet**](EmbeddingsApi.md#embeddingssessionidget) | **GET** /embeddings/session/{id} |  |
 
 
 
@@ -99,7 +99,7 @@ async function example() {
 
   const body = {
     // Date (optional)
-    updateat: 2026-06-04T13:37:40.560Z,
+    updateat: 2026-06-04T22:46:29.467Z,
     // string (optional)
     modelname: model name,
   } satisfies EmbeddingsQueryGetRequest;

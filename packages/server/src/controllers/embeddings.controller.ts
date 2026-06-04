@@ -55,7 +55,7 @@ export class EmbeddingsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/embeddings/session/:id",
+        path: "/embeddings/session/{id}", // ← было :id, стало {id}
         tags: ["Embeddings"],
         request: { params: ParamsIdSchema },
         responses: {

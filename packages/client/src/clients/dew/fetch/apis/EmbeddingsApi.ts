@@ -139,7 +139,7 @@ export class EmbeddingsApi extends runtime.BaseAPI {
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/embeddings/session/:id`;
+        let urlPath = `/embeddings/session/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {

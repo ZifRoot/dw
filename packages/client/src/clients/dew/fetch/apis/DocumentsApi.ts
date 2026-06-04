@@ -74,7 +74,7 @@ export class DocumentsApi extends runtime.BaseAPI {
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/document/:id/fragment/:fragment_id/text`;
+        let urlPath = `/document/{id}/fragment/{fragment_id}/text`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
         urlPath = urlPath.replace('{fragment_id}', encodeURIComponent(String(requestParameters['fragmentId'])));
 
@@ -122,7 +122,7 @@ export class DocumentsApi extends runtime.BaseAPI {
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/document/:id`;
+        let urlPath = `/document/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {
@@ -165,7 +165,7 @@ export class DocumentsApi extends runtime.BaseAPI {
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/document/:id/parse`;
+        let urlPath = `/document/{id}/parse`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {
@@ -212,7 +212,7 @@ export class DocumentsApi extends runtime.BaseAPI {
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/document/:id/text`;
+        let urlPath = `/document/{id}/text`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {

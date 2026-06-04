@@ -4,10 +4,10 @@ All URIs are relative to */api*
 
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
-| [**documentIdFragmentFragmentIdTextGet**](DocumentsApi.md#documentidfragmentfragmentidtextget) | **GET** /document/:id/fragment/:fragment_id/text |  |
-| [**documentIdGet**](DocumentsApi.md#documentidget) | **GET** /document/:id |  |
-| [**documentIdParseGet**](DocumentsApi.md#documentidparseget) | **GET** /document/:id/parse |  |
-| [**documentIdTextGet**](DocumentsApi.md#documentidtextget) | **GET** /document/:id/text |  |
+| [**documentIdFragmentFragmentIdTextGet**](DocumentsApi.md#documentidfragmentfragmentidtextget) | **GET** /document/{id}/fragment/{fragment_id}/text |  |
+| [**documentIdGet**](DocumentsApi.md#documentidget) | **GET** /document/{id} |  |
+| [**documentIdParseGet**](DocumentsApi.md#documentidparseget) | **GET** /document/{id}/parse |  |
+| [**documentIdTextGet**](DocumentsApi.md#documentidtextget) | **GET** /document/{id}/text |  |
 | [**documentsGet**](DocumentsApi.md#documentsget) | **GET** /documents |  |
 
 

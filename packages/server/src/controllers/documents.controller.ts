@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 // import { HeadingCodeParser } from "mdforge";
-import { BaseController, ErrorResponseSchema, ParamsIdSchema, ParamsFragmentSchema, SessionInfoSchema } from "./base.controller";
+import { BaseController, ErrorResponseSchema, ParamsFragmentSchema, ParamsIdSchema, SessionInfoSchema } from "./base.controller";
 import { IProgram } from "src/iprogram";
 
 const ChatSessionSchema = z.object({
@@ -12,7 +12,6 @@ const ChatSessionSchema = z.object({
   updated_at: z.string(),
   user_id: z.string().nullable(),
 });
-
 
 export const updateatSchema = z.object({
   updated_at: z
@@ -60,7 +59,7 @@ export class DocumentsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/document/:id",
+        path: "/document/{id}", // ← было :id, стало {id}
         tags: ["Documents"],
         request: { params: ParamsIdSchema },
         responses: {
@@ -85,7 +84,7 @@ export class DocumentsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/document/:id/text",
+        path: "/document/{id}/text", // ← было :id, стало {id}
         tags: ["Documents"],
         request: { params: ParamsIdSchema },
         responses: { 200: { description: "Полный текст", content: { "text/plain": { schema: z.string() } } }, 404: { description: "Не найдено" } },
@@ -102,7 +101,7 @@ export class DocumentsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/document/:id/parse",
+        path: "/document/{id}/parse", // ← было :id, стало {id}
         tags: ["Documents"],
         request: { params: ParamsIdSchema },
         responses: {
@@ -124,7 +123,7 @@ export class DocumentsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/document/:id/fragment/:fragment_id/text",
+        path: "/document/{id}/fragment/{fragment_id}/text", // ← было :id/:fragment_id, стало {id}/{fragment_id}
         tags: ["Documents"],
         request: { params: ParamsFragmentSchema },
         responses: {
