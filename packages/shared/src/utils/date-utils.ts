@@ -41,20 +41,65 @@ export class ItemWithFormattedDate {
 
 export function toDate(value: number | Date | null | string | undefined): Date | null {
   if (value === null || value === undefined) return null;
-  if (value instanceof Date) return value;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
   if (typeof value === "number") {
     if (value < 0) return null;
-    let date = new Date(value * 1000);
-    return date.getFullYear() > new Date().getFullYear() + 5 ? new Date(value) : date;
+    const asSeconds = new Date(value * 1000);
+    const currentYearPlus5 = new Date().getFullYear() + 5;
+    const date = asSeconds.getFullYear() <= currentYearPlus5 ? asSeconds : new Date(value);
+    return isNaN(date.getTime()) ? null : date;
   }
   if (typeof value === "string") {
-    let date = new Date(value);
-    // Если строка пустая или невалидная – сразу возвращаем null
-    if (isNaN(date.getTime())) {
-      return null;
-    }
-    return date;
+    return parseStringToDate(value);
   }
+  return null;
+}
+
+function parseStringToDate(str: string): Date | null {
+  // 1. ISO 8601 (пробуем стандартный парсер, но только если строка похожа на ISO)
+  const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
+  if (isoRegex.test(str)) {
+    const date = new Date(str);
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // 2. YYYY-MM-DD
+  const dateOnlyRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const matchDateOnly = str.match(dateOnlyRegex);
+  if (matchDateOnly) {
+    const [, year, month, day] = matchDateOnly;
+    const date = new Date(Date.UTC(+year, +month - 1, +day));
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // 3. YYYY-MM-DD HH:MM:SS (или HH:MM:SS.sss)
+  const datetimeRegex = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/;
+  const matchDatetime = str.match(datetimeRegex);
+  if (matchDatetime) {
+    const [, year, month, day, hour, minute, second, msPart] = matchDatetime;
+    let ms = 0;
+    if (msPart) ms = parseInt(msPart.padEnd(3, "0").slice(0, 3), 10);
+    const date = new Date(Date.UTC(+year, +month - 1, +day, +hour, +minute, +second, ms));
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // 4. MM/DD/YYYY (американский)
+  const usRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+  const matchUs = str.match(usRegex);
+  if (matchUs) {
+    const [, month, day, year] = matchUs;
+    const date = new Date(Date.UTC(+year, +month - 1, +day));
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // 5. Строковый timestamp (только цифры)
+  if (/^\d+$/.test(str)) {
+    const num = Number(str);
+    if (!isNaN(num)) {
+      return toDate(+num);
+    }
+  }
+
   return null;
 }
 
