@@ -350,3 +350,38 @@ export const speedxView = pgView("speedx", {
     ORDER BY (sum(ss.size)::double precision / NULLIF(sum(e.processing_time_ms), 0::double precision)) DESC
   `,
 );
+
+// ====================================================================
+// 2. Сложные представления через сырой SQL (raw)
+// ====================================================================
+
+// model_avg_speed
+export const modelAvgSpeedView = pgView("model_avg_speed", {
+  model_name: varchar("model_name"),
+  avg_bytes_per_ms: real("avg_bytes_per_ms"),
+}).as(
+  sql`
+    SELECT session_throughput.model_name,
+           CASE
+               WHEN sum(session_throughput.processing_time_ms) > 0::double precision 
+               THEN sum(session_throughput.total_bytes)::double precision / sum(session_throughput.processing_time_ms)
+               ELSE NULL::double precision
+           END AS avg_bytes_per_ms
+    FROM session_throughput
+    GROUP BY session_throughput.model_name
+  `,
+);
+
+// model_median_speed
+export const modelMedianSpeedView = pgView("model_median_speed", {
+  model_name: varchar("model_name"),
+  median_bytes_per_ms: real("median_bytes_per_ms"),
+}).as(
+  sql`
+    SELECT session_throughput.model_name,
+           percentile_cont(0.5::double precision) WITHIN GROUP (ORDER BY session_throughput.bytes_per_ms) AS median_bytes_per_ms
+    FROM session_throughput
+    WHERE session_throughput.bytes_per_ms IS NOT NULL
+    GROUP BY session_throughput.model_name
+  `,
+);
