@@ -27,7 +27,18 @@ CREATE TABLE "chat_sessions" (
 	"agent" text,
 	"version" integer,
 	"current_message_id" integer,
-	"inserted_at" timestamp
+	"inserted_at" timestamp,
+	"user_id" uuid
+);
+--> statement-breakpoint
+CREATE TABLE "embeddings" (
+	"session_id" uuid NOT NULL,
+	"model_name" varchar(80) NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"dimension" integer NOT NULL,
+	"processing_time_ms" real NOT NULL,
+	"embedding_vector" jsonb,
+	CONSTRAINT "embeddings_session_id_model_name_created_at_pk" PRIMARY KEY("session_id","model_name","created_at")
 );
 --> statement-breakpoint
 CREATE TABLE "files" (
@@ -39,7 +50,8 @@ CREATE TABLE "files" (
 	"token_usage" integer NOT NULL,
 	"error_code" integer,
 	"inserted_at" timestamp NOT NULL,
-	"updated_at" timestamp NOT NULL
+	"updated_at" timestamp NOT NULL,
+	"content" "bytea"
 );
 --> statement-breakpoint
 CREATE TABLE "message_files" (
@@ -58,13 +70,24 @@ CREATE TABLE "message_fragments" (
 	"elapsed_secs" double precision,
 	"references" jsonb,
 	"stage_id" integer,
+	"size" integer NOT NULL,
 	CONSTRAINT "message_fragments_session_id_message_id_fragment_order_pk" PRIMARY KEY("session_id","message_id","fragment_order")
+);
+--> statement-breakpoint
+CREATE TABLE "user" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"credentials" jsonb
 );
 --> statement-breakpoint
 ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_session_id_chat_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."chat_sessions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_session_id_parent_message_id_chat_messages_session_id_message_id_fk" FOREIGN KEY ("session_id","parent_message_id") REFERENCES "public"."chat_messages"("session_id","message_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_sessions" ADD CONSTRAINT "chat_sessions_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "embeddings" ADD CONSTRAINT "embeddings_session_id_chat_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."chat_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_files" ADD CONSTRAINT "message_files_session_id_chat_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."chat_sessions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_files" ADD CONSTRAINT "message_files_file_id_files_id_fk" FOREIGN KEY ("file_id") REFERENCES "public"."files"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_files" ADD CONSTRAINT "message_files_session_id_message_id_chat_messages_session_id_message_id_fk" FOREIGN KEY ("session_id","message_id") REFERENCES "public"."chat_messages"("session_id","message_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_fragments" ADD CONSTRAINT "message_fragments_session_id_chat_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."chat_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_fragments" ADD CONSTRAINT "message_fragments_session_id_message_id_chat_messages_session_id_message_id_fk" FOREIGN KEY ("session_id","message_id") REFERENCES "public"."chat_messages"("session_id","message_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "chat_messages_parent_idx" ON "chat_messages" USING btree ("session_id","parent_message_id");--> statement-breakpoint
 CREATE INDEX "chat_messages_session_id_idx" ON "chat_messages" USING btree ("session_id");--> statement-breakpoint

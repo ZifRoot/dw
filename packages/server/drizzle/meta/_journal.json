@@ -5,106 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1773295917151,
-      "tag": "0000_clear_gladiator",
+      "when": 1780564170808,
+      "tag": "0000_opposite_captain_cross",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1773300624351,
-      "tag": "0001_gigantic_captain_britain",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1773316403197,
-      "tag": "0002_keen_kylun",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1773391797779,
-      "tag": "0003_organic_prowler",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1773398344040,
-      "tag": "0004_normal_miek",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1774100357697,
-      "tag": "0005_chunky_forge",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1774110408152,
-      "tag": "0006_misty_rogue",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1774118384411,
-      "tag": "0007_sloppy_black_knight",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1774120880888,
-      "tag": "0008_bright_skaar",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1774186725208,
-      "tag": "0009_organic_ironclad",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1774186757916,
-      "tag": "0010_fancy_demogoblin",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1774208002535,
-      "tag": "0011_careless_rumiko_fujikawa",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1774208122568,
-      "tag": "0012_simple_newton_destine",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1774208972906,
-      "tag": "0013_perfect_gladiator",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1780558597507,
-      "tag": "0014_smooth_tombstone",
+      "when": 1780564318449,
+      "tag": "0001_smooth_annihilus",
       "breakpoints": true
     }
   ]

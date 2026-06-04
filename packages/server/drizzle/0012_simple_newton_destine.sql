@@ -1,1 +1,0 @@
-ALTER TABLE "embeddings" ADD CONSTRAINT "embeddings_session_id_model_name_created_at_pk" PRIMARY KEY("session_id","model_name","created_at");

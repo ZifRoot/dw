@@ -1,5 +1,5 @@
 {
-  "id": "af01d795-be63-40b7-b678-2a78acb32938",
+  "id": "3ba7f143-deb2-4f3f-baf8-78392e0a1572",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -246,11 +246,104 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "chat_sessions_user_id_user_id_fk": {
+          "name": "chat_sessions_user_id_user_id_fk",
+          "tableFrom": "chat_sessions",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.embeddings": {
+      "name": "embeddings",
+      "schema": "",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_name": {
+          "name": "model_name",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "dimension": {
+          "name": "dimension",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "processing_time_ms": {
+          "name": "processing_time_ms",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "embedding_vector": {
+          "name": "embedding_vector",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "embeddings_session_id_chat_sessions_id_fk": {
+          "name": "embeddings_session_id_chat_sessions_id_fk",
+          "tableFrom": "embeddings",
+          "tableTo": "chat_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "embeddings_session_id_model_name_created_at_pk": {
+          "name": "embeddings_session_id_model_name_created_at_pk",
+          "columns": [
+            "session_id",
+            "model_name",
+            "created_at"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -314,6 +407,12 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -386,6 +485,19 @@
         }
       },
       "foreignKeys": {
+        "message_files_session_id_chat_sessions_id_fk": {
+          "name": "message_files_session_id_chat_sessions_id_fk",
+          "tableFrom": "message_files",
+          "tableTo": "chat_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "message_files_file_id_files_id_fk": {
           "name": "message_files_file_id_files_id_fk",
           "tableFrom": "message_files",
@@ -481,6 +593,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
@@ -507,6 +625,19 @@
         }
       },
       "foreignKeys": {
+        "message_fragments_session_id_chat_sessions_id_fk": {
+          "name": "message_fragments_session_id_chat_sessions_id_fk",
+          "tableFrom": "message_fragments",
+          "tableTo": "chat_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "message_fragments_session_id_message_id_chat_messages_session_id_message_id_fk": {
           "name": "message_fragments_session_id_message_id_chat_messages_session_id_message_id_fk",
           "tableFrom": "message_fragments",
@@ -533,6 +664,38 @@
           ]
         }
       },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user": {
+      "name": "user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credentials": {
+          "name": "credentials",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

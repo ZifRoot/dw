@@ -1,1 +1,0 @@
-ALTER TABLE "message_fragments" DROP CONSTRAINT "message_fragments_session_id_message_id_chat_messages_session_id_message_id_fk";

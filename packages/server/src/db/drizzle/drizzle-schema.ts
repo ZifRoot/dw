@@ -12,7 +12,10 @@ import {
   index,
   real,
   varchar,
+  pgView,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
 import { bytea } from "./types";
 
 // Enums реализованы как text (согласно вашему пожеланию)
@@ -163,3 +166,27 @@ export const embeddingsTable = pgTable(
   },
   (table) => [primaryKey({ columns: [table.sessionId, table.model_name, table.createdAt] })],
 );
+
+// Добавьте этот импорт в начало файла, если его нет
+
+// ====================================================================
+// 1. Простые представления через query builder
+// ====================================================================
+
+// distinct_models
+export const distinctModelsView = pgView("distinct_models").as((qb) =>
+  qb.selectDistinct({ model_name: embeddingsTable.model_name }).from(embeddingsTable),
+);
+
+// session_total_size (raw)
+export const sessionTotalSizeView = pgView("session_total_size", {
+  session_id: uuid("session_id"),
+  total_bytes: integer("total_bytes"),
+}).as(sql`
+  SELECT 
+    session_id, 
+    sum(size) AS total_bytes
+  FROM message_fragments
+  WHERE type = 'RESPONSE'
+  GROUP BY session_id
+`);
