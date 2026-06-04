@@ -6,7 +6,7 @@ import { CanvasRenderer } from "./renderer/CanvasRenderer";
 import { RepulsionEngine } from "./physics/RepulsionEngine";
 import { EmbeddingEngine } from "./physics/EmbeddingEngine";
 import { DataManager } from "./data/DataManager";
-import { ModelManager } from "./data/ModelManager";
+import { ModelManager } from "./ModelManager";
 import { DragHandler } from "./interaction/DragHandler";
 
 /**
