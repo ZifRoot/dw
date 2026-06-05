@@ -55,8 +55,8 @@ export class PointsScene {
   public setPoints(points: Point[]): void {
     const toInsert: Point[] = [];
     for (const p of points) {
-      const idx = this.pointsIndex.get(p.id);
-      if (idx !== undefined) {
+      if (this.pointsIndex.has(p.id)) {
+        const idx = this.pointsIndex.get(p.id)!;
         // Обновляем существующий объект (сохраняем ссылку)
         Object.assign(this.points[idx], p);
       } else {
@@ -64,12 +64,9 @@ export class PointsScene {
       }
     }
     if (toInsert.length) {
+      this.points.push(...toInsert);
       const startIdx = this.points.length;
-      for (let i = 0; i < toInsert.length; i++) {
-        const p = toInsert[i];
-        this.points.push(p);
-        this.pointsIndex.set(p.id, startIdx + i);
-      }
+      for (let i = 0; i < toInsert.length; i++) this.pointsIndex.set(toInsert[i].id, startIdx + i);
     }
     this.render();
   }
@@ -165,21 +162,14 @@ export class PointsScene {
       .attr("class", "point-group")
       .attr("transform", (d) => `translate(${d.x},${d.y})`);
 
-    enter
-      .append("circle")
-      .attr("class", "point")
-      .attr("r", 20)
-      .attr("stroke", "black")
-      .attr("stroke-width", 2)
-      .attr("fill", (d) => d.color);
+    enter.append("circle").attr("class", "point").attr("r", 20).attr("stroke-width", 2);
 
     enter
       .append("text")
       .attr("class", "point-label")
       .text((d) => d.text)
       .attr("text-anchor", "middle")
-      .attr("dy", "0.35em")
-      .attr("fill", "white");
+      .attr("dy", "0.35em");
 
     const merged = enter.merge(groups);
     merged.attr("transform", (d) => `translate(${d.x},${d.y})`);
