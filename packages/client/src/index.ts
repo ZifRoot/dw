@@ -6,7 +6,7 @@ import React from "react";
 // Импортируем глобальные стили для холста (Sass скомпилируется в CSS и вставится в HTML)
 import "./styles/canvas/main.scss";
 import { AppMediator } from "./core/AppMediator";
-import { TwoPointsScene } from "./core/TwoPointsScene";
+import { PointsScene } from "./core/PointsScene";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -21,10 +21,11 @@ app.appendChild(uiDiv);
 app.appendChild(canvasDiv);
 
 const mediator = new AppMediator();
+mediator.temperature = 100;
 
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
-const engine = new TwoPointsScene(canvasDiv, mediator);
-
+const engine = new PointsScene(canvasDiv);
+engine.init();
 // Монтируем React UI
 const root = createRoot(uiDiv);
 root.render(React.createElement(ControlPanel, { mediator }));

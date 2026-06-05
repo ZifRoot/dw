@@ -9,7 +9,7 @@ export interface Point {
   color: string;
 }
 
-export class TwoPointsScene {
+export class PointsScene {
   private svgEngine: SvgEngine;
   private points: Point[] = [];
   private pointsIndex: Map<string, number> = new Map(); // id → индекс в массиве
