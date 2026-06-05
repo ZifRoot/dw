@@ -57,10 +57,20 @@ export class PointsScene {
     const toUpdate: Point[] = [];
 
     for (const p of points) {
+      if (p == null) {
+        console.error("idx");
+      }
       if (this.pointsIndex.has(p.id)) {
         const idx = this.pointsIndex.get(p.id)!;
+        if (idx == null) {
+          console.error("idx");
+        }
         // Обновляем существующий объект (сохраняем ссылку)
-        Object.assign(this.points[idx], p);
+        let old = this.points[idx];
+        if (old == null) {
+          console.error("idx");
+        }
+        Object.assign(old, p);
         toUpdate.push(p);
       } else {
         toInsert.push(p);
@@ -68,8 +78,8 @@ export class PointsScene {
     }
 
     if (toInsert.length) {
-      this.points.push(...toInsert);
       const startIdx = this.points.length;
+      this.points.push(...toInsert);
       for (let i = 0; i < toInsert.length; i++) this.pointsIndex.set(toInsert[i].id, startIdx + i);
     }
 
@@ -105,13 +115,13 @@ export class PointsScene {
   private applyUpdatesToGroups(selection: d3.Selection<SVGGElement, Point, any, any>): void {
     selection.attr("transform", (d) => `translate(${d.x},${d.y})`);
     selection.select<SVGTextElement>("text.point-label").text((d) => d.text);
-    selection.select<SVGCircleElement>("circle.point").attr("fill", (d) => d.color);
     // datum остаётся тем же объектом
   }
 
   /** Перестроить groupSelection после структурных изменений (добавление/удаление) */
   private rebuildGroupSelection(): void {
     this.groupSelection = this.svgEngine.container.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
+    this.groupSelection.exit().remove();
   }
 
   // ========== Публичные методы для физики и внешнего использования ==========
@@ -203,9 +213,6 @@ export class PointsScene {
 
       this.groupMap.set(p.id, enter.node() as SVGGElement);
     }
-
-    const currentScale = this.svgEngine.getTransform().k;
-    this.updatePointStyles(currentScale);
   }
 
   /** Быстрое обновление позиции одной точки (без перерисовки всей сцены) */

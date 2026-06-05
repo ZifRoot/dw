@@ -7,6 +7,7 @@ import React from "react";
 import "./styles/canvas/main.scss";
 import { AppMediator } from "./core/AppMediator";
 import { PointsScene } from "./core/PointsScene";
+import { PointsSceneTester } from "./core/PointsSceneTester";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -24,8 +25,20 @@ const mediator = new AppMediator();
 mediator.temperature = 100;
 
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
-const engine = new PointsScene(canvasDiv);
-engine.init();
+const scene = new PointsScene(canvasDiv);
+scene.init();
+
+const tester = new PointsSceneTester(scene, {
+  minPoints: 20,
+  maxPoints: 30,
+  updatePercent: 50,
+  addCountRange: [2, 5],
+  removeCountRange: [2, 4],
+  intervalMs: 1000,
+  verbose: true,
+});
+
+tester.start();
 // Монтируем React UI
 const root = createRoot(uiDiv);
 root.render(React.createElement(ControlPanel, { mediator }));
