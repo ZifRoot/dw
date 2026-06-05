@@ -14,6 +14,7 @@ export class PointsScene {
   private points: Point[] = [];
   private pointsIndex: Map<string, number> = new Map(); // id → индекс в массиве
   private groupSelection: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
+  private groupMap: Map<string, SVGGElement> = new Map(); // id → DOM-группа
 
   public onPointMoved: ((point: Point) => void) | null = null;
 
@@ -185,8 +186,29 @@ export class PointsScene {
 
     this.groupSelection = merged;
 
+    this.groupMap.clear();
+    let groupMap = this.groupMap;
+    merged.each(function (d) {
+      groupMap.set(d.id, this);
+    });
+
     const currentScale = this.svgEngine.getTransform().k;
     this.updatePointStyles(currentScale);
+  }
+
+  /** Быстрое обновление позиции одной точки (без перерисовки всей сцены) */
+  public updatePointPosition(id: string, x: number, y: number): void {
+    const group = this.groupMap.get(id);
+    if (group) {
+      const point = d3.select(group).datum() as Point;
+      if (point) {
+        point.x = x;
+        point.y = y;
+        d3.select(group).attr("transform", `translate(${x},${y})`);
+      }
+    } else {
+      console.warn(`updatePointPosition: point ${id} not found`);
+    }
   }
 
   public updateAllPointsPositions(): void {
