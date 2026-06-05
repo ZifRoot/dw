@@ -25,7 +25,7 @@ export class SvgEngine {
   private zoomEnabled = true;
 
   // Drag state
-  private dragPredicate: DragPredicate = () => false;
+  private dragPredicate: GetDragElement = () => null;
   private getDragElement: GetDragElement = () => null;
   private dragCallbacks: DragCallbacks<Element> | null = null;
   private currentDragElement: Element | null = null;
@@ -67,7 +67,7 @@ export class SvgEngine {
       .filter((event) => {
         const mouseEvent = event as MouseEvent;
         // Drag разрешён, только если dragPredicate вернул true
-        return this.dragPredicate(mouseEvent);
+        return !!this.dragPredicate(mouseEvent);
       })
       .on("start", (event) => {
         const dragElement = this.getDragElement(event.sourceEvent);
@@ -113,8 +113,8 @@ export class SvgEngine {
    * @param getDragElement Функция, возвращающая DOM-элемент, который будет перетаскиваться.
    * @param callbacks Колбэки для событий drag.
    */
-  public setDragHandler(predicate: DragPredicate, getDragElement: GetDragElement, callbacks: DragCallbacks<Element>): void {
-    this.dragPredicate = predicate;
+  public setDragHandler(callbacks: DragCallbacks<Element>, getDragElement: GetDragElement): void {
+    this.dragPredicate = getDragElement;
     this.getDragElement = getDragElement;
     this.dragCallbacks = callbacks;
     // Обновляем zoom-фильтр, чтобы он учитывал новый предикат

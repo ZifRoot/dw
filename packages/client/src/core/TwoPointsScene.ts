@@ -16,19 +16,8 @@ export class TwoPointsScene {
 
   constructor(element: HTMLElement) {
     this.svgEngine = new SvgEngine(element);
-    // Фильтр zoom: запрещаем zoom на элементах с классом "point-group"
+
     this.svgEngine.setDragHandler(
-      // predicate: событие считается drag, если цель или её родитель имеет класс .point-group
-      (event) => {
-        const target = event.target as Element;
-        return !!target.closest?.(".point-group");
-      },
-      // getDragElement: возвращаем группу .point-group, которую будем перетаскивать
-      (event) => {
-        const target = event.target as Element;
-        return target.closest?.(".point-group") || null;
-      },
-      // callbacks
       {
         onDrag: (group, deltaWorld) => {
           const point = d3.select(group).datum() as Point;
@@ -40,9 +29,10 @@ export class TwoPointsScene {
         },
         onDragEnd: (group) => {
           const point = d3.select(group).datum() as Point;
-          if (point) console.log(`Point ${point.id} moved to (${point.x}, ${point.y})`);
+          if (point && this.onPointMoved) this.onPointMoved(point);
         },
       },
+      (event) => (event?.target as Element)?.closest?.(".point-group") || null,
     );
     this.svgEngine.setZoomCallback((transform) => {
       this.updatePointStyles(transform.k);
