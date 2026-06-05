@@ -17,29 +17,35 @@ export class TwoPointsScene {
   constructor(element: HTMLElement) {
     this.svgEngine = new SvgEngine(element);
     // Фильтр zoom: запрещаем zoom на элементах с классом "point-group"
-    this.svgEngine.setZoomFilter((event) => {
-      const target = event.target as Element;
-      return !target.closest?.(".point-group");
-    });
-    // Регистрируем перетаскиваемые элементы (селектор .point-group)
-    this.svgEngine.registerDraggable<SVGGElement>(".point-group", {
-      onDrag: (group, deltaWorld) => {
-        // Получаем привязанные данные группы – объект Point
-        const point = d3.select(group).datum() as Point;
-        if (!point) return;
-        // Обновляем координаты в объекте (который лежит в массиве points)
-        point.x += deltaWorld[0];
-        point.y += deltaWorld[1];
-        // Обновляем transform группы
-        d3.select(group).attr("transform", `translate(${point.x},${point.y})`);
+    this.svgEngine.setDragHandler(
+      // predicate: событие считается drag, если цель или её родитель имеет класс .point-group
+      (event) => {
+        const target = event.target as Element;
+        return !!target.closest?.(".point-group");
       },
-      onDragEnd: (group) => {
-        const point = d3.select(group).datum() as Point;
-        if (point) {
-          console.log(`Point ${point.id} moved to (${point.x}, ${point.y})`);
-          // Здесь потом вызовем сохранение позиций в DataManager
-        }
+      // getDragElement: возвращаем группу .point-group, которую будем перетаскивать
+      (event) => {
+        const target = event.target as Element;
+        return target.closest?.(".point-group") || null;
       },
+      // callbacks
+      {
+        onDrag: (group, deltaWorld) => {
+          const point = d3.select(group).datum() as Point;
+          if (point) {
+            point.x += deltaWorld[0];
+            point.y += deltaWorld[1];
+            d3.select(group).attr("transform", `translate(${point.x},${point.y})`);
+          }
+        },
+        onDragEnd: (group) => {
+          const point = d3.select(group).datum() as Point;
+          if (point) console.log(`Point ${point.id} moved to (${point.x}, ${point.y})`);
+        },
+      },
+    );
+    this.svgEngine.setZoomCallback((transform) => {
+      this.updatePointStyles(transform.k);
     });
   }
 
@@ -86,6 +92,22 @@ export class TwoPointsScene {
     merged.attr("transform", (d) => `translate(${d.x},${d.y})`);
 
     this.groupSelection = merged;
+  }
+  
+  /** Массовое обновление позиций всех точек (для физики) */
+  public updateAllPointsPositions(): void {
+    if (this.groupSelection) {
+      this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    }
+  }
+
+  private updatePointStyles(scale: number): void {
+    const invScale = 1 / scale;
+    this.svgEngine.container
+      .selectAll<SVGCircleElement, Point>("circle.point")
+      .attr("r", 20 * invScale) // базовый радиус 20px
+      .attr("stroke-width", 2 * invScale);
+    this.svgEngine.container.selectAll<SVGTextElement, Point>("text.point-label").style("font-size", `${16 * invScale}px`);
   }
 
   public fitView(): void {
