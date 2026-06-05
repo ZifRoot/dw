@@ -1,8 +1,7 @@
-import { AppMediator } from "./AppMediator";
-import { SvgCanvasController } from "./SvgCanvasController";
+import { SvgEngine } from "./SvgEngine";
 import * as d3 from "d3";
 
-interface PointData {
+export interface Point {
   id: string;
   x: number;
   y: number;
@@ -10,108 +9,99 @@ interface PointData {
   color: string;
 }
 
-/**
- * Простейшая сцена для проверки SvgCanvasController.
- * Рисует две точки, каждая из которых перетаскивается мышью.
- * Zoom/pan работают одновременно, не конфликтуя с drag.
- */
 export class TwoPointsScene {
-  private svgCtrl: SvgCanvasController;
-  private points: Map<string, PointData> = new Map();
-  private groups: Map<string, d3.Selection<SVGGElement, unknown, null, undefined>> = new Map();
+  private svgEngine: SvgEngine;
+  private points: Point[] = [];
+  private groupSelection: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
 
-  constructor(
-    element: HTMLElement,
-    private mediator: AppMediator,
-  ) {
-    this.mediator.temperature = 100;
-    this.svgCtrl = new SvgCanvasController(element);
-    this.init();
+  constructor(element: HTMLElement) {
+    this.svgEngine = new SvgEngine(element);
+    // Фильтр zoom: запрещаем zoom на элементах с классом "point-group"
+    this.svgEngine.setZoomFilter((event) => {
+      const target = event.target as Element;
+      return !target.closest?.(".point-group");
+    });
+    // Регистрируем перетаскиваемые элементы (селектор .point-group)
+    this.svgEngine.registerDraggable<SVGGElement>(".point-group", {
+      onDrag: (group, deltaWorld) => {
+        // Получаем привязанные данные группы – объект Point
+        const point = d3.select(group).datum() as Point;
+        if (!point) return;
+        // Обновляем координаты в объекте (который лежит в массиве points)
+        point.x += deltaWorld[0];
+        point.y += deltaWorld[1];
+        // Обновляем transform группы
+        d3.select(group).attr("transform", `translate(${point.x},${point.y})`);
+      },
+      onDragEnd: (group) => {
+        const point = d3.select(group).datum() as Point;
+        if (point) {
+          console.log(`Point ${point.id} moved to (${point.x}, ${point.y})`);
+          // Здесь потом вызовем сохранение позиций в DataManager
+        }
+      },
+    });
   }
 
-  /**
-   * Инициализация сцены: создаём две фиксированные точки.
-   */
   public init(): void {
-    const pointA: PointData = { id: "A", x: 200, y: 150, text: "A", color: "red" };
-    const pointB: PointData = { id: "B", x: 400, y: 350, text: "B", color: "blue" };
-    this.points.set(pointA.id, pointA);
-    this.points.set(pointB.id, pointB);
-
+    this.points = [
+      { id: "A", x: 200, y: 150, text: "A", color: "red" },
+      { id: "B", x: 400, y: 350, text: "B", color: "blue" },
+    ];
     this.render();
   }
 
-  /**
-   * Отрисовать все точки (создать группы, круги, текст, добавить drag).
-   */
   private render(): void {
-    for (const point of this.points.values()) {
-      // Создаём группу для точки
-      const group = this.svgCtrl.createGroup("point");
-      group.attr("transform", `translate(${point.x},${point.y})`);
-      // Рисуем круг
-      group.append("circle").attr("r", 20).attr("fill", point.color).attr("stroke", "black").attr("stroke-width", 2);
-      // Рисуем текст
-      group.append("text").text(point.text).attr("text-anchor", "middle").attr("dy", "0.35em").attr("fill", "white").attr("font-size", "16px");
-      // Сохраняем группу
-      this.groups.set(point.id, group);
-    }
+    // Data join: привязываем массив точек к группам
+    const groups = this.svgEngine.container.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d: Point) => d.id);
 
-    // После создания всех точек добавляем обработку перетаскивания
-    this.enableDragging();
+    // Удаляем лишние группы
+    groups.exit().remove();
+
+    // Создаём новые группы
+    const enter = groups
+      .enter()
+      .append("g")
+      .attr("class", "point-group")
+      .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+    // Добавляем круг и текст
+    enter
+      .append("circle")
+      .attr("class", "point")
+      .attr("r", 20)
+      .attr("stroke", "black")
+      .attr("stroke-width", 2)
+      .attr("fill", (d) => d.color);
+    enter
+      .append("text")
+      .text((d) => d.text)
+      .attr("text-anchor", "middle")
+      .attr("dy", "0.35em")
+      .attr("fill", "white");
+
+    // Объединяем enter и update
+    const merged = enter.merge(groups);
+    // Обновляем позиции (на случай, если координаты изменились до перерисовки)
+    merged.attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+    this.groupSelection = merged;
   }
 
-  /**
-   * Включить drag для всех точек.
-   * При перетаскивании точки координаты обновляются в мире, трансформация группы меняется,
-   * а zoom временно отключается.
-   */
-  private enableDragging(): void {
-    for (const [id, group] of this.groups.entries()) {
-      const point = this.points.get(id)!;
-      const dragHandler = d3
-        .drag<SVGGElement, unknown>()
-        .on("start", (event) => {
-          this.svgCtrl.disableZoom(); // отключаем zoom на время драга
-          event.sourceEvent.stopPropagation();
-        })
-        .on("drag", (event) => {
-          // event.dx, event.dy – смещение мыши в экранных пикселях.
-          // Переводим в мировое смещение с помощью screenToWorld.
-          const [dxWorld, dyWorld] = this.svgCtrl.screenToWorld(event.dx, event.dy);
-          point.x += dxWorld;
-          point.y += dyWorld;
-          group.attr("transform", `translate(${point.x},${point.y})`);
-        })
-        .on("end", () => {
-          this.svgCtrl.enableZoom(); // включаем zoom обратно
-          console.log(`Point ${id} moved to (${point.x}, ${point.y})`);
-        });
-      group.call(dragHandler);
-    }
-  }
-
-  /**
-   * Центрировать и масштабировать вид так, чтобы обе точки были видны целиком с отступом.
-   */
   public fitView(): void {
-    const pointsArray = Array.from(this.points.values());
-    const xs = pointsArray.map((p) => p.x);
-    const ys = pointsArray.map((p) => p.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const padding = 50;
-    this.svgCtrl.applyZoomToBounds({ minX, minY, maxX, maxY }, padding);
+    if (this.points.length === 0) return;
+    const xs = this.points.map((p) => p.x);
+    const ys = this.points.map((p) => p.y);
+    const bounds = {
+      minX: Math.min(...xs),
+      minY: Math.min(...ys),
+      maxX: Math.max(...xs),
+      maxY: Math.max(...ys),
+    };
+    this.svgEngine.applyZoomToBounds(bounds, 50);
   }
 
-  /**
-   * Очистить сцену (удалить все группы и данные).
-   */
-  public destroy(): void {
-    this.groups.forEach((group) => this.svgCtrl.removeElement(group));
-    this.groups.clear();
-    this.points.clear();
+  public getPoints(): Point[] {
+    return this.points;
   }
 }
