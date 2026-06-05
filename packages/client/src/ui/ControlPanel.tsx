@@ -33,8 +33,8 @@ export const ControlPanel: React.FC<Props> = ({ mediator }) => {
       <button className={styles.button} onClick={() => mediator.clearPoints()}>
         Очистить
       </button>
-      <div>Температура: {temperature.toFixed(4)}</div>
-      <div>Прогресс: {progress.toFixed(4)}</div>
+      <div><span>Температура:</span><span>{temperature.toFixed(4)}</span></div>
+      <div><span>Прогресс:</span><span>{progress.toFixed(4)}</span></div>
     </div>
   );
 };
