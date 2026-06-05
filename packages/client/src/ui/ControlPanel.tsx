@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { CanvasEngine } from '../core/CanvasEngine';
 import { AppMediator } from '../core/AppMediator';
 import styles from './ControlPanel.module.scss'; // CSS Modules
 interface Props {
-  engine: CanvasEngine;
+  mediator: AppMediator;
 }
 
-export const ControlPanel: React.FC<Props> = ({ engine }) => {
-
-  const mediator = engine.mediator;
+export const ControlPanel: React.FC<Props> = ({ mediator }) => {
 
   const [temperature, setTemperature] = useState(mediator.temperature);
   const [progress, setProgress] = useState(mediator.progress);
@@ -30,10 +27,10 @@ export const ControlPanel: React.FC<Props> = ({ engine }) => {
 
   return (
     <div className={styles.panel}>
-      <button className={styles.button} onClick={() => engine.addPoint()}>
+      <button className={styles.button} onClick={() => mediator.addPoint()}>
         Добавить точку
       </button>
-      <button className={styles.button} onClick={() => engine.clearPoints()}>
+      <button className={styles.button} onClick={() => mediator.clearPoints()}>
         Очистить
       </button>
       <div>Температура: {temperature.toFixed(4)}</div>
