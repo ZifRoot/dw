@@ -48,6 +48,10 @@ export class AppMediator extends EventTarget {
     this.dispatchEvent(new Event("clear-points"));
   }
 
+  public addPoint(): void {
+    this.dispatchEvent(new Event("addPoint"));
+  }
+
   public startRepulsion(): void {
     this.dispatchEvent(new Event("start-repulsion"));
   }
