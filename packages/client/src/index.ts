@@ -1,4 +1,3 @@
-import { CanvasEngine } from "./core/CanvasEngine";
 import { createRoot } from "react-dom/client";
 import { ControlPanel } from "./ui/ControlPanel";
 import React from "react";
@@ -6,8 +5,10 @@ import React from "react";
 // Импортируем глобальные стили для холста (Sass скомпилируется в CSS и вставится в HTML)
 import "./styles/canvas/main.scss";
 import { AppMediator } from "./core/AppMediator";
-import { PointsScene } from "./core/PointsScene";
+import { PointsScene } from "./core/Scene/PointsScene";
 import { PointsSceneTester } from "./core/PointsSceneTester";
+import { SvgEngine } from "./core/SvgEngine";
+import { EdgesScene } from "./core/Scene/EdgesScene";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -23,12 +24,15 @@ app.appendChild(canvasDiv);
 
 const mediator = new AppMediator();
 mediator.temperature = 100;
-
+let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
-const scene = new PointsScene(canvasDiv);
-scene.init();
+const scene1 = new EdgesScene(svgEngine);
+const scene2 = new PointsScene(svgEngine);
 
-const tester = new PointsSceneTester(scene, {
+scene1.attachToPointsScene(scene2);
+scene2.init();
+
+const tester = new PointsSceneTester(scene2, scene1, {
   minPoints: 20,
   maxPoints: 30,
   updatePercent: 50,

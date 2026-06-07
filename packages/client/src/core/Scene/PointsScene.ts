@@ -1,4 +1,4 @@
-import { SvgEngine } from "./SvgEngine";
+import { SvgEngine } from "../SvgEngine";
 import * as d3 from "d3";
 
 export interface Point {
@@ -6,11 +6,10 @@ export interface Point {
   x: number;
   y: number;
   text: string;
-  color: string;
 }
 
 export class PointsScene {
-  private svgEngine: SvgEngine;
+  private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
   private points: Point[] = [];
   private pointsIndex: Map<string, number> = new Map(); // id → индекс в массиве
   private groupSelection: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
@@ -18,9 +17,10 @@ export class PointsScene {
 
   public onPointMoved: ((point: Point) => void) | null = null;
 
-  constructor(element: HTMLElement) {
-    this.svgEngine = new SvgEngine(element);
-
+  constructor(
+    private svgEngine: SvgEngine,
+    groupName = "points-scene",
+  ) {
     this.svgEngine.setDragHandler(
       {
         onDrag: (group, deltaWorld) => {
@@ -39,13 +39,14 @@ export class PointsScene {
       (event) => (event?.target as Element)?.closest?.(".point-group") || null,
     );
 
-    this.svgEngine.setZoomCallback((transform) => this.updatePointStyles(transform.k));
+    this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
+    this.rootGroup = svgEngine.createGroup(groupName);
   }
 
   public init(): void {
     this.setPoints([
-      { id: "A", x: 200, y: 150, text: "A", color: "red" },
-      { id: "B", x: 400, y: 350, text: "B", color: "blue" },
+      { id: "A", x: 200, y: 150, text: "A" },
+      { id: "B", x: 400, y: 350, text: "B" },
     ]);
   }
 
@@ -135,7 +136,7 @@ export class PointsScene {
   /** Удалить точки по списку id – мутация массива */
   public removePoints(ids: string[]): void {
     if (ids.length === 0) return;
-    const toDelete = new Set(ids);
+
     // Удаляем DOM-группы и записи из groupMap для удаляемых точек (до мутации массива)
     for (const id of ids) {
       const group = this.groupMap.get(id);
@@ -143,6 +144,15 @@ export class PointsScene {
       this.groupMap.delete(id);
     }
 
+    this._removePoints(ids);
+    // Перестраиваем groupSelection после изменений
+    this.rebuildGroupSelection();
+    const scale = this.svgEngine.getTransform().k;
+    this.updatePointStyles(scale);
+  }
+
+  private _removePoints(ids: string[]) {
+    const toDelete = new Set(ids);
     let i, tail;
     for (i = 0, tail = this.points.length - 1; i <= tail; i++, tail--) {
       // Пропускаем живые элементы слева
@@ -166,19 +176,12 @@ export class PointsScene {
       this.points[j] = null as any;
     }
     this.points.length = newLength;
-    // Перестраиваем groupSelection после изменений
-    this.rebuildGroupSelection();
-    const scale = this.svgEngine.getTransform().k;
-    this.updatePointStyles(scale);
   }
 
   /** Удалить точки по предикату – аналогично, но с перестроением индекса в конце */
   public removePointsBy(predicate: (point: Point) => boolean): void {
     // Предварительно собираем id точек, которые нужно удалить, и удаляем DOM-группы
-    const toDeleteIds: string[] = [];
-    for (const p of this.points) {
-      if (predicate(p)) toDeleteIds.push(p.id);
-    }
+    const toDeleteIds = this.points.filter((p) => predicate(p)).map((p) => p.id);
     if (toDeleteIds.length === 0) return;
     this.removePoints(toDeleteIds);
   }
@@ -200,19 +203,33 @@ export class PointsScene {
   private createNewPoints(points: Point[]): void {
     if (points.length === 0) return;
 
-    for (const p of points) {
-      const enter = this.svgEngine.createGroup("point-group").datum(p);
-      enter.attr("transform", (d) => `translate(${d.x},${d.y})`);
-      enter.append("circle").attr("class", "point").attr("r", 20).attr("stroke-width", 2);
-      enter
-        .append("text")
-        .attr("class", "point-label")
-        .text((d) => d.text)
-        // .attr("text-anchor", "middle")
-        .attr("dy", "0.35em");
+    // 2. Создаём D3-выборку для добавления новых групп
+    //    (предполагаем, что существующие группы уже привязаны к this.points без новых)
+    //    Для этого временно создаём полную выборку, но отфильтровываем только новые данные.
+    const allData = this.points; // уже включает новые точки
+    const existingGroups = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(allData, (d) => d.id);
 
-      this.groupMap.set(p.id, enter.node() as SVGGElement);
-    }
+    // Новые точки появятся в enter
+    const enter = existingGroups
+      .enter()
+      .append("g")
+      .attr("class", "point-group")
+      .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+    enter.append("circle").attr("class", "point").attr("r", 20).attr("stroke-width", 2);
+
+    enter
+      .append("text")
+      .attr("class", "point-label")
+      .text((d) => d.text)
+      .attr("dy", "0.35em");
+
+    existingGroups.exit().remove();
+    // 3. Обновляем groupMap для новых групп
+    let groupMap = this.groupMap;
+    enter.each(function (d) {
+      groupMap.set(d.id, this);
+    });
   }
 
   /** Быстрое обновление позиции одной точки (без перерисовки всей сцены) */
