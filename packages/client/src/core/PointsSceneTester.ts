@@ -1,18 +1,15 @@
 // PointsSceneTester.ts
 import { PointsScene, Point } from "./Scene/PointsScene";
 import { EdgesScene, Edge } from "./Scene/EdgesScene";
+import { randomInt } from "@utils/data-utils";
 
 interface TestConfig {
-  /** Минимальное количество точек в пуле */
-  minPoints?: number;
-  /** Максимальное количество точек в пуле */
-  maxPoints?: number;
   /** Процент точек, которые будут обновлены на каждой итерации (0-100) */
-  updatePercent?: number;
+  updateFrationRange?: [number, number];
   /** Количество новых точек, добавляемых на каждой итерации (случайное в диапазоне) */
-  addCountRange?: [number, number];
-  /** Количество удаляемых точек на итерации (случайное в диапазоне) */
-  removeCountRange?: [number, number];
+  targetSize?: number;
+
+  removeFrationRange?: [number, number];
   /** Интервал между итерациями в мс */
   intervalMs?: number;
   /** Включить логирование в консоль */
@@ -32,11 +29,9 @@ export class PointsSceneTester {
     this.pointsScene = pointsScene;
     this.edgesScene = edgesScene;
     this.config = {
-      minPoints: config.minPoints ?? 20,
-      maxPoints: config.maxPoints ?? 30,
-      updatePercent: config.updatePercent ?? 50,
-      addCountRange: config.addCountRange ?? [2, 5],
-      removeCountRange: config.removeCountRange ?? [2, 4],
+      updateFrationRange: config.updateFrationRange ?? [20 / 100, 70 / 100],
+      removeFrationRange: config.removeFrationRange ?? [5 / 100, 20 / 100],
+      targetSize: config.targetSize ?? 5,
       intervalMs: config.intervalMs ?? 1000,
       verbose: config.verbose ?? true,
       fullGraph: config.fullGraph ?? true,
@@ -46,9 +41,7 @@ export class PointsSceneTester {
   public start(): void {
     if (this.intervalId !== null) return;
     this.log("Тест запущен");
-    this.initPoints();
-    this.updateEdges(); // построить начальный граф
-    this.intervalId = window.setInterval(() => this.iteration(), this.config.intervalMs);
+    this.iteration();
   }
 
   public stop(): void {
@@ -59,72 +52,56 @@ export class PointsSceneTester {
     }
   }
 
-  public clear(): void {
-    this.stop();
-    this.pointsScene.clear();
-    this.edgesScene.clear();
-    this.log("Сцена очищена");
-  }
-
-  private initPoints(): void {
-    const count = this.randomInt(this.config.minPoints, this.config.maxPoints);
-    const points: Point[] = [];
-    for (let i = 0; i < count; i++) {
-      points.push(this.generateRandomPoint());
-    }
-    this.pointsScene.setPoints(points);
-    this.log(`Инициализация: ${count} точек`);
-  }
-
   private iteration(): void {
     const start = performance.now();
+
     let points = this.pointsScene.getPoints(); // получаем актуальные точки
-
-    // 1. Определяем, сколько точек должно быть в пуле
-    const targetSize = this.randomInt(this.config.minPoints, this.config.maxPoints);
-    const currentSize = points.length;
-
-    // 2. Обновляем случайные существующие точки (updatePercent от текущего количества)
-    const updateCount = Math.floor(currentSize * (this.config.updatePercent / 100));
-    const indicesToUpdate = this.randomIndices(currentSize, updateCount);
-    const updatedPoints: Point[] = [];
-    for (const idx of indicesToUpdate) {
-      const newPoint = this.mutatePoint(points[idx]);
-      // Мутируем точку прямо в массиве через setPoints (upsert)
-      updatedPoints.push(newPoint);
+    let validation = this.pointsScene.entites.validate();
+    if (!validation.ok) {
+      console.error("❌ Ошибки после удаления:", validation.errors);
     }
-    if (updatedPoints.length) {
-      this.pointsScene.setPoints(updatedPoints); // обновление существующих
+
+    let backupCollection = this.pointsScene.entites.clone();
+    let [minP, maxP] = this.config.removeFrationRange;
+
+    // 1. Удаляем лишние точки (если пул превышает целевой размер)
+    let removeCount = this.randomInt(points.length * minP, points.length * maxP) + 1;
+
+    const removedIds = points
+      .map((p) => p.id)
+      .shuffle()
+      .slice(0, removeCount);
+
+    this.pointsScene.removePoints(removedIds);
+
+    validation = this.pointsScene.entites.validate();
+    if (!validation.ok) {
+      console.error("❌ Ошибки после удаления:", validation.errors);
     }
+
+    points = this.pointsScene.getPoints(); // обновляем после мутаций
+    backupCollection = this.pointsScene.entites.clone();
+
+    [minP, maxP] = this.config.updateFrationRange;
+    let updateCount = this.randomInt(points.length * minP, points.length * maxP) + 1;
+
+    const updatedPoints = [...points]
+      .shuffle()
+      .slice(0, updateCount)
+      .map((p) => this.mutatePoint(p));
 
     // 3. Добавляем новые точки (если нужно увеличить пул)
-    let addCount = 0;
-    if (currentSize < targetSize) {
-      addCount = Math.min(targetSize - currentSize, this.randomInt(this.config.addCountRange[0], this.config.addCountRange[1]));
-      const newPoints: Point[] = [];
-      for (let i = 0; i < addCount; i++) {
-        newPoints.push(this.generateRandomPoint());
-      }
-      this.pointsScene.setPoints(newPoints); // добавление новых
-    }
+    let addCount = Math.max(0, this.config.targetSize - points.length) + 1;
+    const newPoints = Array.from({ length: addCount }).map((_) => this.generateRandomPoint());
 
-    // 4. Удаляем лишние точки (если пул превышает целевой размер)
-    let removeCount = 0;
-    points = this.pointsScene.getPoints(); // обновляем после мутаций
-    const currentSizeAfterOps = points.length;
-    if (currentSizeAfterOps > targetSize) {
-      removeCount = currentSizeAfterOps - targetSize;
-      const idsToRemove: string[] = [];
-      const allIds = points.map((p) => p.id);
-      const shuffled = [...allIds];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      for (let i = 0; i < removeCount; i++) idsToRemove.push(shuffled[i]);
-      this.pointsScene.removePoints(idsToRemove);
-    }
+    let uppoints = [...updatedPoints, ...newPoints].shuffle();
 
+    this.pointsScene.setPoints(uppoints); // добавление новых
+
+    validation = this.pointsScene.entites.validate();
+    if (!validation.ok) {
+      console.error("❌ Ошибки после удаления:", validation.errors);
+    }
     // 5. Перестраиваем граф связей (полный граф) на основе нового набора точек
     this.updateEdges();
 
@@ -133,6 +110,9 @@ export class PointsSceneTester {
     this.log(
       `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, время=${duration.toFixed(2)}ms`,
     );
+    this.intervalId = window.setTimeout(() => {
+      this.iteration();
+    }, this.config.intervalMs);
   }
 
   /** Построить полный граф (все пары) из текущих точек */
@@ -168,7 +148,6 @@ export class PointsSceneTester {
       x: Math.random() * 800,
       y: Math.random() * 600,
       text: id.slice(1, 3),
-
     };
   }
 
@@ -183,7 +162,7 @@ export class PointsSceneTester {
   }
 
   private randomInt(min: number, max: number): number {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    return Math.floor(Math.random() * (max - min) + min);
   }
 
   private randomIndices(max: number, count: number): number[] {

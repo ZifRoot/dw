@@ -1,5 +1,6 @@
 import { SvgEngine } from "../SvgEngine";
 import * as d3 from "d3";
+import { EntityCollection } from "./indexer";
 
 export interface Point {
   id: string;
@@ -10,8 +11,9 @@ export interface Point {
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+  public entites: EntityCollection<Point>;
   private points: Point[] = [];
-  private pointsIndex: Map<string, number> = new Map(); // id → индекс в массиве
+
   private groupSelection: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
   private groupMap: Map<string, SVGGElement> = new Map(); // id → DOM-группа
 
@@ -21,15 +23,19 @@ export class PointsScene {
     private svgEngine: SvgEngine,
     groupName = "points-scene",
   ) {
+    this.entites = new EntityCollection<Point>((p) => p.id);
+    this.points = this.entites.items;
+
+    this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.setDragHandler(
       {
         onDrag: (group, deltaWorld) => {
-          const point = d3.select(group).datum() as Point;
-          if (point) {
-            point.x += deltaWorld[0];
-            point.y += deltaWorld[1];
-            d3.select(group).attr("transform", `translate(${point.x},${point.y})`);
-          }
+          d3.select<Element, Point>(group)
+            .each((point) => {
+              point.x += deltaWorld[0];
+              point.y += deltaWorld[1];
+            })
+            .attr("transform", (d) => `translate(${d.x},${d.y})`);
         },
         onDragEnd: (group) => {
           const point = d3.select(group).datum() as Point;
@@ -40,7 +46,6 @@ export class PointsScene {
     );
 
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
-    this.rootGroup = svgEngine.createGroup(groupName);
   }
 
   public init(): void {
@@ -57,66 +62,13 @@ export class PointsScene {
     const toInsert: Point[] = [];
     const toUpdate: Point[] = [];
 
-    for (const p of points) {
-      if (p == null) {
-        console.error("idx");
-      }
-      if (this.pointsIndex.has(p.id)) {
-        const idx = this.pointsIndex.get(p.id)!;
-        if (idx == null) {
-          console.error("idx");
-        }
-        // Обновляем существующий объект (сохраняем ссылку)
-        let old = this.points[idx];
-        if (old == null) {
-          console.error("idx");
-        }
-        Object.assign(old, p);
-        toUpdate.push(p);
-      } else {
-        toInsert.push(p);
-      }
-    }
+    this.entites._setPoints(points, toInsert, toUpdate);
 
-    if (toInsert.length) {
-      const startIdx = this.points.length;
-      this.points.push(...toInsert);
-      for (let i = 0; i < toInsert.length; i++) this.pointsIndex.set(toInsert[i].id, startIdx + i);
-    }
-
-    let targetSelection = this.updateExistingPoints(toUpdate);
-    if (targetSelection) {
-      this.applyUpdatesToGroups(targetSelection);
-    }
-    this.createNewPoints(toInsert);
+    this.createNewPoints();
     this.rebuildGroupSelection();
 
     const scale = this.svgEngine.getTransform().k;
     this.updatePointStyles(scale);
-  }
-
-  // ========== Приватные методы ==========
-
-  /** Мутировать существующие модели и обновить DOM */
-  private updateExistingPoints(points: Point[]): d3.Selection<SVGGElement, Point, any, any> | null {
-    if (points.length === 0) return null;
-
-    const total = this.points.length;
-    const useMassUpdate = points.length > total / 4;
-
-    if (useMassUpdate) {
-      return this.groupSelection;
-    }
-    const updElements = points.map((p) => this.groupMap.get(p.id)).filter((el): el is SVGGElement => el !== undefined);
-    if (updElements.length === 0) return null;
-    return d3.selectAll(updElements);
-  }
-
-  /** Применить обновления (transform, текст, цвет) к D3-селекции групп */
-  private applyUpdatesToGroups(selection: d3.Selection<SVGGElement, Point, any, any>): void {
-    selection.attr("transform", (d) => `translate(${d.x},${d.y})`);
-    selection.select<SVGTextElement>("text.point-label").text((d) => d.text);
-    // datum остаётся тем же объектом
   }
 
   /** Перестроить groupSelection после структурных изменений (добавление/удаление) */
@@ -129,8 +81,7 @@ export class PointsScene {
 
   /** Получить точку по id (через indexMap) */
   public getPointById(id: string): Point | undefined {
-    const idx = this.pointsIndex.get(id);
-    return idx !== undefined ? this.points[idx] : undefined;
+    return this.entites.getPointById(id);
   }
 
   /** Удалить точки по списку id – мутация массива */
@@ -152,30 +103,7 @@ export class PointsScene {
   }
 
   private _removePoints(ids: string[]) {
-    const toDelete = new Set(ids);
-    let i, tail;
-    for (i = 0, tail = this.points.length - 1; i <= tail; i++, tail--) {
-      // Пропускаем живые элементы слева
-      while (i <= tail && !toDelete.has(this.points[i].id)) i++;
-      // Пропускаем удаляемые элементы справа
-      while (i <= tail && toDelete.has(this.points[tail].id)) tail--;
-      if (i >= tail) break;
-      // Замена: последний живой элемент затирает удаляемый
-      const replacement = this.points[tail];
-      // Удаляем старую запись индекса для точки, которая будет перезаписана
-      this.pointsIndex.delete(this.points[i].id);
-      this.points[i] = replacement;
-      this.pointsIndex.set(replacement.id, i);
-    }
-
-    const newLength = tail + 1;
-    // Удаляем из индекса все id удалённых точек (оставшиеся в хвосте)
-    for (let j = newLength; j < this.points.length; j++) {
-      const point = this.points[j];
-      if (point) this.pointsIndex.delete(point.id);
-      this.points[j] = null as any;
-    }
-    this.points.length = newLength;
+    this.entites._removePoints(ids);
   }
 
   /** Удалить точки по предикату – аналогично, но с перестроением индекса в конце */
@@ -187,27 +115,21 @@ export class PointsScene {
   }
 
   /** Очистить все точки */
-  public clear(): void {
-    if (this.groupSelection) {
-      this.groupSelection.remove();
-      this.groupSelection = null;
-    }
-    this.groupMap.clear();
-    this.points.length = 0;
-    this.pointsIndex.clear();
-    this.setPoints([]);
-  }
+  // public clear(): void {
+  //   if (this.groupSelection) {
+  //     this.groupSelection.remove();
+  //     this.groupSelection = null;
+  //   }
+  //   this.groupMap.clear();
+  //   this.points.length = 0;
+  //   // this.pointsIndex.clear();
+  //   this.setPoints([]);
+  // }
 
   // ========== Приватные методы ==========
   /** Создать новые точки DOM */
-  private createNewPoints(points: Point[]): void {
-    if (points.length === 0) return;
-
-    // 2. Создаём D3-выборку для добавления новых групп
-    //    (предполагаем, что существующие группы уже привязаны к this.points без новых)
-    //    Для этого временно создаём полную выборку, но отфильтровываем только новые данные.
-    const allData = this.points; // уже включает новые точки
-    const existingGroups = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(allData, (d) => d.id);
+  private createNewPoints(): void {
+    const existingGroups = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
 
     // Новые точки появятся в enter
     const enter = existingGroups
@@ -225,6 +147,8 @@ export class PointsScene {
       .attr("dy", "0.35em");
 
     existingGroups.exit().remove();
+
+    this.groupSelection = existingGroups;
     // 3. Обновляем groupMap для новых групп
     let groupMap = this.groupMap;
     enter.each(function (d) {
@@ -248,9 +172,14 @@ export class PointsScene {
   }
 
   public updateAllPointsPositions(): void {
-    if (this.groupSelection) {
-      this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y})`);
-    }
+    if (!this.groupSelection) return;
+    this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y})`);
+  }
+  /** Применить обновления (transform, текст, цвет) к D3-селекции групп */
+  private applyUpdatesToGroups(selection: d3.Selection<SVGGElement, Point, any, any>): void {
+    selection.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    selection.select<SVGTextElement>("text.point-label").text((d) => d.text);
+    // datum остаётся тем же объектом
   }
 
   /** Обновить стили (радиус, обводка, шрифт) в зависимости от масштаба */

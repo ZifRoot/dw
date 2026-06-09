@@ -26,6 +26,7 @@ const mediator = new AppMediator();
 mediator.temperature = 100;
 let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
+
 const scene1 = new EdgesScene(svgEngine);
 const scene2 = new PointsScene(svgEngine);
 
@@ -33,13 +34,12 @@ scene1.attachToPointsScene(scene2);
 scene2.init();
 
 const tester = new PointsSceneTester(scene2, scene1, {
-  minPoints: 20,
-  maxPoints: 30,
-  updatePercent: 50,
-  addCountRange: [2, 5],
-  removeCountRange: [2, 4],
+  updateFrationRange: [20 / 100, 70 / 100],
+  removeFrationRange: [5 / 100, 20 / 100],
+  targetSize: 5,
   intervalMs: 1000,
   verbose: true,
+  fullGraph: true,
 });
 
 tester.start();
