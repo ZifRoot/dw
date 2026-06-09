@@ -85,7 +85,7 @@ export class EdgesScene {
     // Создаём линии с привязкой данных
     this.groupSelection = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
 
-    this.groupSelection.enter().append("line").attr("class", "edge").attr("stroke", "#999").attr("stroke-width", 1).attr("stroke-opacity", 0.5);
+    this.groupSelection.enter().append("line").attr("class", "edge").attr("stroke-width", 1);
 
     this.groupSelection.exit().remove();
 
@@ -100,10 +100,10 @@ export class EdgesScene {
     // let target = pointsMap.get(e.targetId);
     // if (!source || !target) return;
     this.groupSelection
-      .attr("x1", (e) => this.pointsScene.getPointById(e.sourceId)?.x ?? 0)
-      .attr("y1", (e) => this.pointsScene.getPointById(e.sourceId)?.y ?? 0)
-      .attr("x2", (e) => this.pointsScene.getPointById(e.targetId)?.x ?? 0)
-      .attr("y2", (e) => this.pointsScene.getPointById(e.targetId)?.y ?? 0);
+      .attr("x1", (e) => this.pointsScene.getPointById(e.sourceId)?.x ?? 1000)
+      .attr("y1", (e) => this.pointsScene.getPointById(e.sourceId)?.y ?? 1000)
+      .attr("x2", (e) => this.pointsScene.getPointById(e.targetId)?.x ?? 1000)
+      .attr("y2", (e) => this.pointsScene.getPointById(e.targetId)?.y ?? 1000);
   }
   private updatePointStyles(scale: number): void {
     if (!this.groupSelection) return;

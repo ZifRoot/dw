@@ -34,8 +34,8 @@ scene1.attachToPointsScene(scene2);
 scene2.init();
 
 const tester = new PointsSceneTester(scene2, scene1, {
-  updateFrationRange: [20 / 100, 70 / 100],
-  removeFrationRange: [5 / 100, 20 / 100],
+  updateFrationRange: [0 / 100, 0 / 100],
+  removeFrationRange: [0 / 100, 0 / 100],
   targetSize: 5,
   intervalMs: 1000,
   verbose: true,

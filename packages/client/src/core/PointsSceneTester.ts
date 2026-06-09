@@ -65,7 +65,7 @@ export class PointsSceneTester {
     let [minP, maxP] = this.config.removeFrationRange;
 
     // 1. Удаляем лишние точки (если пул превышает целевой размер)
-    let removeCount = this.randomInt(points.length * minP, points.length * maxP) + 1;
+    let removeCount = this.randomInt(points.length * minP, points.length * maxP);
 
     const removedIds = points
       .map((p) => p.id)
@@ -83,7 +83,7 @@ export class PointsSceneTester {
     backupCollection = this.pointsScene.entites.clone();
 
     [minP, maxP] = this.config.updateFrationRange;
-    let updateCount = this.randomInt(points.length * minP, points.length * maxP) + 1;
+    let updateCount = this.randomInt(points.length * minP, points.length * maxP);
 
     const updatedPoints = [...points]
       .shuffle()
@@ -91,7 +91,7 @@ export class PointsSceneTester {
       .map((p) => this.mutatePoint(p));
 
     // 3. Добавляем новые точки (если нужно увеличить пул)
-    let addCount = Math.max(0, this.config.targetSize - points.length) + 1;
+    let addCount = Math.max(0, this.config.targetSize - points.length);
     const newPoints = Array.from({ length: addCount }).map((_) => this.generateRandomPoint());
 
     let uppoints = [...updatedPoints, ...newPoints].shuffle();
