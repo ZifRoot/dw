@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AppMediator } from '../core/AppMediator';
+import { AppMediator } from '../../core/AppMediator';
 import styles from './ControlPanel.module.scss'; // CSS Modules
 interface Props {
   mediator: AppMediator;

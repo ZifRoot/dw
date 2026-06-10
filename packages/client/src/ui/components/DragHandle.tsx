@@ -1,6 +1,5 @@
-// components/DragHandle.tsx
 import React from 'react';
-import { useMouseDrag } from '../hooks/useMouseDrag';
+import { useDrag } from '../hooks/useDrag';
 import { DragOverlay } from './DragOverlay';
 import styles from './DragHandle.module.scss';
 
@@ -9,7 +8,7 @@ interface DragHandleProps {
 }
 
 export const DragHandle: React.FC<DragHandleProps> = ({ onDrag }) => {
-  const { onMouseDown, isDragging, handleMouseMove, handleMouseUp } = useMouseDrag({
+  const { onStart, onMove, onEnd, isDragging } = useDrag({
     onMove: (dx, dy) => onDrag(dx, dy),
   });
 
@@ -17,14 +16,15 @@ export const DragHandle: React.FC<DragHandleProps> = ({ onDrag }) => {
     <>
       <div
         className={styles.handle}
-        onMouseDown={onMouseDown}
+        onMouseDown={onStart}
+        onTouchStart={onStart}
       >
         ⋮⋮
       </div>
       <DragOverlay
         active={isDragging}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        onMove={onMove}
+        onEnd={onEnd}
       />
     </>
   );

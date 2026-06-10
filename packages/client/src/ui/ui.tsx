@@ -1,8 +1,8 @@
 // ui.tsx
 import { createRoot } from 'react-dom/client';
-import { ControlPanel } from './ControlPanel';
+import { ControlPanel } from './Panels/ControlPanel';
 import { AppMediator } from 'src/core/AppMediator';
-import { InfoPanel } from './components/InfoPanel';
+import { InfoPanel } from './Panels/InfoPanel';
 
 export function createControlPanel(container: HTMLElement, mediator: AppMediator) {
   const root = createRoot(container);

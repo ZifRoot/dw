@@ -5,20 +5,31 @@ import { createPortal } from 'react-dom';
 interface DragOverlayProps {
   active: boolean;
   cursor?: string;
-  onMouseMove: (e: MouseEvent) => void;
-  onMouseUp: (e: MouseEvent) => void;
+  onMove: (e: MouseEvent | TouchEvent) => void;
+  onEnd: (e: MouseEvent | TouchEvent) => void;
 }
 
 export const DragOverlay: React.FC<DragOverlayProps> = ({
   active,
   cursor = 'grabbing',
-  onMouseMove,
-  onMouseUp,
+  onMove,
+  onEnd,
 }) => {
   if (!active) return null;
 
+  const handleMouseMove = (e: React.MouseEvent) => onMove(e.nativeEvent);
+  const handleMouseUp = (e: React.MouseEvent) => onEnd(e.nativeEvent);
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    onMove(e.nativeEvent);
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    onEnd(e.nativeEvent);
+  };
+
   return createPortal(
-    <div name="DragOverlay"
+    <div
       style={{
         position: 'fixed',
         top: 0,
@@ -26,12 +37,14 @@ export const DragOverlay: React.FC<DragOverlayProps> = ({
         width: '100%',
         height: '100%',
         zIndex: 9999,
-        backgroundColor: '#FFFFFF',
-        opacity: 0.1,
+        backgroundColor: 'transparent',
         cursor,
+        touchAction: 'none', // отключает прокрутку и жесты на оверлее
       }}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     />,
     document.body
   );

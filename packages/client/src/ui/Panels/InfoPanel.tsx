@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { DragHandle } from './DragHandle';
-import { Resizer } from './Resizer';
+import { DragHandle } from '../components/DragHandle';
+import { Resizer } from '../components/Resizer';
 import styles from './InfoPanel.module.scss';
 
 export const InfoPanel: React.FC<{ children: React.ReactNode }> = ({ children }) => {
