@@ -44,6 +44,7 @@ export class RepulsionEngine {
     let maxShift = 0;
     for (let i = 0; i < points.length; i++) {
       for (let j = i + 1; j < points.length; j++) {
+        if (points[i].fixed && points[j].fixed) continue;
         const shift = this.applyRepulsionToPair(points[i], points[j]);
         if (shift > maxShift) maxShift = shift;
       }
@@ -69,15 +70,20 @@ export class RepulsionEngine {
     } else {
       const dist = Math.sqrt(distSq);
 
-      let k = (this.needDist / dist - 1) * 0.5 * this.repulsionStrength;
+      const l = p1.fixed || p2.fixed || false ? 1 : 0.5;
+      let k = (this.needDist / dist - 1) * l * this.repulsionStrength;
       t = (this.needDist - dist) / this.needDist;
       sx = dx * k;
       sy = dy * k;
     }
-    p1.x += sx;
-    p1.y += sy;
-    p2.x -= sx;
-    p2.y -= sy;
+    if (!p1.fixed) {
+      p1.x += sx;
+      p1.y += sy;
+    }
+    if (!p2.fixed) {
+      p2.x -= sx;
+      p2.y -= sy;
+    }
     return t;
   }
 
