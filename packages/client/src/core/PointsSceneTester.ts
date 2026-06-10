@@ -119,8 +119,10 @@ export class PointsSceneTester {
 
     const duration = performance.now() - start;
     const finalPoints = this.pointsScene.getPoints();
+
+    if (this.mediator.autoZoom) this.pointsScene.fitView();
     this.log(
-      `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, время=${duration.toFixed(2)}ms`
+      `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, время=${duration.toFixed(2)}ms`,
     );
   }
 
