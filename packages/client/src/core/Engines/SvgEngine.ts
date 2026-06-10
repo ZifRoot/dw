@@ -21,9 +21,7 @@ export class SvgEngine {
   public container: d3.Selection<SVGGElement, unknown, null, undefined>;
   private transform: ZoomTransform = d3.zoomIdentity;
   private zoomBehavior?: d3.ZoomBehavior<SVGSVGElement, unknown>;
-  onZoom(arg0: (transform: ZoomTransform) => void) {
-    this.zoomCallback.push(arg0);
-  }
+
   private zoomCallback: ((transform: ZoomTransform) => void)[] = [];
   private zoomEnabled = true;
 
@@ -40,6 +38,10 @@ export class SvgEngine {
 
     this.updateZoomBehavior();
     this.setupGlobalDrag();
+  }
+
+  onZoom(arg0: (transform: ZoomTransform) => void) {
+    this.zoomCallback.push(arg0);
   }
 
   // ========== Настройка zoom ==========
