@@ -4,7 +4,7 @@ import { PointsScene } from "./core/Scene/PointsScene";
 import { PointsSceneTester } from "./core/PointsSceneTester";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
-import { createControlPanel, createInfoPanel } from "./ui/ui";
+import { createControlPanel, createInfoPanel } from "./ui";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -36,7 +36,7 @@ let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
 
 const scene1 = new EdgesScene(svgEngine);
-const scene2 = new PointsScene(svgEngine);
+const scene2 = new PointsScene(svgEngine, mediator);
 
 scene1.attachToPointsScene(scene2);
 scene2.init();

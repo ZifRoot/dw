@@ -1,6 +1,8 @@
 import { SvgEngine } from "../Engines/SvgEngine";
 import * as d3 from "d3";
 import { EntityCollection } from "./indexer";
+import { UIPoint } from "../ui-models";
+import { AppMediator } from "../AppMediator";
 
 export interface Point {
   id: string;
@@ -22,6 +24,7 @@ export class PointsScene {
 
   constructor(
     private svgEngine: SvgEngine,
+    private mediator: AppMediator,
     groupName = "points-scene",
   ) {
     this.entites = new EntityCollection<Point>((p) => p.id);
@@ -47,6 +50,36 @@ export class PointsScene {
     );
 
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
+    this.svgEngine.svg.on("click", (event) => {
+      const target = event.target as Element;
+      const group = target.closest?.(".point-group");
+      if (group) {
+        const point = d3.select(group).datum() as Point;
+        if (point) {
+          const uiPoint: UIPoint = {
+            id: point.id,
+            x: point.x,
+            y: point.y,
+            text: point.text,
+            fixed: point.fixed ?? false,
+          };
+          this.mediator!.selectedPoint = uiPoint;
+        }
+      }
+    });
+    this.mediator.onPointUpdate(({ pointId, changes }) => {
+      const point = this.getPointById(pointId);
+      if (!point) return;
+
+      // Обновляем модель
+      if (changes.text !== undefined) point.text = changes.text;
+      if (changes.fixed !== undefined) point.fixed = changes.fixed;
+      if (changes.x !== undefined) point.x = changes.x;
+      if (changes.y !== undefined) point.y = changes.y;
+
+      // Обновляем DOM
+      this.applyUpdatesToGroups(this.groupSelection!);
+    });
   }
 
   public init(): void {
@@ -66,10 +99,8 @@ export class PointsScene {
     this.entites._setPoints(points, toInsert, toUpdate);
 
     this.createNewPoints();
-    this.rebuildGroupSelection();
-
-    const scale = this.svgEngine.getTransform().k;
-    this.updatePointStyles(scale);
+    this.applyUpdatesToGroups(this.groupSelection!);
+    this.updatePointStyles();
   }
 
   /** Перестроить groupSelection после структурных изменений (добавление/удаление) */
@@ -98,9 +129,10 @@ export class PointsScene {
 
     this._removePoints(ids);
     // Перестраиваем groupSelection после изменений
-    this.rebuildGroupSelection();
-    const scale = this.svgEngine.getTransform().k;
-    this.updatePointStyles(scale);
+    // this.rebuildGroupSelection();
+    this.applyUpdatesToGroups();
+
+    this.updatePointStyles();
   }
 
   private _removePoints(ids: string[]) {
@@ -133,23 +165,15 @@ export class PointsScene {
     const existingGroups = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
 
     // Новые точки появятся в enter
-    const enter = existingGroups
-      .enter()
-      .append("g")
-      .attr("class", "point-group")
-      .attr("transform", (d) => `translate(${d.x},${d.y})`);
+    const enter = existingGroups.enter().append("g").attr("class", "point-group");
+    enter.append("circle").attr("class", "point");
 
-    enter.append("circle").attr("class", "point").attr("r", 20).attr("stroke-width", 2);
-
-    enter
-      .append("text")
-      .attr("class", "point-label")
-      .text((d) => d.text)
-      .attr("dy", "0.35em");
+    enter.append("text").attr("class", "point-label").attr("dy", "0.35em");
 
     existingGroups.exit().remove();
 
     this.groupSelection = existingGroups;
+
     // 3. Обновляем groupMap для новых групп
     let groupMap = this.groupMap;
     enter.each(function (d) {
@@ -177,15 +201,18 @@ export class PointsScene {
     this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y})`);
   }
   /** Применить обновления (transform, текст, цвет) к D3-селекции групп */
-  private applyUpdatesToGroups(selection: d3.Selection<SVGGElement, Point, any, any>): void {
+  private applyUpdatesToGroups(selection?: d3.Selection<SVGGElement, Point, any, any> | null): void {
+    selection ||= this.groupSelection;
+    if (!selection) return;
     selection.attr("transform", (d) => `translate(${d.x},${d.y})`);
     selection.select<SVGTextElement>("text.point-label").text((d) => d.text);
     // datum остаётся тем же объектом
   }
 
   /** Обновить стили (радиус, обводка, шрифт) в зависимости от масштаба */
-  private updatePointStyles(scale: number): void {
+  private updatePointStyles(scale?: number): void {
     if (!this.groupSelection) return;
+    scale ??= this.svgEngine.getTransform().k;
     const invScale = 1 / scale;
     this.groupSelection
       .selectAll<SVGCircleElement, Point>("circle.point")
