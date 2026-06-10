@@ -3,6 +3,7 @@
 html,
 body {
   margin: 0;
+  overflow: hidden;
 }
 
 html,
@@ -36,7 +37,7 @@ svg {
   width: 280px;
   background: #1e2a3a;
   border-left: 1px solid #2c3e44;
-  overflow-y: auto;
+  overflow: hidden;
   transition: all 1s;
   border-radius: 0px;
 }

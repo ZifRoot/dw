@@ -2,7 +2,7 @@
 import { createRoot } from 'react-dom/client';
 import { ControlPanel } from './ControlPanel';
 import { AppMediator } from 'src/core/AppMediator';
-import { InfoPanel } from './InfoPanel';
+import { InfoPanel } from './components/InfoPanel';
 
 export function createControlPanel(container: HTMLElement, mediator: AppMediator) {
   const root = createRoot(container);
@@ -11,5 +11,5 @@ export function createControlPanel(container: HTMLElement, mediator: AppMediator
 
 export function createInfoPanel(container: HTMLElement, mediator: AppMediator) {
   const root = createRoot(container);
-  root.render(<InfoPanel mediator={mediator} />);
+  root.render(<InfoPanel  ><div></div></InfoPanel>);
 }
