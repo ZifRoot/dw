@@ -14,13 +14,3 @@
     cursor: grabbing;
   }
 }
-.disabled {
-  cursor: default;
-  opacity: 0.3;
-  &:hover {
-    color: #aaa;
-  }
-  &:active {
-    cursor: default;
-  }
-}

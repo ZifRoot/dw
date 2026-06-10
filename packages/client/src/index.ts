@@ -8,13 +8,6 @@ import { createControlPanel, createInfoPanel } from "./ui/ui";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
-// Добавляем скрытый чекбокс
-const toggle = document.createElement("input");
-toggle.type = "checkbox";
-toggle.id = "float-panel-toggle";
-toggle.style.display = "none";
-app.appendChild(toggle); // в начало лучше вставить, но для простоты – куда угодно
-
 // Верхняя панель управления
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "control-panel";
