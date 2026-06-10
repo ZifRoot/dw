@@ -1,0 +1,16 @@
+// DragHandle.module.scss
+.handle {
+  cursor: grab;
+  padding: 8px 4px;
+  user-select: none;
+  font-size: 18px;
+  line-height: 1;
+  color: #aaa;
+  transition: color 0.2s;
+  &:hover {
+    color: white;
+  }
+  &:active {
+    cursor: grabbing;
+  }
+}

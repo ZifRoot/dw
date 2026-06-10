@@ -1,4 +1,4 @@
-import { Point } from "../Point";
+import { Point } from "../models/Point";
 
 export function computeDisplacement(
   p1: Point,
@@ -27,10 +27,10 @@ export function smoothMove(point: Point, target: { x: number; y: number }, smoot
   point.y = point.y * (1 - smoothingFactor) + target.y * smoothingFactor;
 }
 
-export function mxy(dist: number, dx: number, dy: number, force: number, epsilon: number, minDistancePx: number): { moveX: number; moveY: number } {
+export function mxy(dist: number, dx: number, dy: number, force: number, epsilon: number, minDistance: number): { moveX: number; moveY: number } {
   if (dist < epsilon) {
     const angle = Math.random() * 2 * Math.PI;
-    const r = minDistancePx / 2;
+    const r = minDistance;
     return { moveX: Math.cos(angle) * r, moveY: Math.sin(angle) * r };
   }
   return { moveX: (dx / dist) * force, moveY: (dy / dist) * force };

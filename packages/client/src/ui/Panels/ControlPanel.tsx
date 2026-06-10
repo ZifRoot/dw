@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AppMediator } from '../core/AppMediator';
+import { AppMediator } from '../../core/AppMediator';
 import styles from './ControlPanel.module.scss'; // CSS Modules
 interface Props {
   mediator: AppMediator;
@@ -38,7 +38,7 @@ export const ControlPanel: React.FC<Props> = ({ mediator }) => {
       <div>Прогресс: {progress.toFixed(4)}</div>
       <div>
         <label>AUTO ZOOM:</label>
-        <input type="checkbox" value={autoZoom} onChange={e => mediator.autoZoom = e.target.value} />
+        <input type="checkbox" checked={autoZoom} onChange={e => mediator.autoZoom = e.target.checked} />
       </div>
       <div>
         <label>Целевое кол-во точек:</label>

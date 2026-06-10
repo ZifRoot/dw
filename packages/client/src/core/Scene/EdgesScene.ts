@@ -1,6 +1,7 @@
 import { SvgEngine } from "../Engines/SvgEngine.ts";
 import { EntityCollection } from "./indexer.ts";
-import { PointsScene, Point } from "./PointsScene.ts";
+import { PointsScene } from "./PointsScene.ts";
+import { Point } from "../models/Point.ts";
 import * as d3 from "d3";
 
 export interface Edge {

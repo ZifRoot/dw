@@ -4,17 +4,11 @@ import { PointsScene } from "./core/Scene/PointsScene";
 import { PointsSceneTester } from "./core/PointsSceneTester";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
-import { createControlPanel, createInfoPanel } from "./ui/ui";
+import { createControlPanel, createInfoPanel } from "./ui";
+import { RepulsionEngine } from "./core/physics/RepulsionEngine";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
-// Добавляем скрытый чекбокс
-const toggle = document.createElement("input");
-toggle.type = "checkbox";
-toggle.id = "float-panel-toggle";
-toggle.style.display = "none";
-app.appendChild(toggle); // в начало лучше вставить, но для простоты – куда угодно
-
 // Верхняя панель управления
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "control-panel";
@@ -43,10 +37,13 @@ let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
 
 const scene1 = new EdgesScene(svgEngine);
-const scene2 = new PointsScene(svgEngine);
+const scene2 = new PointsScene(svgEngine, mediator);
 
 scene1.attachToPointsScene(scene2);
 scene2.init();
+
+let repulsionEngine = new RepulsionEngine(mediator);
+repulsionEngine.setPoints(scene2.getPoints());
 
 const tester = new PointsSceneTester(mediator, scene2, scene1, {
   updateFrationRange: [0 / 100, 0 / 100],

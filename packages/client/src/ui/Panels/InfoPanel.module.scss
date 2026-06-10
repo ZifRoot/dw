@@ -1,0 +1,73 @@
+// InfoPanel.module.scss
+.panel {
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  background: #1e2a3a;
+}
+
+.floatButton {
+  display: inline-block;
+  cursor: pointer;
+  background: #2c4c6c;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  margin-bottom: 16px;
+  transition: background 0.2s;
+  user-select: none;
+
+  &:hover {
+    background: #3e6a8c;
+  }
+
+  &::before {
+    content: "🔓 Открепить";
+  }
+
+  color: white;
+}
+
+.fixedLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  cursor: pointer;
+
+  input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+}
+
+.docked {
+  position: relative; // важно для ресайзера
+  height: 100%;
+}
+
+.floating {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  background-color: rgba(30, 40, 50, 0.92);
+  border: 1px solid #2c3e44;
+  z-index: 100;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid #2c3e44;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
