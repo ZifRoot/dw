@@ -1,5 +1,16 @@
 // Импорт партиала с точками
 @use "point";
+html,
+body {
+  margin: 0;
+}
+
+html,
+body,
+div,
+svg {
+  box-sizing: border-box;
+}
 
 #app {
   display: grid;
@@ -7,23 +18,45 @@
   height: 100vh;
   border: blue solid 5px;
   overflow: hidden;
-  box-sizing: border-box;
   grid-template-rows: auto 1fr;
-}
-
-div,
-svg {
-  box-sizing: border-box;
 }
 
 #canvas-container {
   background-color: black;
   overflow: hidden;
   border: rgb(21, 255, 0) solid 2px;
-  box-sizing: border-box;
 }
-html,
-body {
-  margin: 0;
-  box-sizing: border-box;
+
+.main-area {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  transition: all 0.2s;
+}
+#info-panel {
+  width: 280px;
+  background: #1e2a3a;
+  border-left: 1px solid #2c3e44;
+  overflow-y: auto;
+  transition: all 1s;
+  border-radius: 0px;
+}
+
+/* Режим плавающей панели (вариант А) – при :checked */
+#float-panel-toggle:checked ~ .main-area {
+}
+#float-panel-toggle:checked ~ .main-area #info-panel {
+  position: absolute;
+  top: 77px;
+  right: 10px;
+  width: 280px;
+  // background: rgba(30, 40, 50, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  border: 1px solid #2c3e44;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  /* можно добавить transition для плавности */
+}
+#float-panel-toggle:checked ~ .main-area #canvas-container {
+  width: 100%;
 }

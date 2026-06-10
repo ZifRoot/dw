@@ -90,7 +90,7 @@ export class CanvasRenderer {
   }
 
   // Обновление transform для всех точек (вызывается каждый кадр)
-  public updatePointsTransform(points: Point[]): void {
+  public updatePointsTransform(): void {
     this.container.selectAll<SVGGElement, Point>("g.point-group").attr("transform", (d) => `translate(${d.x},${d.y})`);
   }
 

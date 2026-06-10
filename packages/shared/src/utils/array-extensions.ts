@@ -9,6 +9,8 @@ declare global {
     uniqueBy<K extends keyof T | ((item: T) => PropertyKey)>(keySelector: K, strategy?: "first" | "last"): T[];
     groupBy<K>(keySelector: (item: T) => K): Map<K, T[]>;
     groupBy<K, Y>(keySelector: (item: T) => K, em: (items: T[]) => Y): Map<K, Y>;
+    removeByIndices(indices: number[], del: (p: T) => void, add: (p: T, index: number) => void): void;
+    shuffle(): T[];
   }
 }
 
@@ -105,3 +107,32 @@ export const uniqueBy = <T, K extends keyof T | ((item: T) => string | number)>(
     items.map((item) => [typeof keySelector === "function" ? (keySelector as (item: T) => any)(item) : item[keySelector as keyof T], item]),
   ).values(),
 ];
+
+export function removeByIndices<T>(this: T[], indices: number[], del: (p: T) => void, add: (p: T, index: number) => void): void {
+  if (indices.length === 0) return;
+  // Уникальные индексы, отсортированные по убыванию
+  const toDelete = indices.filter((i) => i != null && i >= 0 && i < this.length).sort((a, b) => b - a);
+  let prev = -1;
+  for (const idx of toDelete) {
+    if (idx === prev) continue;
+    prev = idx;
+    if (idx >= this.length) continue;
+    const removedObj = this[idx];
+    del(removedObj);
+    if (idx === this.length - 1) {
+      this.pop();
+    } else {
+      add((this[idx] = this.pop()!), idx);
+    }
+  }
+}
+export function shuffle<T>(this: T[]): T[] {
+  const result = [...this];
+  for (let i = 0; i < result.length; i++) {
+    const j = Math.floor(Math.random() * result.length);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+Array.prototype.removeByIndices = removeByIndices;
+Array.prototype.shuffle = shuffle;

@@ -1,63 +1,92 @@
-/// <summary>Медиатор на основе EventTarget для связи CanvasEngine и UI.</summary>
-export class AppMediator extends EventTarget {
-  private state = new Map<string, any>();
+// core/AppMediator.ts
+import { BaseMediator } from "./BaseMediator";
 
+// Типы данных для каждого ключа
+interface AppEventMap {
+  [AppMediator.PROGRESS]: number;
+  [AppMediator.TARGET_SIZE]: number;
+  [AppMediator.TEMPERATURE]: number;
+  [AppMediator.AUTO_ZOOM]: boolean;
+  // команды (без данных)
+  [AppMediator.CLEAR_POINTS]: undefined;
+  [AppMediator.ADD_POINT]: undefined;
+  [AppMediator.START_REPULSION]: undefined;
+}
+
+export class AppMediator extends BaseMediator {
+  // ========== Ключи для состояния ==========
   static PROGRESS = "progress";
+  static TARGET_SIZE = "target-size";
+  static TEMPERATURE = "temperature";
+  static AUTO_ZOOM = "auto-zoom";
 
-  constructor() {
-    super();
-  }
+  // ========== Ключи для команд (событий без состояния) ==========
+  static CLEAR_POINTS = "clear-points";
+  static ADD_POINT = "add-point";
+  static START_REPULSION = "start-repulsion";
 
-  /// <summary>Устанавливает значение и генерирует событие.</summary>
-  public set(key: string, value: any): void {
-    const old = this.state.get(key);
-    if (old === value) return;
-    this.state.set(key, value);
-    this.dispatchEvent(new CustomEvent(key, { detail: value }));
-  }
-
-  /// <summary>Возвращает текущее значение.</summary>
-  public get(key: string): any {
-    return this.state.get(key);
-  }
-
-  /// <summary>Удобные геттеры/сеттеры для конкретных полей.</summary>
+  // ========== Геттеры/сеттеры ==========
   public get progress(): number {
-    return this.get(AppMediator.PROGRESS) ?? 0;
+    return this.get(AppMediator.PROGRESS);
   }
   public set progress(value: number) {
     this.set(AppMediator.PROGRESS, value);
   }
 
+  public get targetSize(): number {
+    return this.get(AppMediator.TARGET_SIZE);
+  }
+  public set targetSize(value: number) {
+    this.set(AppMediator.TARGET_SIZE, value);
+  }
+
   public get temperature(): number {
-    return this.get("temperature") ?? 0;
+    return this.get(AppMediator.TEMPERATURE);
   }
   public set temperature(value: number) {
-    this.set("temperature", value);
+    this.set(AppMediator.TEMPERATURE, value);
   }
 
   public get autoZoom(): boolean {
-    return this.get("autoZoom") ?? true;
+    return this.get(AppMediator.AUTO_ZOOM);
   }
   public set autoZoom(value: boolean) {
-    this.set("autoZoom", value);
+    this.set(AppMediator.AUTO_ZOOM, value);
   }
 
-  // ========== Команды (вызываются из UI) ==========
+  // ========== Команды ==========
   public clearPoints(): void {
-    this.dispatchEvent(new Event("clear-points"));
+    this.emit(AppMediator.CLEAR_POINTS);
   }
 
   public addPoint(): void {
-    this.dispatchEvent(new Event("addPoint"));
+    this.emit(AppMediator.ADD_POINT);
   }
 
   public startRepulsion(): void {
-    this.dispatchEvent(new Event("start-repulsion"));
+    this.emit(AppMediator.START_REPULSION);
   }
 
-  public setAutoZoom(enabled: boolean): void {
-    this.autoZoom = enabled;
-    this.dispatchEvent(new CustomEvent("set-auto-zoom", { detail: enabled }));
+  // ========== Типизированные методы подписки ==========
+  public onProgress(callback: (value: number) => void): () => void {
+    return this.on(AppMediator.PROGRESS, callback);
+  }
+  public onTargetSize(callback: (value: number) => void): () => void {
+    return this.on(AppMediator.TARGET_SIZE, callback);
+  }
+  public onTemperature(callback: (value: number) => void): () => void {
+    return this.on(AppMediator.TEMPERATURE, callback);
+  }
+  public onAutoZoom(callback: (value: boolean) => void): () => void {
+    return this.on(AppMediator.AUTO_ZOOM, callback);
+  }
+  public onClearPoints(callback: () => void): () => void {
+    return this.on(AppMediator.CLEAR_POINTS, () => callback());
+  }
+  public onAddPoint(callback: () => void): () => void {
+    return this.on(AppMediator.ADD_POINT, () => callback());
+  }
+  public onStartRepulsion(callback: () => void): () => void {
+    return this.on(AppMediator.START_REPULSION, () => callback());
   }
 }

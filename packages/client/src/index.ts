@@ -1,31 +1,67 @@
-import { CanvasEngine } from "./core/CanvasEngine";
-import { createRoot } from "react-dom/client";
-import { ControlPanel } from "./ui/ControlPanel";
-import React from "react";
-
-// Импортируем глобальные стили для холста (Sass скомпилируется в CSS и вставится в HTML)
 import "./styles/canvas/main.scss";
 import { AppMediator } from "./core/AppMediator";
-import { PointsScene } from "./core/PointsScene";
+import { PointsScene } from "./core/Scene/PointsScene";
+import { PointsSceneTester } from "./core/PointsSceneTester";
+import { SvgEngine } from "./core/Engines/SvgEngine";
+import { EdgesScene } from "./core/Scene/EdgesScene";
+import { createControlPanel, createInfoPanel } from "./ui/ui";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
+// Добавляем скрытый чекбокс
+const toggle = document.createElement("input");
+toggle.type = "checkbox";
+toggle.id = "float-panel-toggle";
+toggle.style.display = "none";
+app.appendChild(toggle); // в начало лучше вставить, но для простоты – куда угодно
 
+// Верхняя панель управления
+const controlPanelDiv = document.createElement("div");
+controlPanelDiv.id = "control-panel";
+app.appendChild(controlPanelDiv);
+
+// Основная область
+const mainArea = document.createElement("div");
+mainArea.className = "main-area";
+app.appendChild(mainArea);
+
+// Контейнер канваса
 const canvasDiv = document.createElement("div");
 canvasDiv.id = "canvas-container";
+mainArea.appendChild(canvasDiv);
 
-const uiDiv = document.createElement("div");
-uiDiv.id = "ui-container";
-
-app.appendChild(uiDiv);
-app.appendChild(canvasDiv);
+// Контейнер боковой панели
+const infoPanelDiv = document.createElement("div");
+infoPanelDiv.id = "info-panel";
+mainArea.appendChild(infoPanelDiv);
 
 const mediator = new AppMediator();
 mediator.temperature = 100;
-
+mediator.targetSize = 5;
+mediator.progress = 0;
+let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
-const engine = new PointsScene(canvasDiv);
-engine.init();
-// Монтируем React UI
-const root = createRoot(uiDiv);
-root.render(React.createElement(ControlPanel, { mediator }));
+
+const scene1 = new EdgesScene(svgEngine);
+const scene2 = new PointsScene(svgEngine);
+
+scene1.attachToPointsScene(scene2);
+scene2.init();
+
+const tester = new PointsSceneTester(mediator, scene2, scene1, {
+  updateFrationRange: [0 / 100, 0 / 100],
+  removeFrationRange: [0 / 100, 0 / 100],
+  targetSize: 5,
+  intervalMs: 3000,
+  verbose: true,
+  fullGraph: true,
+});
+
+tester.start();
+
+createControlPanel(controlPanelDiv, mediator);
+
+createInfoPanel(infoPanelDiv, mediator);
+// // Монтируем React UI
+// const root = createRoot(uiDiv);
+// root.render(React.createElement(ControlPanel, { mediator }));

@@ -1,0 +1,218 @@
+import { SvgEngine } from "../Engines/SvgEngine";
+import * as d3 from "d3";
+import { EntityCollection } from "./indexer";
+
+export interface Point {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  fixed?: boolean;
+}
+
+export class PointsScene {
+  private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+  public entites: EntityCollection<Point>;
+  private points: Point[] = [];
+
+  private groupSelection: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
+  private groupMap: Map<string, SVGGElement> = new Map(); // id → DOM-группа
+
+  public onPointMoved: ((point: Point) => void) | null = null;
+
+  constructor(
+    private svgEngine: SvgEngine,
+    groupName = "points-scene",
+  ) {
+    this.entites = new EntityCollection<Point>((p) => p.id);
+    this.points = this.entites.items;
+
+    this.rootGroup = svgEngine.createGroup(groupName);
+    this.svgEngine.setDragHandler(
+      {
+        onDrag: (group, deltaWorld) => {
+          d3.select<Element, Point>(group)
+            .each((point) => {
+              point.x += deltaWorld[0];
+              point.y += deltaWorld[1];
+            })
+            .attr("transform", (d) => `translate(${d.x},${d.y})`);
+        },
+        onDragEnd: (group) => {
+          const point = d3.select(group).datum() as Point;
+          if (point && this.onPointMoved) this.onPointMoved(point);
+        },
+      },
+      (event) => (event?.target as Element)?.closest?.(".point-group") || null,
+    );
+
+    this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
+  }
+
+  public init(): void {
+    this.setPoints([
+      { id: "A", x: 200, y: 150, text: "A" },
+      { id: "B", x: 400, y: 350, text: "B" },
+    ]);
+  }
+
+  // ========== Управление точками ==========
+
+  /** Обновить/добавить точки (upsert) – мутирует массив, обновляет объекты */
+  public setPoints(points: Point[]): void {
+    const toInsert: Point[] = [];
+    const toUpdate: Point[] = [];
+
+    this.entites._setPoints(points, toInsert, toUpdate);
+
+    this.createNewPoints();
+    this.rebuildGroupSelection();
+
+    const scale = this.svgEngine.getTransform().k;
+    this.updatePointStyles(scale);
+  }
+
+  /** Перестроить groupSelection после структурных изменений (добавление/удаление) */
+  private rebuildGroupSelection(): void {
+    this.groupSelection = this.svgEngine.container.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
+    this.groupSelection.exit().remove();
+  }
+
+  // ========== Публичные методы для физики и внешнего использования ==========
+
+  /** Получить точку по id (через indexMap) */
+  public getPointById(id: string): Point | undefined {
+    return this.entites.getPointById(id);
+  }
+
+  /** Удалить точки по списку id – мутация массива */
+  public removePoints(ids: string[]): void {
+    if (ids.length === 0) return;
+
+    // Удаляем DOM-группы и записи из groupMap для удаляемых точек (до мутации массива)
+    for (const id of ids) {
+      const group = this.groupMap.get(id);
+      if (group) d3.select(group).remove();
+      this.groupMap.delete(id);
+    }
+
+    this._removePoints(ids);
+    // Перестраиваем groupSelection после изменений
+    this.rebuildGroupSelection();
+    const scale = this.svgEngine.getTransform().k;
+    this.updatePointStyles(scale);
+  }
+
+  private _removePoints(ids: string[]) {
+    this.entites._removePoints(ids);
+  }
+
+  /** Удалить точки по предикату – аналогично, но с перестроением индекса в конце */
+  public removePointsBy(predicate: (point: Point) => boolean): void {
+    // Предварительно собираем id точек, которые нужно удалить, и удаляем DOM-группы
+    const toDeleteIds = this.points.filter((p) => predicate(p)).map((p) => p.id);
+    if (toDeleteIds.length === 0) return;
+    this.removePoints(toDeleteIds);
+  }
+
+  /** Очистить все точки */
+  // public clear(): void {
+  //   if (this.groupSelection) {
+  //     this.groupSelection.remove();
+  //     this.groupSelection = null;
+  //   }
+  //   this.groupMap.clear();
+  //   this.points.length = 0;
+  //   // this.pointsIndex.clear();
+  //   this.setPoints([]);
+  // }
+
+  // ========== Приватные методы ==========
+  /** Создать новые точки DOM */
+  private createNewPoints(): void {
+    const existingGroups = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
+
+    // Новые точки появятся в enter
+    const enter = existingGroups
+      .enter()
+      .append("g")
+      .attr("class", "point-group")
+      .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+    enter.append("circle").attr("class", "point").attr("r", 20).attr("stroke-width", 2);
+
+    enter
+      .append("text")
+      .attr("class", "point-label")
+      .text((d) => d.text)
+      .attr("dy", "0.35em");
+
+    existingGroups.exit().remove();
+
+    this.groupSelection = existingGroups;
+    // 3. Обновляем groupMap для новых групп
+    let groupMap = this.groupMap;
+    enter.each(function (d) {
+      groupMap.set(d.id, this);
+    });
+  }
+
+  /** Быстрое обновление позиции одной точки (без перерисовки всей сцены) */
+  public updatePointPosition(id: string, x: number, y: number): void {
+    const group = this.groupMap.get(id);
+    if (group) {
+      const point = d3.select(group).datum() as Point;
+      if (point) {
+        point.x = x;
+        point.y = y;
+        d3.select(group).attr("transform", `translate(${x},${y})`);
+      }
+    } else {
+      console.warn(`updatePointPosition: point ${id} not found`);
+    }
+  }
+
+  public updateAllPointsPositions(): void {
+    if (!this.groupSelection) return;
+    this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y})`);
+  }
+  /** Применить обновления (transform, текст, цвет) к D3-селекции групп */
+  private applyUpdatesToGroups(selection: d3.Selection<SVGGElement, Point, any, any>): void {
+    selection.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    selection.select<SVGTextElement>("text.point-label").text((d) => d.text);
+    // datum остаётся тем же объектом
+  }
+
+  /** Обновить стили (радиус, обводка, шрифт) в зависимости от масштаба */
+  private updatePointStyles(scale: number): void {
+    if (!this.groupSelection) return;
+    const invScale = 1 / scale;
+    this.groupSelection
+      .selectAll<SVGCircleElement, Point>("circle.point")
+      .attr("r", 20 * invScale)
+      .attr("stroke-width", 2 * invScale);
+    this.groupSelection.selectAll<SVGTextElement, Point>("text.point-label").style("font-size", `${16 * invScale}px`);
+  }
+
+  /** Центрировать и масштабировать вид по всем точкам */
+  public fitView(padding = 50): void {
+    if (this.points.length === 0) return;
+    const xs = this.points.map((p) => p.x);
+    const ys = this.points.map((p) => p.y);
+    const bounds = {
+      minX: Math.min(...xs),
+      minY: Math.min(...ys),
+      maxX: Math.max(...xs),
+      maxY: Math.max(...ys),
+    };
+    this.svgEngine.applyZoomToBounds(bounds, padding);
+  }
+
+  public getPoints(): Point[] {
+    return this.points;
+  }
+  // ========== Доступ к SvgEngine (при необходимости) ==========
+  public getSvgEngine(): SvgEngine {
+    return this.svgEngine;
+  }
+}

@@ -21,7 +21,8 @@ export class SvgEngine {
   public container: d3.Selection<SVGGElement, unknown, null, undefined>;
   private transform: ZoomTransform = d3.zoomIdentity;
   private zoomBehavior?: d3.ZoomBehavior<SVGSVGElement, unknown>;
-  private zoomCallback: ((transform: ZoomTransform) => void) | null = null;
+
+  private zoomCallback: ((transform: ZoomTransform) => void)[] = [];
   private zoomEnabled = true;
 
   // Drag state
@@ -39,6 +40,10 @@ export class SvgEngine {
     this.setupGlobalDrag();
   }
 
+  onZoom(arg0: (transform: ZoomTransform) => void) {
+    this.zoomCallback.push(arg0);
+  }
+
   // ========== Настройка zoom ==========
   private updateZoomBehavior(): void {
     this.svg.on(".zoom", null);
@@ -53,8 +58,8 @@ export class SvgEngine {
       .on("zoom", (event) => {
         this.transform = event.transform;
         this.container.attr("transform", this.transform.toString());
-        if (this.zoomCallback) {
-          this.zoomCallback(this.transform);
+        for (const zoomCallback of this.zoomCallback) {
+          zoomCallback(this.transform);
         }
       });
     this.svg.call(this.zoomBehavior);
@@ -99,10 +104,6 @@ export class SvgEngine {
         this.dragStartWorld = null;
       });
     this.svg.call(dragHandler);
-  }
-
-  public setZoomCallback(cb: (transform: ZoomTransform) => void): void {
-    this.zoomCallback = cb;
   }
 
   // ========== Публичные методы ==========

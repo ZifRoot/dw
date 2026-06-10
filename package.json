@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "generate:all": "npm run generate:client && npm run generate:server",
-    "generate:client": "cd generators && openapi-generator-cli generate -i openapi.json -g typescript-axios -o ../packages/client/src/api -c config.client.json",
+    "generate:dew": "cd generators\\dew && generate.cmd",
     "generate:server": "cd generators && openapi-generator-cli generate -i openapi.json -g typescript-node -o ../packages/server/src/api -c config.server.json",
     "debug:server": "cd packages/server && npm run debug",
     "debug:client": "cd packages/client && npm run debug",

@@ -51,9 +51,6 @@ export class CanvasEngine {
 
     this.dragHandler = new DragHandler(this.renderer.getSvg(), this.renderer);
     //  this.dragHandler.onDragEndCallback=
-
-    // \
-
     this.init();
   }
 
@@ -101,7 +98,7 @@ export class CanvasEngine {
   private updateAnimation(): void {
     if (this.needsRepulsion) {
       const maxShift = this.repulsion.applyRepulsionStep(this.points);
-      this.renderer.updatePointsTransform(this.points);
+      this.renderer.updatePointsTransform();
       this.repulsion.updateTemperature(maxShift);
       this.mediator.temperature = this.repulsion.temperature * 100;
       if (this.repulsion.temperature < this.temperatureThreshold) {
@@ -121,7 +118,7 @@ export class CanvasEngine {
         const idx = Math.floor(Math.random() * pairs.length);
         this.embedding.applyDisplacement(pairs[idx], this.forceStrength, this.smoothingFactor);
       }
-      this.renderer.updatePointsTransform(this.points);
+      this.renderer.updatePointsTransform();
     }
 
     // Прогресс генерации пар (если ещё не закончена)
