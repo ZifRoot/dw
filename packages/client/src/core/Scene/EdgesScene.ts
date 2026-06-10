@@ -85,7 +85,7 @@ export class EdgesScene {
     // Создаём линии с привязкой данных
     this.groupSelection = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
 
-    this.groupSelection.enter().append("line").attr("class", "edge").attr("stroke-width", 1);
+    this.groupSelection.enter().append("line").attr("class", "edge");
 
     this.groupSelection.exit().remove();
 
@@ -108,11 +108,7 @@ export class EdgesScene {
   private updatePointStyles(scale: number): void {
     if (!this.groupSelection) return;
     const invScale = 1 / scale;
-    this.groupSelection
-      .selectAll<SVGCircleElement, Point>("circle.point")
-      .attr("r", 20 * invScale)
-      .attr("stroke-width", 2 * invScale);
-    this.groupSelection.selectAll<SVGTextElement, Point>("text.point-label").style("font-size", `${16 * invScale}px`);
+    // this.groupSelection.attr("stroke-width", 10 * invScale);
   }
 
   // ========== Публичные методы для внешнего доступа ==========
