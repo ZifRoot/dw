@@ -1,27 +1,19 @@
-/// <summary>Медиатор на основе EventTarget для связи CanvasEngine и UI.</summary>
-export class AppMediator extends EventTarget {
-  private state = new Map<string, any>();
+// core/AppMediator.ts
+import { BaseMediator } from "./BaseMediator";
 
+export class AppMediator extends BaseMediator {
+  // ========== Ключи для состояния ==========
   static PROGRESS = "progress";
+  static TARGET_SIZE = "target-size";
+  static TEMPERATURE = "temperature";
+  static AUTO_ZOOM = "auto-zoom";
 
-  constructor() {
-    super();
-  }
+  // ========== Ключи для команд (событий без состояния) ==========
+  static CLEAR_POINTS = "clear-points";
+  static ADD_POINT = "add-point";
+  static START_REPULSION = "start-repulsion";
 
-  /// <summary>Устанавливает значение и генерирует событие.</summary>
-  public set(key: string, value: any): void {
-    const old = this.state.get(key);
-    if (old === value) return;
-    this.state.set(key, value);
-    this.dispatchEvent(new CustomEvent(key, { detail: value }));
-  }
-
-  /// <summary>Возвращает текущее значение.</summary>
-  public get(key: string): any {
-    return this.state.get(key);
-  }
-
-  /// <summary>Удобные геттеры/сеттеры для конкретных полей.</summary>
+  // ========== Геттеры/сеттеры (единообразно через константы) ==========
   public get progress(): number {
     return this.get(AppMediator.PROGRESS) ?? 0;
   }
@@ -29,35 +21,39 @@ export class AppMediator extends EventTarget {
     this.set(AppMediator.PROGRESS, value);
   }
 
+  public get targetSize(): number {
+    const val = this.get(AppMediator.TARGET_SIZE);
+    return val !== undefined ? val : 20;
+  }
+  public set targetSize(value: number) {
+    const clamped = Math.max(1, Math.min(1000, value));
+    this.set(AppMediator.TARGET_SIZE, clamped);
+  }
+
   public get temperature(): number {
-    return this.get("temperature") ?? 0;
+    return this.get(AppMediator.TEMPERATURE) ?? 100;
   }
   public set temperature(value: number) {
-    this.set("temperature", value);
+    this.set(AppMediator.TEMPERATURE, value);
   }
 
   public get autoZoom(): boolean {
-    return this.get("autoZoom") ?? true;
+    return this.get(AppMediator.AUTO_ZOOM) ?? true;
   }
   public set autoZoom(value: boolean) {
-    this.set("autoZoom", value);
+    this.set(AppMediator.AUTO_ZOOM, value);
   }
 
-  // ========== Команды (вызываются из UI) ==========
+  // ========== Команды (используют константы) ==========
   public clearPoints(): void {
-    this.dispatchEvent(new Event("clear-points"));
+    this.emit(AppMediator.CLEAR_POINTS);
   }
 
   public addPoint(): void {
-    this.dispatchEvent(new Event("addPoint"));
+    this.emit(AppMediator.ADD_POINT);
   }
 
   public startRepulsion(): void {
-    this.dispatchEvent(new Event("start-repulsion"));
-  }
-
-  public setAutoZoom(enabled: boolean): void {
-    this.autoZoom = enabled;
-    this.dispatchEvent(new CustomEvent("set-auto-zoom", { detail: enabled }));
+    this.emit(AppMediator.START_REPULSION);
   }
 }
