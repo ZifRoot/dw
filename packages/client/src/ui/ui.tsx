@@ -1,10 +1,15 @@
 // ui.tsx
-import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { CanvasEngine } from '../core/Engines/CanvasEngine';
 import { ControlPanel } from './ControlPanel';
+import { AppMediator } from 'src/core/AppMediator';
+import { InfoPanel } from './InfoPanel';
 
-export function createUI(container: HTMLElement, engine: CanvasEngine) {
+export function createControlPanel(container: HTMLElement, mediator: AppMediator) {
   const root = createRoot(container);
-  root.render(<ControlPanel engine={engine} />);
+  root.render(<ControlPanel mediator={mediator} />);
+}
+
+export function createInfoPanel(container: HTMLElement, mediator: AppMediator) {
+  const root = createRoot(container);
+  root.render(<InfoPanel mediator={mediator} />);
 }

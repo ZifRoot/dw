@@ -1,7 +1,8 @@
 // PointsSceneTester.ts
 import { PointsScene, Point } from "./Scene/PointsScene";
 import { EdgesScene, Edge } from "./Scene/EdgesScene";
-import { randomInt } from "@utils/data-utils";
+import { AppMediator } from "./AppMediator";
+import { Safe } from "@utils/logger";
 
 interface TestConfig {
   /** Процент точек, которые будут обновлены на каждой итерации (0-100) */
@@ -19,13 +20,16 @@ interface TestConfig {
 }
 
 export class PointsSceneTester {
-  private pointsScene: PointsScene;
-  private edgesScene: EdgesScene;
   private config: Required<TestConfig>;
   private intervalId: number | null = null;
   private nextId = 1000;
 
-  constructor(pointsScene: PointsScene, edgesScene: EdgesScene, config: TestConfig = {}) {
+  constructor(
+    private mediator: AppMediator,
+    private pointsScene: PointsScene,
+    private edgesScene: EdgesScene,
+    config: TestConfig = {},
+  ) {
     this.pointsScene = pointsScene;
     this.edgesScene = edgesScene;
     this.config = {
@@ -53,6 +57,14 @@ export class PointsSceneTester {
   }
 
   private iteration(): void {
+    this._iteration();
+    this.intervalId = window.setTimeout(() => {
+      requestAnimationFrame(() => this.iteration());
+    }, this.config.intervalMs);
+  }
+
+  @Safe
+  private _iteration() {
     const start = performance.now();
 
     let points = this.pointsScene.getPoints(); // получаем актуальные точки
@@ -65,7 +77,7 @@ export class PointsSceneTester {
     let [minP, maxP] = this.config.removeFrationRange;
 
     // 1. Удаляем лишние точки (если пул превышает целевой размер)
-    let removeCount = this.randomInt(points.length * minP, points.length * maxP);
+    let removeCount = this.randomInt(0, Math.max(0, points.length - this.mediator.targetSize));
 
     const removedIds = points
       .map((p) => p.id)
@@ -91,7 +103,7 @@ export class PointsSceneTester {
       .map((p) => this.mutatePoint(p));
 
     // 3. Добавляем новые точки (если нужно увеличить пул)
-    let addCount = Math.max(0, this.config.targetSize - points.length);
+    let addCount = this.randomInt(0, Math.max(0, this.mediator.targetSize - points.length));
     const newPoints = Array.from({ length: addCount }).map((_) => this.generateRandomPoint());
 
     let uppoints = [...updatedPoints, ...newPoints].shuffle();
@@ -108,11 +120,8 @@ export class PointsSceneTester {
     const duration = performance.now() - start;
     const finalPoints = this.pointsScene.getPoints();
     this.log(
-      `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, время=${duration.toFixed(2)}ms`,
+      `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, время=${duration.toFixed(2)}ms`
     );
-    this.intervalId = window.setTimeout(() => {
-      this.iteration();
-    }, this.config.intervalMs);
   }
 
   /** Построить полный граф (все пары) из текущих точек */

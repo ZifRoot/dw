@@ -22,6 +22,14 @@
 }
 
 .edge {
-  stroke-opacity: 0.5;
+  stroke-opacity: 0.1;
   stroke: aqua;
+  stroke-width: 3;
+  &:hover {
+    stroke-opacity: 0.2;
+    stroke: aqua;
+    stroke-width: 10;
+
+    // r: 10;
+  }
 }

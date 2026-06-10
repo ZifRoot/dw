@@ -7,6 +7,7 @@ export interface Point {
   x: number;
   y: number;
   text: string;
+  fixed?: boolean;
 }
 
 export class PointsScene {
