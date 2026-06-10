@@ -1,4 +1,4 @@
-import { SvgEngine } from "../SvgEngine";
+import { SvgEngine } from "../Engines/SvgEngine";
 import * as d3 from "d3";
 import { EntityCollection } from "./indexer";
 

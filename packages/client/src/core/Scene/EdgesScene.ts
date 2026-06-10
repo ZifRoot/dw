@@ -1,4 +1,4 @@
-import { SvgEngine } from "../SvgEngine";
+import { SvgEngine } from "../Engines/SvgEngine.ts";
 import { EntityCollection } from "./indexer.ts";
 import { PointsScene, Point } from "./PointsScene.ts";
 import * as d3 from "d3";

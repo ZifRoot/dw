@@ -7,7 +7,7 @@ import "./styles/canvas/main.scss";
 import { AppMediator } from "./core/AppMediator";
 import { PointsScene } from "./core/Scene/PointsScene";
 import { PointsSceneTester } from "./core/PointsSceneTester";
-import { SvgEngine } from "./core/SvgEngine";
+import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
 
 // Создаём контейнеры
@@ -37,7 +37,7 @@ const tester = new PointsSceneTester(scene2, scene1, {
   updateFrationRange: [0 / 100, 0 / 100],
   removeFrationRange: [0 / 100, 0 / 100],
   targetSize: 5,
-  intervalMs: 1000,
+  intervalMs: 3000,
   verbose: true,
   fullGraph: true,
 });
