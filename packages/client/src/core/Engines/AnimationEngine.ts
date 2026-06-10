@@ -13,7 +13,7 @@ export class AnimationEngine {
   public setCallback(cb: AnimationCallback | null): void {
     this.callback = cb;
     if (typeof cb === "function") {
-      this.start();
+      // this.start();
     } else {
       this.stop();
     }

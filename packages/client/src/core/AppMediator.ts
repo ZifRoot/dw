@@ -26,6 +26,7 @@ export class AppMediator extends BaseMediator {
   static SELECTED_POINT = "selected-point";
   static SELECTED_EDGE = "selected-edge";
   static POINT_UPDATE = "point-update";
+  static POINTS_UPDATE = "points-update";
   static EDGE_UPDATE = "edge-update";
   static CLEAR_POINTS = "clear-points";
   static ADD_POINT = "add-point";
@@ -96,6 +97,10 @@ export class AppMediator extends BaseMediator {
     this.emit(AppMediator.START_REPULSION);
   }
 
+  public updatePoints(): void {
+    this.emit(AppMediator.POINTS_UPDATE);
+  }
+
   // ========== Типизированные методы подписки (скрывают ключи) ==========
   public onProgress(callback: (value: number) => void): () => void {
     return this.on(AppMediator.PROGRESS, callback);
@@ -118,6 +123,11 @@ export class AppMediator extends BaseMediator {
   public onPointUpdate(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void {
     return this.on(AppMediator.POINT_UPDATE, callback);
   }
+
+  public onPointsUpdate(callback: () => void): () => void {
+    return this.on(AppMediator.POINTS_UPDATE, callback);
+  }
+
   public onEdgeUpdate(callback: (detail: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> }) => void): () => void {
     return this.on(AppMediator.EDGE_UPDATE, callback);
   }

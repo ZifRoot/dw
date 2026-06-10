@@ -5,6 +5,7 @@ import { PointsSceneTester } from "./core/PointsSceneTester";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
 import { createControlPanel, createInfoPanel } from "./ui";
+import { RepulsionEngine } from "./core/physics/RepulsionEngine";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -40,6 +41,9 @@ const scene2 = new PointsScene(svgEngine, mediator);
 
 scene1.attachToPointsScene(scene2);
 scene2.init();
+
+let repulsionEngine = new RepulsionEngine(mediator);
+repulsionEngine.setPoints(scene2.getPoints());
 
 const tester = new PointsSceneTester(mediator, scene2, scene1, {
   updateFrationRange: [0 / 100, 0 / 100],

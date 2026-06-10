@@ -3,14 +3,7 @@ import * as d3 from "d3";
 import { EntityCollection } from "./indexer";
 import { UIPoint } from "../ui-models";
 import { AppMediator } from "../AppMediator";
-
-export interface Point {
-  id: string;
-  x: number;
-  y: number;
-  text: string;
-  fixed?: boolean;
-}
+import { Point } from "../models/Point";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -80,6 +73,7 @@ export class PointsScene {
       // Обновляем DOM
       this.applyUpdatesToGroups(this.groupSelection!);
     });
+    this.mediator.onPointsUpdate(() => this.updateAllPointsPositions());
   }
 
   public init(): void {
@@ -101,12 +95,6 @@ export class PointsScene {
     this.createNewPoints();
     this.applyUpdatesToGroups(this.groupSelection!);
     this.updatePointStyles();
-  }
-
-  /** Перестроить groupSelection после структурных изменений (добавление/удаление) */
-  private rebuildGroupSelection(): void {
-    this.groupSelection = this.svgEngine.container.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
-    this.groupSelection.exit().remove();
   }
 
   // ========== Публичные методы для физики и внешнего использования ==========
@@ -199,6 +187,7 @@ export class PointsScene {
   public updateAllPointsPositions(): void {
     if (!this.groupSelection) return;
     this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    if (this.mediator.autoZoom) this.fitView();
   }
   /** Применить обновления (transform, текст, цвет) к D3-селекции групп */
   private applyUpdatesToGroups(selection?: d3.Selection<SVGGElement, Point, any, any> | null): void {

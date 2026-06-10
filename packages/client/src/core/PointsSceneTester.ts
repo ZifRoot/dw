@@ -1,5 +1,6 @@
 // PointsSceneTester.ts
-import { PointsScene, Point } from "./Scene/PointsScene";
+import { PointsScene } from "./Scene/PointsScene";
+import { Point } from "./models/Point";
 import { EdgesScene, Edge } from "./Scene/EdgesScene";
 import { AppMediator } from "./AppMediator";
 import { Safe } from "@utils/logger";
@@ -135,8 +136,8 @@ export class PointsSceneTester {
       return;
     }
     const edges: Edge[] = [];
-    for (let i = 0; i < points.length; i++) {
-      for (let j = i + 1; j < points.length; j++) {
+    for (let i = 0; i < points.length; i += 10) {
+      for (let j = i + 1; j < points.length; j += 10) {
         edges.push({
           id: `${points[i].id}-${points[j].id}`,
           sourceId: points[i].id,
