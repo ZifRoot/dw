@@ -35,6 +35,7 @@ export interface IRepository {
   createFile(data: MessageFileCreate): Promise<MessageFile>;
   createManyFiles(data: MessageFileCreate[]): Promise<number>;
   findAllFiles(): Promise<MessageFile[]>;
+  findAllFilesNullContent(sessionId: string): Promise<MessageFile[]>;
 
   // ========== Message Fragments ==========
   findAllFragments(sessionId: string, messageId?: number): Promise<MessageFragment[]>;
