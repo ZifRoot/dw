@@ -1,22 +1,9 @@
 // app-db.ts
 import { Database, ITable, TableConfig } from "./db-core";
+import { EmbeddingTable } from "./tables/EmbeddingTable";
+import { PointTable } from "./tables/PointTable";
 
-export interface PointTable {
-  id: string;
-  x: number;
-  y: number;
-  title: string;
-  updated_at: number;
-}
-
-export interface EmbeddingTable {
-  session_id: string;
-  model_name: string;
-  value: number[];
-  created_at: number;
-}
-
-export class CanvasPositions extends Database {
+export class CanvasPositionsDB extends Database {
   public points: ITable<PointTable>;
   public embeddings: ITable<EmbeddingTable>;
 

@@ -2,7 +2,7 @@ import { Point } from "./Point";
 import { ModelData } from "./ModelData";
 import { Pair } from "./Pair";
 import { AppMediator } from "./AppMediator";
-import { EmbeddingTable } from "./data/CanvasPositions";
+import { EmbeddingTable } from "./data/tables/EmbeddingTable";
 
 /**
  * Управляет моделями, покрытием, генерацией пар.

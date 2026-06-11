@@ -22,6 +22,7 @@ export class AppMediator extends BaseMediator {
   static PROGRESS = "progress";
   static TARGET_SIZE = "target-size";
   static TEMPERATURE = "temperature";
+  static SIZE_TEXT = "size-text";
   static AUTO_ZOOM = "auto-zoom";
   static SELECTED_POINT = "selected-point";
   static SELECTED_EDGE = "selected-edge";
@@ -75,6 +76,13 @@ export class AppMediator extends BaseMediator {
     this.set(AppMediator.SELECTED_EDGE, value);
   }
 
+  public get sizeText(): number {
+    return this.get(AppMediator.SIZE_TEXT) ?? 0;
+  }
+  public set sizeText(value: number) {
+    this.set(AppMediator.SIZE_TEXT, value);
+  }
+
   // ========== Универсальные методы обновления ==========
   public updatePoint(pointId: string, changes: Partial<Omit<UIPoint, "id">>): void {
     this.emit(AppMediator.POINT_UPDATE, { pointId, changes });
@@ -126,6 +134,10 @@ export class AppMediator extends BaseMediator {
 
   public onPointsUpdate(callback: () => void): () => void {
     return this.on(AppMediator.POINTS_UPDATE, callback);
+  }
+
+  public onSizeText(callback: (value: number) => void): () => void {
+    return this.on(AppMediator.SIZE_TEXT, callback);
   }
 
   public onEdgeUpdate(callback: (detail: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> }) => void): () => void {

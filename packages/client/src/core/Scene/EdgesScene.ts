@@ -1,8 +1,9 @@
 import { SvgEngine } from "../Engines/SvgEngine.ts";
 import { EntityCollection } from "./indexer.ts";
 import { PointsScene } from "./PointsScene.ts";
-import { Point } from "../models/Point.ts";
 import * as d3 from "d3";
+import { AppMediator } from "../AppMediator.ts";
+import { UIEdge } from "../ui-models.ts";
 
 export interface Edge {
   id: string; // уникальный идентификатор ребра (например, "sourceId-targetId")
@@ -18,9 +19,11 @@ export class EdgesScene {
   public entites: EntityCollection<Edge>;
   private groupSelection: d3.Selection<SVGLineElement, Edge, SVGGElement, unknown> | null = null;
   private pointsScene!: PointsScene;
+  unregisterSelectedPoint: () => void;
 
   constructor(
     private svgEngine: SvgEngine,
+    private mediator: AppMediator,
     groupName = "edges-scene",
   ) {
     this.entites = new EntityCollection<Edge>((p) => p.id);
@@ -28,6 +31,51 @@ export class EdgesScene {
     this.svgEngine = svgEngine;
     this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
+    this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => {
+      this.highlightEdgesForPoint(point?.id ?? null);
+    });
+    this.rootGroup.on("click", (event) => {
+      const target = event.target as Element;
+      const line = target.closest?.(".edge");
+      if (line && d3.select(line).classed("highlighted")) {
+        const edge = d3.select(line).datum() as Edge;
+        if (edge) {
+          const uiEdge: UIEdge = {
+            id: edge.id,
+            sourceId: edge.sourceId,
+            targetId: edge.targetId,
+            distance: edge.distance,
+            visible: true,
+          };
+          this.mediator.selectedEdge = uiEdge;
+          // this.mediator.selectedPoint = null;
+        }
+      }
+    });
+  }
+
+  // Подсветка рёбер, инцидентных данной точке (или снятие подсветки)
+  private highlightEdgesForPoint(pointId: string | null): void {
+    if (!this.groupSelection) return;
+    if (!pointId) {
+      // Снимаем подсветку со всех рёбер
+      this.groupSelection.classed("highlighted", false);
+      return;
+    }
+    // Находим рёбра, где sourceId или targetId совпадает с pointId
+    const relatedEdgeIds = new Set<string>();
+    for (const edge of this.edges) {
+      if (edge.sourceId === pointId || edge.targetId === pointId) {
+        relatedEdgeIds.add(edge.id);
+      }
+    }
+    // Применяем класс highlighted и делаем кликабельными
+    this.groupSelection.classed("highlighted", (d) => relatedEdgeIds.has(d.id));
+  }
+
+  // При уничтожении сцены отписываемся
+  public destroy(): void {
+    if (this.unregisterSelectedPoint) this.unregisterSelectedPoint();
   }
 
   /** Подключить сцену точек для автоматического обновления линий при движении точек */
@@ -89,6 +137,8 @@ export class EdgesScene {
     this.groupSelection.enter().append("line").attr("class", "edge");
 
     this.groupSelection.exit().remove();
+
+    this.groupSelection = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
 
     this.updateLines();
   }
