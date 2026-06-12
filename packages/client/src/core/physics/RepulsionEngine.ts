@@ -2,92 +2,102 @@ import { AppMediator } from "../AppMediator";
 import { AnimationEngine } from "../Engines/AnimationEngine";
 import { Point } from "../models/Point";
 
-/**
- * Отвечает только за отталкивание точек (репульсию).
- * Не знает о рендеринге или флагах.
- */
-export class RepulsionEngine {
-  public repulsionStrength = 0.7;
-  public minDistancePx = 1e-3;
-  public needDist = 100;
-  public needDistSq: number;
+export class RepulsionEngineConfig {
+  public repulsionStrength = 0.2;
+  public minDistance = 1e-3;
+  public targetDistance = 100;
   public epsilon = 1e-6;
-  public temperature = 0;
-  animation: AnimationEngine;
-  points!: Point[];
+  public stopTemperature = 0.1;
+}
+
+export class RepulsionEngine {
+  private temperature = 0;
+  private targetDistSq: number;
+  public points: Point[] = [];
 
   constructor(
     public mediator: AppMediator,
-    public needTemperature: number = 0.4,
+    public animation: AnimationEngine,
+    public config: RepulsionEngineConfig,
   ) {
-    this.needDistSq = this.needDist * this.needDist;
-    this.animation = new AnimationEngine();
-    this.animation.setCallback(() => this.Ax());
-    this.mediator.onStartRepulsion(() => this.start());
+    this.targetDistSq = config.targetDistance ** 2;
+    mediator.onStartRepulsion(() => this.animation.setCallback(() => this.step()));
   }
 
-  start() {
+  public start() {
     this.animation.start();
   }
 
-  setPoints(points: Point[]) {
+  public setPoints(points: Point[]) {
     this.points = points;
   }
-  Ax(): void {
-    this.temperature = this.applyRepulsionStep(this.points);
+
+  private step(): void {
+    this.temperature = this.applyRepulsionStep();
     this.mediator.updatePoints();
     this.mediator.temperature = this.temperature;
-    if (this.temperature < this.needTemperature) this.animation.stop();
+    if (this.temperature < this.config.stopTemperature) {
+      this.animation.setCallback(null);
+    }
   }
 
-  public applyRepulsionStep(points: Point[]): number {
-    let maxShift = 0;
-    for (let i = 0; i < points.length; i++) {
-      for (let j = i + 1; j < points.length; j++) {
-        if (points[i].fixed && points[j].fixed) continue;
-        const shift = this.applyRepulsionToPair(points[i], points[j]);
-        if (shift > maxShift) maxShift = shift;
+  private applyRepulsionStep(): number {
+    const points = this.points;
+    const len = points.length;
+    let maxShift = -1;
+    const targetDistance = this.config.targetDistance;
+    const minDistance = this.config.minDistance;
+    const repulsionStrength = this.config.repulsionStrength;
+    const stopTemperature2 = this.config.stopTemperature * 2;
+    for (let i = 0; i < len; i++) {
+      const p1 = points[i];
+      for (let j = i + 1; j < len; j++) {
+        const p2 = points[j];
+
+        // Быстрая проверка: оба фиксированы – пропускаем
+        if (p1.fixed && p2.fixed) continue;
+
+        const dx = p1.x - p2.x;
+        const dy = p1.y - p2.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq >= this.targetDistSq) continue;
+
+        let shiftX: number, shiftY: number;
+        let temperature: number;
+
+        if (distSq < this.config.epsilon) {
+          // Случайное расталкивание при нулевом расстоянии
+          const angle = Math.random() * 2 * Math.PI;
+          const r = minDistance;
+          shiftX = Math.cos(angle) * r;
+          shiftY = Math.sin(angle) * r;
+          temperature = stopTemperature2;
+        } else {
+          const dist = Math.sqrt(distSq);
+          // Коэффициент силы с учётом фиксации
+          let factor: number;
+          if (p1.fixed || p2.fixed)
+            factor = 1.0; // одна фиксирована – вся сила на подвижную
+          else factor = 0.5; // обе подвижны – сила делится
+
+          const k = (targetDistance / dist - 1) * factor * repulsionStrength;
+          shiftX = dx * k;
+          shiftY = dy * k;
+          temperature = Math.abs(1 - dist / targetDistance);
+        }
+
+        if (!p1.fixed) {
+          p1.x += shiftX;
+          p1.y += shiftY;
+        }
+        if (!p2.fixed) {
+          p2.x -= shiftX;
+          p2.y -= shiftY;
+        }
+
+        if (temperature > maxShift) maxShift = temperature;
       }
     }
     return maxShift;
-  }
-
-  public applyRepulsionToPair(p1: Point, p2: Point): number {
-    const dx = p1.x - p2.x;
-    const dy = p1.y - p2.y;
-    const distSq = dx * dx + dy * dy;
-    if (distSq >= this.needDistSq) return 0;
-
-    let sx: number;
-    let sy: number;
-    let t: number;
-    if (distSq < this.epsilon) {
-      const angle = Math.random() * 2 * Math.PI;
-      const r = this.minDistancePx;
-      sx = Math.cos(angle) * r;
-      sy = Math.sin(angle) * r;
-      t = this.needTemperature * 2;
-    } else {
-      const dist = Math.sqrt(distSq);
-
-      const l = p1.fixed || p2.fixed || false ? 1 : 0.5;
-      let k = (this.needDist / dist - 1) * l * this.repulsionStrength;
-      t = (this.needDist - dist) / this.needDist;
-      sx = dx * k;
-      sy = dy * k;
-    }
-    if (!p1.fixed) {
-      p1.x += sx;
-      p1.y += sy;
-    }
-    if (!p2.fixed) {
-      p2.x -= sx;
-      p2.y -= sy;
-    }
-    return t;
-  }
-
-  public updateTemperature(maxShift: number): void {
-    this.temperature = maxShift / this.minDistancePx;
   }
 }

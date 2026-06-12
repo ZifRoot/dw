@@ -34,6 +34,7 @@ export const ControlPanel: React.FC<Props> = ({ mediator }) => {
       <button className={styles.button} onClick={() => mediator.addPoint()}>Добавить точку</button>
       <button className={styles.button} onClick={() => mediator.clearPoints()}>Очистить</button>
       <button className={styles.button} onClick={() => mediator.startRepulsion()}>Старт репульсии</button>
+      <button className={styles.button} onClick={() => mediator.startGraph()}>Старт Graph</button>
       <div>Температура: {temperature.toFixed(4)}</div>
       <div>Прогресс: {progress.toFixed(4)}</div>
       <div>

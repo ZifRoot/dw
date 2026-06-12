@@ -32,6 +32,7 @@ export class AppMediator extends BaseMediator {
   static CLEAR_POINTS = "clear-points";
   static ADD_POINT = "add-point";
   static START_REPULSION = "start-repulsion";
+  static START_GRAPH = "start-graph";
 
   // ========== Геттеры/сеттеры для UI-моделей ==========
   public get progress(): number {
@@ -104,6 +105,9 @@ export class AppMediator extends BaseMediator {
   public startRepulsion(): void {
     this.emit(AppMediator.START_REPULSION);
   }
+  public startGraph(): void {
+    this.emit(AppMediator.START_GRAPH);
+  }
 
   public updatePoints(): void {
     this.emit(AppMediator.POINTS_UPDATE);
@@ -151,5 +155,8 @@ export class AppMediator extends BaseMediator {
   }
   public onStartRepulsion(callback: () => void): () => void {
     return this.on(AppMediator.START_REPULSION, () => callback());
+  }
+  public onStartGraph(callback: () => void): () => void {
+    return this.on(AppMediator.START_GRAPH, () => callback());
   }
 }

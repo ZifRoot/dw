@@ -5,7 +5,9 @@ import { PointsSceneTester } from "./core/PointsSceneTester";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
 import { createControlPanel, createInfoPanel } from "./ui";
-import { RepulsionEngine } from "./core/physics/RepulsionEngine";
+import { RepulsionEngine, RepulsionEngineConfig } from "./core/physics/RepulsionEngine";
+import { AnimationEngine } from "./core/Engines/AnimationEngine";
+import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -31,22 +33,31 @@ mainArea.appendChild(infoPanelDiv);
 
 const mediator = new AppMediator();
 mediator.temperature = 100;
-mediator.targetSize = 5;
+mediator.targetSize = 500;
 mediator.progress = 0;
 mediator.sizeText = 16;
+mediator.selectedPoint = null;
+mediator.selectedEdge = null;
+setTimeout(() => (mediator.autoZoom = false), 0);
 let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
 
-const scene1 = new EdgesScene(svgEngine, mediator);
-const scene2 = new PointsScene(svgEngine, mediator);
+const edgesScene = new EdgesScene(svgEngine, mediator);
+const pointsScene = new PointsScene(svgEngine, mediator);
 
-scene1.attachToPointsScene(scene2);
-scene2.init();
+edgesScene.attachToPointsScene(pointsScene);
+pointsScene.init();
 
-let repulsionEngine = new RepulsionEngine(mediator, 0.1);
-repulsionEngine.setPoints(scene2.getPoints());
+const animation1 = new AnimationEngine();
+const animation2 = new AnimationEngine();
+const repulsionEngine = new RepulsionEngine(mediator, animation1, new RepulsionEngineConfig());
+const graphEngine = new GraphEngine(mediator, animation2, new GraphEngineConfig());
 
-const tester = new PointsSceneTester(mediator, scene2, scene1, {
+graphEngine.setEdges(edgesScene.getEdges());
+
+repulsionEngine.setPoints(pointsScene.getPoints());
+
+const tester = new PointsSceneTester(mediator, pointsScene, edgesScene, {
   updateFrationRange: [0 / 100, 0 / 100],
   removeFrationRange: [0 / 100, 0 / 100],
   targetSize: 5,

@@ -1,10 +1,11 @@
 // PointsSceneTester.ts
 import { PointsScene } from "./Scene/PointsScene";
 import { Point } from "./models/Point";
-import { EdgesScene, Edge } from "./Scene/EdgesScene";
+import { EdgesScene } from "./Scene/EdgesScene";
+import { Edge } from "./models/Edge";
 import { AppMediator } from "./AppMediator";
 import { Safe } from "@utils/logger";
-import { Configuration, DocumentsApi, DocumentsGet200ResponseInner } from "src/clients/dew/fetch";
+import { DocumentsGet200ResponseInner } from "src/clients/dew/fetch";
 import { DataManager } from "./data/DataManager";
 import { PointTable } from "./data/tables/PointTable";
 
@@ -27,7 +28,6 @@ export class PointsSceneTester {
   private config: Required<TestConfig>;
   private intervalId: number | null = null;
   private nextId = 1000;
-  documentsApi: DocumentsApi;
   dataManager: DataManager;
 
   constructor(
@@ -158,12 +158,18 @@ export class PointsSceneTester {
       return;
     }
     const edges: Edge[] = [];
-    for (let i = 0; i < points.length; i += 2) {
-      for (let j = i + 1; j < points.length; j += 2) {
+    for (let i = 0; i < points.length; i++) {
+      for (let j = 0; j < 1; j++) {
+        let jj = (i + 1 + j) % points.length;
+        if (i === jj) continue;
+        let pi = points[i];
+        let pj = points[jj];
         edges.push({
-          id: `${points[i].id}-${points[j].id}`,
-          sourceId: points[i].id,
-          targetId: points[j].id,
+          id: `${pi.id}-${pj.id}`,
+          sourceId: pi.id,
+          targetId: pj.id,
+          source: pi,
+          target: pj,
         });
       }
     }

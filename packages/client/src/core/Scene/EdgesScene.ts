@@ -4,14 +4,7 @@ import { PointsScene } from "./PointsScene.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
 import { UIEdge } from "../ui-models.ts";
-
-export interface Edge {
-  id: string; // уникальный идентификатор ребра (например, "sourceId-targetId")
-  sourceId: string;
-  targetId: string;
-  distance?: number; // опционально
-  // другие поля, например, thickness, color, fixed и т.д.
-}
+import { Edge } from "../models/Edge.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -31,26 +24,24 @@ export class EdgesScene {
     this.svgEngine = svgEngine;
     this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
-    this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => {
-      this.highlightEdgesForPoint(point?.id ?? null);
-    });
+    this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point?.id ?? null));
+
+    this.mediator.onPointsUpdate(() => this.updateLines());
     this.rootGroup.on("click", (event) => {
       const target = event.target as Element;
-      const line = target.closest?.(".edge");
-      if (line && d3.select(line).classed("highlighted")) {
-        const edge = d3.select(line).datum() as Edge;
-        if (edge) {
-          const uiEdge: UIEdge = {
-            id: edge.id,
-            sourceId: edge.sourceId,
-            targetId: edge.targetId,
-            distance: edge.distance,
-            visible: true,
-          };
-          this.mediator.selectedEdge = uiEdge;
-          // this.mediator.selectedPoint = null;
-        }
-      }
+      const line = target.closest?.(".highlighted");
+      if (!line) return;
+      const edge = d3.select(line).datum() as Edge;
+      if (!edge) return;
+      const uiEdge: UIEdge = {
+        id: edge.id,
+        sourceId: edge.sourceId,
+        targetId: edge.targetId,
+        distance: edge.distance,
+        visible: true,
+      };
+      this.mediator.selectedEdge = uiEdge;
+      // this.mediator.selectedPoint = null;
     });
   }
 
@@ -96,7 +87,7 @@ export class EdgesScene {
     this.entites._setPoints(edges, toInsert, toUpdate);
 
     // Синхронизируем DOM
-    this.syncDomWithEdges(toUpdate, toInsert);
+    this.renderLines();
   }
 
   /** Удалить рёбра по списку id */
@@ -121,13 +112,6 @@ export class EdgesScene {
 
   // ========== Приватные методы синхронизации DOM ==========
 
-  private syncDomWithEdges(toUpdate: Edge[], toInsert: Edge[]): void {
-    // Полная перерисовка – проще, чем поддерживать частичное обновление.
-    // Для производительности можно реализовать инкрементальное обновление,
-    // но поскольку рёбер обычно меньше, чем точек, оставим полную перерисовку.
-    this.renderLines();
-  }
-
   private renderLines(): void {
     if (this.edges.length === 0) return;
 
@@ -145,16 +129,11 @@ export class EdgesScene {
 
   private updateLines(): void {
     if (!this.groupSelection || !this.pointsScene) return;
-
-    const pointsMap = new Map(this.pointsScene.getPoints().map((p) => [p.id, p]));
-    // let source = pointsMap.get(e.sourceId);
-    // let target = pointsMap.get(e.targetId);
-    // if (!source || !target) return;
     this.groupSelection
-      .attr("x1", (e) => this.pointsScene.getPointById(e.sourceId)?.x ?? 1000)
-      .attr("y1", (e) => this.pointsScene.getPointById(e.sourceId)?.y ?? 1000)
-      .attr("x2", (e) => this.pointsScene.getPointById(e.targetId)?.x ?? 1000)
-      .attr("y2", (e) => this.pointsScene.getPointById(e.targetId)?.y ?? 1000);
+      .attr("x1", (e) => e.source.x)
+      .attr("y1", (e) => e.source.y)
+      .attr("x2", (e) => e.target.x)
+      .attr("y2", (e) => e.target.y);
   }
   private updatePointStyles(scale: number): void {
     if (!this.groupSelection) return;
