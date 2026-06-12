@@ -87,20 +87,8 @@ export class Program implements IProgram {
     let map = new Map<string, MessageFile>();
     let sessions = await this.repository.findAllSessions(user.id);
 
-    for (const session of sessions) {
-      let messages = await this.repository.findAllMessages(session.id);
-
-      for (const message of messages) {
-        let files = await this.repository.findAllFilesByMessage(message.sessionId, message.messageId);
-        for (const file of files) {
-          if (!map.has(file.id)) {
-            map.set(file.id, file);
-          }
-        }
-      }
-    }
-
-    let files = [...map.values()];
+    let files_x = await Promise.all(sessions.map((session) => this.repository.findAllFilesNullContent(session.id)));
+    let files = files_x.flat().uniqueBy((f) => f.id);
 
     files = files.filter((f) => f.content == null);
 

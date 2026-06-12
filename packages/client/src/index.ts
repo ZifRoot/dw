@@ -33,16 +33,17 @@ const mediator = new AppMediator();
 mediator.temperature = 100;
 mediator.targetSize = 5;
 mediator.progress = 0;
+mediator.sizeText = 16;
 let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
 
-const scene1 = new EdgesScene(svgEngine);
+const scene1 = new EdgesScene(svgEngine, mediator);
 const scene2 = new PointsScene(svgEngine, mediator);
 
 scene1.attachToPointsScene(scene2);
 scene2.init();
 
-let repulsionEngine = new RepulsionEngine(mediator);
+let repulsionEngine = new RepulsionEngine(mediator, 0.1);
 repulsionEngine.setPoints(scene2.getPoints());
 
 const tester = new PointsSceneTester(mediator, scene2, scene1, {

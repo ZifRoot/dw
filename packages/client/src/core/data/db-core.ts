@@ -11,7 +11,7 @@ export interface TableConfig {
 
 export interface ITableInfo {
   readonly config: TableConfig;
-  readonly storeName: string;
+  readonly name: string;
   readonly database: IDatabase;
 }
 
@@ -44,6 +44,7 @@ export abstract class Database implements IDatabase {
   private version: number;
   private registeredTables: ITableInfo[] = [];
   private promise_db?: Promise<IDBDatabase>;
+  public verbose: boolean = false;
 
   constructor(dbName: string, version: number) {
     this.dbName = dbName;
@@ -54,7 +55,7 @@ export abstract class Database implements IDatabase {
     return this.registeredTables;
   }
 
-  protected createTable<T>(config: TableConfig): ITable<T> {
+  protected addTable<T>(config: TableConfig): ITable<T> {
     const table = new Table<T>(this, config);
     this.registeredTables.push(table);
     return table;
@@ -69,25 +70,39 @@ export abstract class Database implements IDatabase {
       const request = indexedDB.open(this.dbName, this.version);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
-      request.onupgradeneeded = () => this.onupgradeneeded(request);
+      request.onupgradeneeded = (changeEvent) => this.onupgradeneeded(request, changeEvent);
     });
   }
 
-  private onupgradeneeded(request: IDBOpenDBRequest) {
+  private onupgradeneeded(request: IDBOpenDBRequest, event: IDBVersionChangeEvent) {
     const db = request.result;
-    for (const table of this.registeredTables) {
-      const config = table.config;
-      if (!db.objectStoreNames.contains(config.name)) {
-        const store = db.createObjectStore(config.name, {
-          keyPath: config.keyPath,
-          autoIncrement: config.autoIncrement,
-        });
-        if (config.indexes) {
-          for (const idx of config.indexes) {
-            store.createIndex(idx.name, idx.keyPath, idx.options);
-          }
-        }
-      }
+    const transaction = request.transaction;
+    if (!transaction) {
+      throw new Error("Transaction is null in upgradeneeded");
+    }
+
+    // 1. Существующие имена хранилищ
+    const existingStoreNames = Array.from(db.objectStoreNames);
+
+    // 2. Удаляем лишние хранилища (которых нет в конфиге)
+    const requiredStoreNames = this.tables.map((s) => s.config.name);
+    existingStoreNames.filter((s) => !requiredStoreNames.includes(s)).forEach((storeName) => this.deleteTable(db, storeName));
+
+    // 3. Для каждого хранилища из конфига
+    for (const table of this.tables) {
+      let config = table.config;
+      let store: IDBObjectStore = this.ensureTable(config, db, transaction);
+
+      // Синхронизация индексов
+      let indexes = config.indexes ?? [];
+      const requiredIndexNames = indexes.map((idx) => idx.name);
+      const existingIndexNames = Array.from(store.indexNames);
+
+      // Удаляем лишние индексы
+      existingIndexNames.filter((s) => !requiredIndexNames.includes(s)).forEach((idxName) => this.deleteIndex(store, idxName, config));
+
+      // Добавляем недостающие индексы
+      indexes.filter((s) => !store.indexNames.contains(s.name)).forEach((idxConfig) => this.createIndex(store, idxConfig, config));
     }
   }
 
@@ -96,6 +111,33 @@ export abstract class Database implements IDatabase {
       this.db.close();
       this.db = null;
     }
+  }
+
+  private deleteTable(db: IDBDatabase, storeName: string) {
+    db.deleteObjectStore(storeName);
+    if (this.verbose) console.log(`Удалено лишнее хранилище: ${storeName}`);
+  }
+
+  private deleteIndex(store: IDBObjectStore, idxName: string, config: TableConfig) {
+    store.deleteIndex(idxName);
+    if (this.verbose) console.log(`[${config.name}] Удалён индекс: ${idxName}`);
+  }
+
+  private createIndex(store: IDBObjectStore, idxConfig: { name: string; keyPath: string; options?: IDBIndexParameters }, config: TableConfig) {
+    store.createIndex(idxConfig.name, idxConfig.keyPath, idxConfig.options);
+    if (this.verbose) console.log(`[${config.name}] Добавлен индекс: ${idxConfig.name}`);
+  }
+
+  private ensureTable(config: TableConfig, db: IDBDatabase, transaction: IDBTransaction) {
+    if (db.objectStoreNames.contains(config.name)) {
+      return transaction.objectStore(config.name);
+    }
+    let store = db.createObjectStore(config.name, {
+      keyPath: config.keyPath,
+      autoIncrement: config.autoIncrement,
+    });
+    if (this.verbose) console.log(`Создано хранилище: ${config.name}`);
+    return store;
   }
 
   protected async transaction(storeNames: string | string[], mode: IDBTransactionMode): Promise<IDBTransaction> {
@@ -179,7 +221,7 @@ class Table<T> implements ITable<T> {
     return this._config;
   }
 
-  get storeName(): string {
+  get name(): string {
     return this._config.name;
   }
 
@@ -188,26 +230,26 @@ class Table<T> implements ITable<T> {
   }
 
   async put(item: T): Promise<void> {
-    return this.database.put(this.storeName, item);
+    return this.database.put(this.name, item);
   }
 
   async putMany(items: T[]): Promise<void> {
-    return this.database.putMany(this.storeName, items);
+    return this.database.putMany(this.name, items);
   }
 
   async get(key: IDBValidKey): Promise<T | undefined> {
-    return this.database.get<T>(this.storeName, key);
+    return this.database.get<T>(this.name, key);
   }
 
   async getAll(): Promise<T[]> {
-    return this.database.getAll<T>(this.storeName);
+    return this.database.getAll<T>(this.name);
   }
 
   async delete(key: IDBValidKey): Promise<void> {
-    return this.database.delete(this.storeName, key);
+    return this.database.delete(this.name, key);
   }
 
   async clear(): Promise<void> {
-    return this.database.clear(this.storeName);
+    return this.database.clear(this.name);
   }
 }

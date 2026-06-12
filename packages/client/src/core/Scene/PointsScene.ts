@@ -9,6 +9,7 @@ export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
   public entites: EntityCollection<Point>;
   private points: Point[] = [];
+  private unregisterDrag: (() => void) | null = null;
 
   private groupSelection: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
   private groupMap: Map<string, SVGGElement> = new Map(); // id → DOM-группа
@@ -24,23 +25,29 @@ export class PointsScene {
     this.points = this.entites.items;
 
     this.rootGroup = svgEngine.createGroup(groupName);
-    this.svgEngine.setDragHandler(
-      {
-        onDrag: (group, deltaWorld) => {
-          d3.select<Element, Point>(group)
-            .each((point) => {
-              point.x += deltaWorld[0];
-              point.y += deltaWorld[1];
-            })
-            .attr("transform", (d) => `translate(${d.x},${d.y})`);
+    // Регистрируем детектор перетаскивания для точек
+    this.unregisterDrag = this.svgEngine.registerDragDetector((event) => {
+      const target = event.target as Element;
+      const group = target.closest?.(".point-group");
+      if (!group) return null;
+      return {
+        element: group,
+        callbacks: {
+          onDrag: (group, deltaWorld) => {
+            d3.select<Element, Point>(group)
+              .each((point) => {
+                point.x += deltaWorld[0];
+                point.y += deltaWorld[1];
+              })
+              .attr("transform", (d) => `translate(${d.x},${d.y})`);
+          },
+          onDragEnd: (group) => {
+            const point = d3.select(group).datum() as Point;
+            if (point && this.onPointMoved) this.onPointMoved(point);
+          },
         },
-        onDragEnd: (group) => {
-          const point = d3.select(group).datum() as Point;
-          if (point && this.onPointMoved) this.onPointMoved(point);
-        },
-      },
-      (event) => (event?.target as Element)?.closest?.(".point-group") || null,
-    );
+      };
+    });
 
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
     this.svgEngine.svg.on("click", (event) => {
@@ -74,6 +81,7 @@ export class PointsScene {
       this.applyUpdatesToGroups(this.groupSelection!);
     });
     this.mediator.onPointsUpdate(() => this.updateAllPointsPositions());
+    this.mediator.onSizeText(() => this.updatePointStyles());
   }
 
   public init(): void {
@@ -160,7 +168,7 @@ export class PointsScene {
 
     existingGroups.exit().remove();
 
-    this.groupSelection = existingGroups;
+    this.groupSelection = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
 
     // 3. Обновляем groupMap для новых групп
     let groupMap = this.groupMap;
@@ -203,11 +211,14 @@ export class PointsScene {
     if (!this.groupSelection) return;
     scale ??= this.svgEngine.getTransform().k;
     const invScale = 1 / scale;
+
+    let sizeText = this.mediator.sizeText;
+
     this.groupSelection
       .selectAll<SVGCircleElement, Point>("circle.point")
       .attr("r", 20 * invScale)
       .attr("stroke-width", 2 * invScale);
-    this.groupSelection.selectAll<SVGTextElement, Point>("text.point-label").style("font-size", `${16 * invScale}px`);
+    this.groupSelection.selectAll<SVGTextElement, Point>("text.point-label").style("font-size", `${sizeText * invScale}px`);
   }
 
   /** Центрировать и масштабировать вид по всем точкам */
@@ -230,5 +241,8 @@ export class PointsScene {
   // ========== Доступ к SvgEngine (при необходимости) ==========
   public getSvgEngine(): SvgEngine {
     return this.svgEngine;
+  }
+  public destroy(): void {
+    if (this.unregisterDrag) this.unregisterDrag();
   }
 }

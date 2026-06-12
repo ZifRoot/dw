@@ -4,7 +4,7 @@ import { ZoomTransform } from "d3";
 export type DragPredicate = (event: MouseEvent) => boolean;
 export type GetDragElement = (event: MouseEvent) => Element | null;
 
-interface DragCallbacks<T extends Element> {
+export interface DragCallbacks<T extends Element> {
   onDragStart?: (element: T, worldPos: [number, number], event: MouseEvent) => void;
   onDrag?: (element: T, deltaWorld: [number, number], worldPos: [number, number], event: MouseEvent) => void;
   onDragEnd?: (element: T, event: MouseEvent) => void;
@@ -25,11 +25,12 @@ export class SvgEngine {
   private zoomCallback: ((transform: ZoomTransform) => void)[] = [];
   private zoomEnabled = true;
 
-  // Drag state
-  private dragPredicate: GetDragElement = () => null;
-  private getDragElement: GetDragElement = () => null;
-  private dragCallbacks: DragCallbacks<Element> | null = null;
+  // Drag detectors registry
+  private detectors: Array<{
+    predicate: (event: MouseEvent) => { element: Element; callbacks: DragCallbacks<Element> } | null;
+  }> = [];
   private currentDragElement: Element | null = null;
+  private currentDragCallbacks: DragCallbacks<Element> | null = null;
   private dragStartWorld: [number, number] | null = null;
 
   constructor(private element: HTMLElement) {
@@ -52,8 +53,11 @@ export class SvgEngine {
       .filter((event) => {
         if (!this.zoomEnabled) return false;
         const mouseEvent = event as MouseEvent;
-        // Zoom разрешён, только если dragPredicate вернул false
-        return !this.dragPredicate(mouseEvent);
+        // Zoom разрешён, если ни один детектор не захватил событие
+        for (const d of this.detectors) {
+          if (d.predicate(mouseEvent)) return false;
+        }
+        return true;
       })
       .on("zoom", (event) => {
         this.transform = event.transform;
@@ -71,37 +75,52 @@ export class SvgEngine {
       .drag<SVGSVGElement, unknown>()
       .filter((event) => {
         const mouseEvent = event as MouseEvent;
-        // Drag разрешён, только если dragPredicate вернул true
-        return !!this.dragPredicate(mouseEvent);
+        // Drag разрешён, если хотя бы один детектор вернул элемент
+        for (const d of this.detectors) {
+          if (d.predicate(mouseEvent)) return true;
+        }
+        return false;
       })
       .on("start", (event) => {
-        const dragElement = this.getDragElement(event.sourceEvent);
-        if (!dragElement) return;
+        const mouseEvent = event.sourceEvent;
+        let dragElement: Element | null = null;
+        let dragCallbacks: DragCallbacks<Element> | null = null;
+        for (const d of this.detectors) {
+          const result = d.predicate(mouseEvent);
+          if (result) {
+            dragElement = result.element;
+            dragCallbacks = result.callbacks;
+            break;
+          }
+        }
+        if (!dragElement || !dragCallbacks) return;
         this.currentDragElement = dragElement;
+        this.currentDragCallbacks = dragCallbacks;
         const [mx, my] = this.screenToWorld(event.sourceEvent.clientX, event.sourceEvent.clientY);
         this.dragStartWorld = [mx, my];
-        if (this.dragCallbacks?.onDragStart) {
-          this.dragCallbacks.onDragStart(this.currentDragElement, [mx, my], event.sourceEvent);
+        if (dragCallbacks.onDragStart) {
+          dragCallbacks.onDragStart(this.currentDragElement, [mx, my], event.sourceEvent);
         }
         event.sourceEvent.stopPropagation();
       })
       .on("drag", (event) => {
-        if (!this.currentDragElement || !this.dragCallbacks || !this.dragStartWorld) return;
+        if (!this.currentDragElement || !this.currentDragCallbacks || !this.dragStartWorld) return;
         const [mx, my] = this.screenToWorld(event.sourceEvent.clientX, event.sourceEvent.clientY);
         const dx = mx - this.dragStartWorld[0];
         const dy = my - this.dragStartWorld[1];
-        if (this.dragCallbacks.onDrag) {
-          this.dragCallbacks.onDrag(this.currentDragElement, [dx, dy], [mx, my], event.sourceEvent);
+        if (this.currentDragCallbacks.onDrag) {
+          this.currentDragCallbacks.onDrag(this.currentDragElement, [dx, dy], [mx, my], event.sourceEvent);
         }
         this.dragStartWorld = [mx, my];
         event.sourceEvent.stopPropagation();
       })
       .on("end", (event) => {
-        if (this.dragCallbacks?.onDragEnd && this.currentDragElement) {
-          this.dragCallbacks.onDragEnd(this.currentDragElement, event.sourceEvent);
+        if (this.currentDragCallbacks?.onDragEnd && this.currentDragElement) {
+          this.currentDragCallbacks.onDragEnd(this.currentDragElement, event.sourceEvent);
         }
         this.currentDragElement = null;
         this.dragStartWorld = null;
+        this.currentDragCallbacks = null;
       });
     this.svg.call(dragHandler);
   }
@@ -109,17 +128,20 @@ export class SvgEngine {
   // ========== Публичные методы ==========
 
   /**
-   * Установить обработчик перетаскивания.
-   * @param predicate Функция, определяющая, является ли событие началом перетаскивания.
-   * @param getDragElement Функция, возвращающая DOM-элемент, который будет перетаскиваться.
-   * @param callbacks Колбэки для событий drag.
+   * Зарегистрировать детектор перетаскивания.
+   * @param predicate Функция, получающая MouseEvent и возвращающая { element, callbacks } или null.
+   * @returns Функция для отписки.
    */
-  public setDragHandler(callbacks: DragCallbacks<Element>, getDragElement: GetDragElement): void {
-    this.dragPredicate = getDragElement;
-    this.getDragElement = getDragElement;
-    this.dragCallbacks = callbacks;
+  public registerDragDetector(predicate: (event: MouseEvent) => { element: Element; callbacks: DragCallbacks<Element> } | null): () => void {
+    const detector = { predicate };
+    this.detectors.push(detector);
     // Обновляем zoom-фильтр, чтобы он учитывал новый предикат
     this.updateZoomBehavior();
+    return () => {
+      const index = this.detectors.indexOf(detector);
+      if (index !== -1) this.detectors.splice(index, 1);
+      this.updateZoomBehavior();
+    };
   }
 
   /** Временно отключить zoom (например, на время анимации) */

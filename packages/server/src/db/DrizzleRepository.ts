@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, SQL, lt, gt } from "drizzle-orm";
+import { eq, and, sql, desc, SQL, lt, gt, isNull } from "drizzle-orm";
 import { db_drizzle } from "./drizzle/drizzle-db";
 import {
   chatSessionsTable,
@@ -203,6 +203,23 @@ export class DrizzleRepository implements IRepository {
           ...file,
           sessionId,
           messageId,
+        }),
+    );
+  }
+
+  async findAllFilesNullContent(sessionId: string): Promise<MessageFile[]> {
+    const items = await this.client
+      .select({ file: filesTable, mf: messageFilesTable })
+      .from(messageFilesTable)
+      .innerJoin(filesTable, eq(messageFilesTable.fileId, filesTable.id))
+      .where(and(eq(messageFilesTable.sessionId, sessionId), isNull(filesTable.content)))
+      .orderBy(messageFilesTable.messageId);
+    return items.map(
+      ({ file, mf }) =>
+        new MessageFile({
+          ...file,
+          sessionId: mf.sessionId,
+          messageId: mf.messageId,
         }),
     );
   }

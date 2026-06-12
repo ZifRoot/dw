@@ -4,6 +4,9 @@ import { Point } from "./models/Point";
 import { EdgesScene, Edge } from "./Scene/EdgesScene";
 import { AppMediator } from "./AppMediator";
 import { Safe } from "@utils/logger";
+import { Configuration, DocumentsApi, DocumentsGet200ResponseInner } from "src/clients/dew/fetch";
+import { DataManager } from "./data/DataManager";
+import { PointTable } from "./data/tables/PointTable";
 
 interface TestConfig {
   /** Процент точек, которые будут обновлены на каждой итерации (0-100) */
@@ -24,6 +27,8 @@ export class PointsSceneTester {
   private config: Required<TestConfig>;
   private intervalId: number | null = null;
   private nextId = 1000;
+  documentsApi: DocumentsApi;
+  dataManager: DataManager;
 
   constructor(
     private mediator: AppMediator,
@@ -41,12 +46,29 @@ export class PointsSceneTester {
       verbose: config.verbose ?? true,
       fullGraph: config.fullGraph ?? true,
     };
+
+    this.dataManager = new DataManager();
   }
 
   public start(): void {
     if (this.intervalId !== null) return;
     this.log("Тест запущен");
+    // this._start().catch(console.error);
+
     this.iteration();
+  }
+
+  private async _start() {
+    let documents = await this.dataManager.syncAll();
+    this.pointsScene.setPoints(documents.map((d) => this.generatePointf(d)));
+  }
+  generatePointf(doc: PointTable): Point {
+    return {
+      id: doc.id,
+      x: doc.x ?? Math.random() * 800,
+      y: doc.y ?? Math.random() * 600,
+      text: doc.title,
+    };
   }
 
   public stop(): void {
@@ -136,8 +158,8 @@ export class PointsSceneTester {
       return;
     }
     const edges: Edge[] = [];
-    for (let i = 0; i < points.length; i += 10) {
-      for (let j = i + 1; j < points.length; j += 10) {
+    for (let i = 0; i < points.length; i += 2) {
+      for (let j = i + 1; j < points.length; j += 2) {
         edges.push({
           id: `${points[i].id}-${points[j].id}`,
           sourceId: points[i].id,
@@ -160,6 +182,14 @@ export class PointsSceneTester {
       x: Math.random() * 800,
       y: Math.random() * 600,
       text: id.slice(1, 3),
+    };
+  }
+  private generatePoint(doc: DocumentsGet200ResponseInner): Point {
+    return {
+      id: doc.id,
+      x: Math.random() * 800,
+      y: Math.random() * 600,
+      text: doc.title,
     };
   }
 

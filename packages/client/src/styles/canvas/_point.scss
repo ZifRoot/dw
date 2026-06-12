@@ -33,3 +33,9 @@
     // r: 10;
   }
 }
+
+.edge.highlighted {
+  stroke: #ffaa44;
+  pointer-events: stroke; // чтобы клик проходил по линии
+  cursor: pointer;
+}

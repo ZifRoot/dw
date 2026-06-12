@@ -34,6 +34,8 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({ point, mediator 
   return (
     <div >
       <h3>Информация о точке</h3>
+      <button onClick={() => mediator.selectedPoint = null}>Выйти</button>
+      {/* className={styles.button} */}
       <div><strong>ID:</strong> {point.id}</div>
       <div>
         <strong>Текст:</strong>
