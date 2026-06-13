@@ -33,6 +33,7 @@ export class PointsScene {
       const group = d3.select<Element, Point>(element);
       const point = group.datum();
       if (!point) return null;
+      // Временно фиксируем точку на время перетаскивания
       point.fixed = true;
       this.applyUpdatesToGroups(group);
       return {
@@ -58,22 +59,20 @@ export class PointsScene {
     });
 
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
-    this.svgEngine.svg.on("click", (event) => {
+    this.rootGroup.on("click", (event) => {
       const target = event.target as Element;
-      const group = target.closest?.(".point-group");
-      if (group) {
-        const point = d3.select(group).datum() as Point;
-        if (point) {
-          const uiPoint: UIPoint = {
-            id: point.id,
-            x: point.x,
-            y: point.y,
-            text: point.text,
-            fixed: point.fixed ?? false,
-          };
-          this.mediator!.selectedPoint = uiPoint;
-        }
-      }
+      const domEl = target.closest?.(".point-group");
+      if (!domEl) return;
+      const point = d3.select(domEl).datum() as Point;
+      if (!point) return;
+      const uiPoint: UIPoint = {
+        id: point.id,
+        x: point.x,
+        y: point.y,
+        text: point.text,
+        fixed: point.fixed ?? false,
+      };
+      this.mediator!.selectedPoint = uiPoint;
     });
     this.mediator.onPointUpdate(({ pointId, changes }) => {
       const point = this.getPointById(pointId);

@@ -26,7 +26,7 @@ export class SvgEngine {
   private transform: ZoomTransform = d3.zoomIdentity;
   private zoomBehavior?: d3.ZoomBehavior<SVGSVGElement, unknown>;
 
-  private zoomCallbacks: ZoomCallback[] = [];
+  private zoomCallbacks: Set<ZoomCallback> = new Set();
   private zoomEnabled = true;
 
   // Drag detectors registry
@@ -43,8 +43,9 @@ export class SvgEngine {
     this.setupGlobalDrag();
   }
 
-  onZoom(zoomCallback: ZoomCallback) {
-    this.zoomCallbacks.push(zoomCallback);
+  onZoom(zoomCallback: ZoomCallback): () => void {
+    this.zoomCallbacks.add(zoomCallback);
+    return () => this.zoomCallbacks.delete(zoomCallback);
   }
 
   // ========== Настройка zoom ==========
