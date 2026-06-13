@@ -1,5 +1,5 @@
 .point {
-  fill: rgb(0, 0, 0);
+  // fill: rgb(0, 0, 0);
   stroke: rgb(219, 214, 224);
 
   cursor: crosshair;
@@ -8,8 +8,8 @@
     cursor: crosshair;
   }
   &:hover {
-    fill: rgb(255, 2, 2);
-    transition: r 0.1s ease;
+    stroke: rgb(255, 0, 0);
+    // transition: r 0.1s ease;
     // r: 10;
   }
 }

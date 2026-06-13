@@ -159,7 +159,7 @@ export class PointsSceneTester {
     }
     const edges: Edge[] = [];
     for (let i = 0; i < points.length; i++) {
-      for (let j = 0; j < 1; j++) {
+      for (let j = 0; j < 4; j++) {
         let jj = (i + 1 + j) % points.length;
         if (i === jj) continue;
         let pi = points[i];

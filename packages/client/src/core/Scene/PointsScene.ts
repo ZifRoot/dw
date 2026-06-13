@@ -11,7 +11,7 @@ export class PointsScene {
   private points: Point[] = [];
   private unregisterDrag: (() => void) | null = null;
 
-  private groupSelection: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
+  private groupSelection: d3.Selection<Element, Point, SVGGElement, unknown> | null = null;
   private groupMap: Map<string, SVGGElement> = new Map(); // id → DOM-группа
 
   public onPointMoved: ((point: Point) => void) | null = null;
@@ -28,21 +28,29 @@ export class PointsScene {
     // Регистрируем детектор перетаскивания для точек
     this.unregisterDrag = this.svgEngine.registerDragDetector((event) => {
       const target = event.target as Element;
-      const group = target.closest?.(".point-group");
-      if (!group) return null;
+      const element = target.closest?.(".point-group");
+      if (!element) return null;
+      const group = d3.select<Element, Point>(element);
+      const point = group.datum();
+      if (!point) return null;
+      point.fixed = true;
+      this.applyUpdatesToGroups(group);
       return {
-        element: group,
+        element: element,
         callbacks: {
-          onDrag: (group, deltaWorld) => {
-            d3.select<Element, Point>(group)
-              .each((point) => {
-                point.x += deltaWorld[0];
-                point.y += deltaWorld[1];
-              })
-              .attr("transform", (d) => `translate(${d.x},${d.y})`);
+          onDrag: (element, deltaWorld) => {
+            const group = d3.select<Element, Point>(element);
+            group.each((point) => {
+              point.x += deltaWorld[0];
+              point.y += deltaWorld[1];
+            });
+
+            this.applyUpdatesToGroups(group);
+            // .attr("transform", (d) => `translate(${d.x},${d.y})`);
           },
           onDragEnd: (group) => {
             const point = d3.select(group).datum() as Point;
+            point.fixed = false;
             if (point && this.onPointMoved) this.onPointMoved(point);
           },
         },
@@ -158,7 +166,7 @@ export class PointsScene {
   // ========== Приватные методы ==========
   /** Создать новые точки DOM */
   private createNewPoints(): void {
-    const existingGroups = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
+    const existingGroups = this.rootGroup.selectAll<Element, Point>("g.point-group").data(this.points, (d) => d.id);
 
     // Новые точки появятся в enter
     const enter = existingGroups.enter().append("g").attr("class", "point-group");
@@ -168,7 +176,7 @@ export class PointsScene {
 
     existingGroups.exit().remove();
 
-    this.groupSelection = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
+    this.groupSelection = this.rootGroup.selectAll<Element, Point>("g.point-group").data(this.points, (d) => d.id);
 
     // 3. Обновляем groupMap для новых групп
     let groupMap = this.groupMap;
@@ -198,11 +206,12 @@ export class PointsScene {
     if (this.mediator.autoZoom) this.fitView();
   }
   /** Применить обновления (transform, текст, цвет) к D3-селекции групп */
-  private applyUpdatesToGroups(selection?: d3.Selection<SVGGElement, Point, any, any> | null): void {
+  private applyUpdatesToGroups(selection?: d3.Selection<Element, Point, any, any> | null): void {
     selection ||= this.groupSelection;
     if (!selection) return;
     selection.attr("transform", (d) => `translate(${d.x},${d.y})`);
     selection.select<SVGTextElement>("text.point-label").text((d) => d.text);
+    selection.selectAll<SVGCircleElement, Point>("circle.point").attr("fill", (d) => (d.fixed ? "rgb(255, 166, 0)" : "rgb(0, 0, 0)"));
     // datum остаётся тем же объектом
   }
 
@@ -213,7 +222,6 @@ export class PointsScene {
     const invScale = 1 / scale;
 
     let sizeText = this.mediator.sizeText;
-
     this.groupSelection
       .selectAll<SVGCircleElement, Point>("circle.point")
       .attr("r", 20 * invScale)
