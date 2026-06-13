@@ -91,12 +91,12 @@ export class PointsSceneTester {
     const start = performance.now();
 
     let points = this.pointsScene.getPoints(); // получаем актуальные точки
-    let validation = this.pointsScene.entites.validate();
+    let validation = this.pointsScene.entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
 
-    let backupCollection = this.pointsScene.entites.clone();
+    let backupCollection = this.pointsScene.entities.clone();
     let [minP, maxP] = this.config.removeFrationRange;
 
     // 1. Удаляем лишние точки (если пул превышает целевой размер)
@@ -109,13 +109,13 @@ export class PointsSceneTester {
 
     this.pointsScene.removePoints(removedIds);
 
-    validation = this.pointsScene.entites.validate();
+    validation = this.pointsScene.entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
 
     points = this.pointsScene.getPoints(); // обновляем после мутаций
-    backupCollection = this.pointsScene.entites.clone();
+    backupCollection = this.pointsScene.entities.clone();
 
     [minP, maxP] = this.config.updateFrationRange;
     let updateCount = this.randomInt(points.length * minP, points.length * maxP);
@@ -133,7 +133,7 @@ export class PointsSceneTester {
 
     this.pointsScene.setPoints(uppoints); // добавление новых
 
-    validation = this.pointsScene.entites.validate();
+    validation = this.pointsScene.entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
