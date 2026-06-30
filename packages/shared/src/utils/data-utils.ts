@@ -3,11 +3,21 @@ export function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function safe<T>(fn: () => Promise<T>) {
+export async function safe<T>(fn: () => Promise<T>, _default?: T) {
   try {
     return await fn();
   } catch (error) {
     console.error(error);
+    return _default;
+  }
+}
+
+export function safeSync<T>(fn: () => T, _default?: T) {
+  try {
+    return fn();
+  } catch (error) {
+    console.error(error);
+    return _default;
   }
 }
 

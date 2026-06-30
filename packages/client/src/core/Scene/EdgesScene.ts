@@ -4,13 +4,13 @@ import { PointsScene } from "./PointsScene.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
 import { UIEdge } from "../ui-models.ts";
-import { Edge } from "../models/Edge.ts";
+import { Edge, EdgeModel } from "../models/Edge.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private edges: Edge[] = [];
-  public entites: EntityCollection<Edge>;
-  private groupSelection: d3.Selection<SVGLineElement, Edge, SVGGElement, unknown> | null = null;
+  private edges: EdgeModel[] = [];
+  public entites: EntityCollection<EdgeModel>;
+  private groupSelection: d3.Selection<SVGLineElement, EdgeModel, SVGGElement, unknown> | null = null;
   private pointsScene!: PointsScene;
   unregisterSelectedPoint: () => void;
 
@@ -19,7 +19,7 @@ export class EdgesScene {
     private mediator: AppMediator,
     groupName = "edges-scene",
   ) {
-    this.entites = new EntityCollection<Edge>((p) => p.id);
+    this.entites = new EntityCollection<EdgeModel>((p) => p.id);
     this.edges = this.entites.items;
     this.svgEngine = svgEngine;
     this.rootGroup = svgEngine.createGroup(groupName);
@@ -31,7 +31,7 @@ export class EdgesScene {
       const target = event.target as Element;
       const line = target.closest?.(".highlighted");
       if (!line) return;
-      const edge = d3.select(line).datum() as Edge;
+      const edge = d3.select(line).datum() as EdgeModel;
       if (!edge) return;
       const uiEdge: UIEdge = {
         id: edge.id,
@@ -79,9 +79,9 @@ export class EdgesScene {
   // ========== Управление рёбрами (upsert, удаление, очистка) ==========
 
   /** Обновить существующие рёбра и добавить новые (upsert) – мутирует массив */
-  public setEdges(edges: Edge[]): void {
-    const toInsert: Edge[] = [];
-    const toUpdate: Edge[] = [];
+  public setEdges(edges: EdgeModel[]): void {
+    const toInsert: EdgeModel[] = [];
+    const toUpdate: EdgeModel[] = [];
     this.entites.clear();
 
     this.entites._setPoints(edges, toInsert, toUpdate);
@@ -116,13 +116,13 @@ export class EdgesScene {
     if (this.edges.length === 0) return;
 
     // Создаём линии с привязкой данных
-    this.groupSelection = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
+    this.groupSelection = this.rootGroup.selectAll<SVGLineElement, EdgeModel>("line.edge").data(this.edges, (d) => d.id);
 
     this.groupSelection.enter().append("line").attr("class", "edge");
 
     this.groupSelection.exit().remove();
 
-    this.groupSelection = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
+    this.groupSelection = this.rootGroup.selectAll<SVGLineElement, EdgeModel>("line.edge").data(this.edges, (d) => d.id);
 
     this.updateLines();
   }

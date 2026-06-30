@@ -48,7 +48,7 @@ export function createLoggedMethodRunner<This, Args extends any[], Return>(
   };
 }
 
-export function saveR<This, Args extends any[], Return>(
+export function _safe<This, Args extends any[], Return>(
   fn: (this: This, ...args: Args) => Promise<Return> | Return,
 ): (this: This, ...args: Args) => Promise<Return> {
   return async function (this: This, ...args: Args): Promise<Return> {
@@ -97,5 +97,5 @@ export function LogParam(target: any, propertyKey: string, descriptor: PropertyD
 export function Safe(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
   const originalMethod = descriptor.value;
   // Просто оборачиваем оригинальный метод через соответствующую утилиту
-  descriptor.value = saveR(originalMethod);
+  descriptor.value = _safe(originalMethod);
 }

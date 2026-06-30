@@ -1,6 +1,6 @@
 import { AppMediator } from "../AppMediator";
-import { AnimationEngine } from "../Engines/AnimationEngine";
-import { Edge } from "../models/Edge";
+import { AnimationCallback, AnimationEngine } from "../Engines/AnimationEngine";
+import { Edge, EdgeModel } from "../models/Edge";
 
 export class GraphEngineConfig {
   public strength = 0.5;
@@ -12,7 +12,8 @@ export class GraphEngine {
   private temperature = 0;
   private targetDistSq: number;
 
-  edges!: Edge[];
+  edges!: EdgeModel[];
+  unsubCallback: AnimationCallback | null = null;
 
   constructor(
     public mediator: AppMediator,
@@ -20,89 +21,74 @@ export class GraphEngine {
     public config: GraphEngineConfig,
   ) {
     this.targetDistSq = this.config.targetDistance ** 2;
-    this.mediator.onStartRepulsion(() => this.animation.setCallback(() => this.step()));
+    this.mediator.onStartRepulsion(() => this.start());
   }
 
   start() {
-    this.animation.start();
+    this.unsubCallback ??= this.animation.addCallback(() => this.step());
   }
 
-  setEdges(edges: Edge[]) {
+  stop() {
+    if (this.unsubCallback != null) {
+      this.unsubCallback();
+      this.unsubCallback = null;
+    }
+  }
+
+  setEdges(edges: EdgeModel[]) {
     this.edges = edges;
   }
 
   step(): void {
-    this.temperature = this.applyRepulsionStep();
+    this.temperature = this.applyStep();
     this.mediator.updatePoints();
     this.mediator.temperature = this.temperature;
-    if (this.temperature < this.config.stopTemperature) this.animation.setCallback(null);
+    if (this.temperature < this.config.stopTemperature) {
+      this.stop();
+    }
   }
 
-  public applyRepulsionStep(): number {
+  public applyStep(): number {
     let maxShift = -1;
-    const targetDistance = this.config.targetDistance;
-    const targetDistSq = this.targetDistSq;
-    const strength = this.config.strength;
     for (let i = 0; i < this.edges.length; i++) {
       let edge = this.edges[i];
-      const p1 = edge.source;
-      const p2 = edge.target;
-      if (p1.fixed && p2.fixed) continue;
 
-      const dx = p1.x - p2.x;
-      const dy = p1.y - p2.y;
-      const distSq = dx * dx + dy * dy;
-      if (distSq <= targetDistSq) continue;
-
-      const dist = Math.sqrt(distSq);
-
-      const k = (1 - targetDistance / dist) * strength;
-      const factor = p1.fixed || p2.fixed ? 1.0 : 0.5;
-      const shiftX = dx * k * factor;
-      const shiftY = dy * k * factor;
-      const temp = (dist - targetDistance) / dist;
-
-      if (!p1.fixed) {
-        p1.x -= shiftX;
-        p1.y -= shiftY;
-      }
-      if (!p2.fixed) {
-        p2.x += shiftX;
-        p2.y += shiftY;
-      }
-
-      if (temp > maxShift) maxShift = temp;
+      let temp = this.applyPair(edge);
+      maxShift = Math.max(maxShift, temp);
     }
     return maxShift;
   }
 
-  public applyRepulsionToPair(edge: Edge): number {
+  public applyPair(edge: EdgeModel): number {
+    const targetDistance = this.config.targetDistance;
+    const targetDistSq = this.targetDistSq;
+    const strength = this.config.strength;
     const p1 = edge.source;
     const p2 = edge.target;
-    const dx = p1.x - p2.x;
-    const dy = p1.y - p2.y;
-    const distSq = dx * dx + dy * dy;
-    if (distSq <= this.targetDistSq) return 0;
 
-    let sx: number;
-    let sy: number;
-    let t: number;
+    if (p1.fixed && p2.fixed) return -1;
+
+    const d = p1.subNew(p2);
+    const distSq = d.lenSq();
+
+    if (distSq <= targetDistSq) return -1;
 
     const dist = Math.sqrt(distSq);
-    const f2 = p1.fixed || p2.fixed || false ? 1 : 0.5;
-    let k = (this.config.targetDistance / dist - 1) * f2 * this.config.strength;
-    sx = dx * k;
-    sy = dy * k;
-    t = 1 - dist / this.config.targetDistance;
+
+    const factor = p1.fixed || p2.fixed ? 1.0 : 0.5;
+    const temp = 1 - targetDistance / dist;
+    const k = temp * strength * factor;
+
+    d.scale(k);
 
     if (!p1.fixed) {
-      p1.x += sx;
-      p1.y += sy;
+      p1.sub(d);
     }
+
     if (!p2.fixed) {
-      p2.x -= sx;
-      p2.y -= sy;
+      p2.add(d);
     }
-    return t;
+
+    return temp;
   }
 }
