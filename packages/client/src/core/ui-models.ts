@@ -3,6 +3,7 @@ export interface UIPoint {
   id: string;
   x: number;
   y: number;
+  z: number;
   text: string;
   fixed: boolean;
 }

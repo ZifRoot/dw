@@ -1,12 +1,13 @@
 // PointsSceneTester.ts
 import { PointsScene } from "./Scene/PointsScene";
-import { Point } from "./models/Point";
-import { EdgesScene, Edge } from "./Scene/EdgesScene";
+import { EdgesScene } from "./Scene/EdgesScene";
+import { Edge, EdgeModel } from "./models/Edge";
 import { AppMediator } from "./AppMediator";
 import { Safe } from "@utils/logger";
-import { Configuration, DocumentsApi, DocumentsGet200ResponseInner } from "src/clients/dew/fetch";
+import { DocumentsGet200ResponseInner } from "src/clients/dew/fetch";
 import { DataManager } from "./data/DataManager";
 import { PointTable } from "./data/tables/PointTable";
+import { PointModel } from "./models/PointModel";
 
 interface TestConfig {
   /** Процент точек, которые будут обновлены на каждой итерации (0-100) */
@@ -27,7 +28,6 @@ export class PointsSceneTester {
   private config: Required<TestConfig>;
   private intervalId: number | null = null;
   private nextId = 1000;
-  documentsApi: DocumentsApi;
   dataManager: DataManager;
 
   constructor(
@@ -47,7 +47,7 @@ export class PointsSceneTester {
       fullGraph: config.fullGraph ?? true,
     };
 
-    this.dataManager = new DataManager();
+    this.dataManager = new DataManager(mediator);
   }
 
   public start(): void {
@@ -59,16 +59,15 @@ export class PointsSceneTester {
   }
 
   private async _start() {
-    let documents = await this.dataManager.syncAll();
-    this.pointsScene.setPoints(documents.map((d) => this.generatePointf(d)));
+    let documents = await this.dataManager.reloadTables();
+    //this.pointsScene.setPoints(documents.map((d) => this.generatePointf(d)));
   }
-  generatePointf(doc: PointTable): Point {
-    return {
-      id: doc.id,
+  generatePointf(doc: PointTable): PointModel {
+    return new PointModel(doc.id, doc.title, false, {
       x: doc.x ?? Math.random() * 800,
       y: doc.y ?? Math.random() * 600,
-      text: doc.title,
-    };
+      z: Math.random(),
+    });
   }
 
   public stop(): void {
@@ -91,12 +90,12 @@ export class PointsSceneTester {
     const start = performance.now();
 
     let points = this.pointsScene.getPoints(); // получаем актуальные точки
-    let validation = this.pointsScene.entites.validate();
+    let validation = this.pointsScene.entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
 
-    let backupCollection = this.pointsScene.entites.clone();
+    let backupCollection = this.pointsScene.entities.clone();
     let [minP, maxP] = this.config.removeFrationRange;
 
     // 1. Удаляем лишние точки (если пул превышает целевой размер)
@@ -109,13 +108,13 @@ export class PointsSceneTester {
 
     this.pointsScene.removePoints(removedIds);
 
-    validation = this.pointsScene.entites.validate();
+    validation = this.pointsScene.entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
 
     points = this.pointsScene.getPoints(); // обновляем после мутаций
-    backupCollection = this.pointsScene.entites.clone();
+    backupCollection = this.pointsScene.entities.clone();
 
     [minP, maxP] = this.config.updateFrationRange;
     let updateCount = this.randomInt(points.length * minP, points.length * maxP);
@@ -133,16 +132,16 @@ export class PointsSceneTester {
 
     this.pointsScene.setPoints(uppoints); // добавление новых
 
-    validation = this.pointsScene.entites.validate();
+    validation = this.pointsScene.entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
     // 5. Перестраиваем граф связей (полный граф) на основе нового набора точек
-    this.updateEdges();
+    if (uppoints.length > 0 || removeCount > 0) this.updateEdges();
 
     const duration = performance.now() - start;
     const finalPoints = this.pointsScene.getPoints();
-
+    
     if (this.mediator.autoZoom) this.pointsScene.fitView();
     this.log(
       `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, время=${duration.toFixed(2)}ms`,
@@ -157,13 +156,20 @@ export class PointsSceneTester {
       this.edgesScene.setEdges([]);
       return;
     }
-    const edges: Edge[] = [];
-    for (let i = 0; i < points.length; i += 2) {
-      for (let j = i + 1; j < points.length; j += 2) {
+    const edges: EdgeModel[] = [];
+    for (let i = 0; i < points.length; i++) {
+      for (let j = 0; j < 4; j++) {
+        let jj = (i + 1 + j) % points.length;
+        if (i === jj) continue;
+        let pi = points[i];
+        let pj = points[jj];
         edges.push({
-          id: `${points[i].id}-${points[j].id}`,
-          sourceId: points[i].id,
-          targetId: points[j].id,
+          id: `${pi.id}-${pj.id}`,
+          sourceId: pi.id,
+          targetId: pj.id,
+          source: pi,
+          target: pj,
+          distance: 150 + Math.random() * 200,
         });
       }
     }
@@ -171,36 +177,34 @@ export class PointsSceneTester {
     if (this.config.verbose) {
       console.log(`[Edges] Построено ${edges.length} рёбер`);
     }
+    this.mediator.startRepulsion();
   }
 
   // ========== Вспомогательные методы ==========
 
-  private generateRandomPoint(): Point {
+  private generateRandomPoint(): PointModel {
     const id = `p${this.nextId++}`;
-    return {
-      id,
+    return new PointModel(id, id.slice(1, 5), false, {
       x: Math.random() * 800,
       y: Math.random() * 600,
-      text: id.slice(1, 3),
-    };
+      z: Math.random(),
+    });
   }
-  private generatePoint(doc: DocumentsGet200ResponseInner): Point {
-    return {
-      id: doc.id,
+  private generatePoint(doc: DocumentsGet200ResponseInner): PointModel {
+    return new PointModel(doc.id, doc.title, false, {
       x: Math.random() * 800,
       y: Math.random() * 600,
-      text: doc.title,
-    };
+      z: Math.random(),
+    });
   }
 
-  private mutatePoint(point: Point): Point {
+  private mutatePoint(point: PointModel): PointModel {
     // Создаём новый объект с изменениями (но сохраняем id)
-    return {
-      ...point,
-      x: Math.max(0, Math.min(1000, point.x + (Math.random() - 0.5) * 100)),
-      y: Math.max(0, Math.min(800, point.y + (Math.random() - 0.5) * 100)),
-      text: point.text + (Math.random() > 0.8 ? "!" : ""),
-    };
+    let p = point.clone();
+    p.x = Math.max(0, Math.min(1000, point.x + (Math.random() - 0.5) * 100));
+    p.y = Math.max(0, Math.min(800, point.y + (Math.random() - 0.5) * 100));
+    p.text = point.text + (Math.random() > 0.8 ? "!" : "");
+    return p;
   }
 
   private randomInt(min: number, max: number): number {

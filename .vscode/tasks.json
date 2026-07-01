@@ -43,7 +43,7 @@
       "label": "release:server",
       "type": "shell",
       "command": "npm run release:server",
-      "dependsOn": ["build:server:release"]
+      "dependsOn": ["build:client:release", "build:server:release"]
     },
     {
       "label": "release:client",

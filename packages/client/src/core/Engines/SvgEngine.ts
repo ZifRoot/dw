@@ -9,7 +9,11 @@ export interface DragCallbacks<T extends Element> {
   onDrag?: (element: T, deltaWorld: [number, number], worldPos: [number, number], event: MouseEvent) => void;
   onDragEnd?: (element: T, event: MouseEvent) => void;
 }
+export interface Detector {
+  predicate: (event: MouseEvent) => { element: Element; callbacks: DragCallbacks<Element> } | null;
+}
 
+export type ZoomCallback = (transform: ZoomTransform) => void;
 /**
  * SvgEngine – универсальный движок для работы с SVG-холстом.
  * - Управление SVG, zoom/pan, координатами.
@@ -22,13 +26,11 @@ export class SvgEngine {
   private transform: ZoomTransform = d3.zoomIdentity;
   private zoomBehavior?: d3.ZoomBehavior<SVGSVGElement, unknown>;
 
-  private zoomCallback: ((transform: ZoomTransform) => void)[] = [];
+  private zoomCallbacks: Set<ZoomCallback> = new Set();
   private zoomEnabled = true;
 
   // Drag detectors registry
-  private detectors: Array<{
-    predicate: (event: MouseEvent) => { element: Element; callbacks: DragCallbacks<Element> } | null;
-  }> = [];
+  private detectors: Set<Detector> = new Set();
   private currentDragElement: Element | null = null;
   private currentDragCallbacks: DragCallbacks<Element> | null = null;
   private dragStartWorld: [number, number] | null = null;
@@ -41,8 +43,9 @@ export class SvgEngine {
     this.setupGlobalDrag();
   }
 
-  onZoom(arg0: (transform: ZoomTransform) => void) {
-    this.zoomCallback.push(arg0);
+  onZoom(zoomCallback: ZoomCallback): () => void {
+    this.zoomCallbacks.add(zoomCallback);
+    return () => this.zoomCallbacks.delete(zoomCallback);
   }
 
   // ========== Настройка zoom ==========
@@ -62,7 +65,7 @@ export class SvgEngine {
       .on("zoom", (event) => {
         this.transform = event.transform;
         this.container.attr("transform", this.transform.toString());
-        for (const zoomCallback of this.zoomCallback) {
+        for (const zoomCallback of this.zoomCallbacks) {
           zoomCallback(this.transform);
         }
       });
@@ -134,12 +137,11 @@ export class SvgEngine {
    */
   public registerDragDetector(predicate: (event: MouseEvent) => { element: Element; callbacks: DragCallbacks<Element> } | null): () => void {
     const detector = { predicate };
-    this.detectors.push(detector);
+    this.detectors.add(detector);
     // Обновляем zoom-фильтр, чтобы он учитывал новый предикат
     this.updateZoomBehavior();
     return () => {
-      const index = this.detectors.indexOf(detector);
-      if (index !== -1) this.detectors.splice(index, 1);
+      this.detectors.delete(detector);
       this.updateZoomBehavior();
     };
   }

@@ -23,7 +23,7 @@
     "debug:server": "cd packages/server && npm run debug",
     "debug:client": "cd packages/client && npm run debug",
     "release:server": "cd packages/server && npm run release",
-    "release:client": "npm run build:client:release && cd packages/client && npm run preview",
+    "release:client": "cd packages/client && npm run release",
     "build:server:release": "cd packages/server && npm run build:release",
     "build:client:release": "cd packages/client && npm run build:release",
     "db:generate": "drizzle-kit generate",

@@ -43,6 +43,7 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({ point, mediator 
       </div>
       <div><strong>X:</strong> {point.x.toFixed(2)}</div>
       <div><strong>Y:</strong> {point.y.toFixed(2)}</div>
+      <div><strong>Z:</strong> {point.z.toFixed(2)}</div>
       <label >
         <input type="checkbox" checked={fixed} onChange={handleFixedChange} />
         Зафиксировать (не участвует в физике)

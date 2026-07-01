@@ -8,7 +8,7 @@
     },
     {
       "name": "Release Fullstack",
-      "configurations": ["Release: Server", "Release: Client"],
+      "configurations": ["Release: Server", "webServer"],
       "stopAll": true
     }
   ],
@@ -43,6 +43,21 @@
       "url": "http://localhost:4173",
       "webRoot": "${workspaceFolder}/packages/client/dist",
       "preLaunchTask": "release:client"
+    },
+    {
+      "name": "webServer",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:8081",
+      "webRoot": "${workspaceFolder}/packages/server/dist",
+    },
+    {
+      "name": "Build: Client",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:4173",
+      "webRoot": "${workspaceFolder}/packages/client/dist",
+      "preLaunchTask": "build:client:release"
     }
   ]
 }

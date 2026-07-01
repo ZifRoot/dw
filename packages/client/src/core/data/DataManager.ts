@@ -1,122 +1,114 @@
-// DataManager.ts (исправленный)
-import { Configuration, DocumentsApi, EmbeddingsApi } from "src/clients/dew/fetch";
+// DataManager.ts
+
 import { CanvasPositionsDB } from "./CanvasPositionsDB";
-import { EmbeddingTable } from "./tables/EmbeddingTable";
-import { toDate } from "@utils/date-utils";
+import { AppMediator } from "../AppMediator";
 import { PointTable } from "./tables/PointTable";
+import { EmbeddingTable } from "./tables/EmbeddingTable";
+import { LogSafe, Safe } from "@utils/logger";
+import { toDate } from "@utils/date-utils";
+import { SingleExecution } from "@utils/single-runner";
+import * as fetch from "src/clients/dew/fetch";
 
 export class DataManager {
-  public _db: CanvasPositionsDB;
-  private embeddingsStore = new Map<string, EmbeddingTable[]>();
-  documentsApi: DocumentsApi;
-  embeddingsApi: EmbeddingsApi;
+  private db: CanvasPositionsDB;
+  private documentsApi: fetch.DocumentsApi;
+  private embeddingsApi: fetch.EmbeddingsApi;
+  private unsubReload: () => void;
 
-  get db() {
-    return this._db;
+  constructor(private mediator: AppMediator) {
+    const config = new fetch.Configuration({ basePath: "http://localhost:3000/api" });
+    this.documentsApi = new fetch.DocumentsApi(config);
+    this.embeddingsApi = new fetch.EmbeddingsApi(config);
+    this.db = new CanvasPositionsDB();
+    // Подписка на команду перезагрузки таблиц
+    this.unsubReload = this.mediator.onReloadTables(() => this.reloadTables());
   }
 
-  constructor() {
-    const config = new Configuration({
-      basePath: "http://localhost:3000/api",
-    });
-    this.documentsApi = new DocumentsApi(config);
-    this.embeddingsApi = new EmbeddingsApi(config);
-    this._db = new CanvasPositionsDB();
+  public destroy(): void {
+    this.unsubReload();
   }
 
-  public getEmbeddingsStore(): Map<string, EmbeddingTable[]> {
-    return this.embeddingsStore;
+  // ========== Загрузка локальных данных ==========
+  private async loadLocalDataAndEmit(): Promise<void> {
+    const points = await this.db.points.getAll();
+    const embeddings = await this.db.embeddings.getAll();
+
+    this.mediator.pointsTable = points;
+    this.mediator.embeddingsTable = embeddings;
+  }
+  reloadTables() {
+    this.reloadTablesSingle().catch(() => {});
   }
 
-  public clear(): void {
-    this.embeddingsStore.clear();
+  // ========== Полная синхронизация с сервером ==========
+  @SingleExecution
+  @LogSafe
+  private async reloadTablesSingle(): Promise<void> {
+    await this.loadLocalDataAndEmit();
+    // 1. Загружаем документы с сервера
+    const serverDocs = await this.documentsApi.documentsGet();
+
+    // 2. Загружаем эмбеддинги для всех документов
+    const serverEmbeddings = await this.fetchAllEmbeddings(serverDocs);
+
+    // 3. Синхронизируем таблицы
+    await this.syncPointsWithServer(serverDocs);
+    await this.syncEmbeddingsWithServer(serverEmbeddings);
+
+    // 4. Отправляем обновлённые локальные данные
+    await this.loadLocalDataAndEmit();
   }
 
-  // public async loadEmbeddings(points: Point[]): Promise<void> {
-  //   await Promise.all(points.map((p) => this.fetchEmbeddingForPoint(p)));
-  // }
+  private async fetchAllEmbeddings(documents: fetch.DocumentsGet200ResponseInner[]): Promise<fetch.EmbeddingsSessionIdGet200ResponseInner[]> {
+    const promises = documents.map((doc) => this.embeddingsSessionIdGet(doc));
+    const results = await Promise.all(promises);
+    return results.filter((a) => a != null).flat();
+  }
 
-  // private async fetchEmbeddingForPoint(point: Point): Promise<void> {
-  //   try {
-  //     let embs = await this.embeddingsApi.embeddingsSessionIdGet({ id: point.id });
-  //     const embeddingTables: EmbeddingTable[] = embs.map((e) => ({
-  //       session_id: point.id,
-  //       model_name: e.modelName || "unknown",
-  //       value: e.embedding || [],
-  //       created_at: Date.now(),
-  //     }));
-  //     this.embeddingsStore.set(point.id, embeddingTables);
-  //     await this.db.embeddings.putMany(embeddingTables);
-  //   } catch (err) {
-  //     console.error(`fetchEmbeddingForPoint ${point.id} error`, err);
-  //   }
-  // }
+  @Safe
+  private embeddingsSessionIdGet(doc: fetch.DocumentsGet200ResponseInner): Promise<fetch.EmbeddingsSessionIdGet200ResponseInner[] | null> {
+    return this.embeddingsApi.embeddingsSessionIdGet({ id: doc.id });
+  }
 
-  // --- НОВЫЙ МЕТОД СИНХРОНИЗАЦИИ ---
-  /**
-   * Синхронизирует локальную базу данных с сервером:
-   * - Получает список всех документов с сервера.
-   * - Сравнивает с существующими точками в IndexedDB по id и updated_at.
-   * - Обновляет/добавляет только изменившиеся точки (сохраняя их координаты, если они уже были).
-   * - Параллельно загружает эмбеддинги для изменившихся документов.
-   * - Возвращает массив актуальных точек (с координатами из БД, которые могли быть изменены пользователем).
-   */
-  public async syncAll(): Promise<PointTable[]> {
-    try {
-      // 1. Загружаем свежий список документов с сервера
-      const serverDocs = await this.documentsApi.documentsGet();
+  private async syncPointsWithServer(serverDocs: fetch.DocumentsGet200ResponseInner[]): Promise<void> {
+    const localPoints = await this.db.points.getAll();
+    const localMap = new Map(localPoints.map((p) => [p.id, p]));
 
-      // 2. Получаем все локальные точки (с сохранёнными координатами)
-      const localPoints = await this.db.points.getAll();
-      const localPointsMap = new Map<string, PointTable>();
-      for (const lp of localPoints) {
-        localPointsMap.set(lp.id, lp);
+    for (const doc of serverDocs) {
+      const existing = localMap.get(doc.id);
+      const serverUpdatedAt = toDate(doc.updatedAt)?.getTime() ?? Date.now();
+      if (!existing || existing.updated_at !== serverUpdatedAt) {
+        const pointTable: PointTable = {
+          id: doc.id,
+          x: existing?.x, // начальные координаты, если нет локальных
+          y: existing?.y,
+          title: doc.title,
+          updated_at: serverUpdatedAt,
+        };
+        await this.db.points.put(pointTable);
       }
-
-      // 3. Определяем, какие точки нужно добавить или обновить
-      const pointsToUpsert: typeof localPoints = [];
-      const idsToFetchEmbeddings: string[] = [];
-
-      for (const doc of serverDocs) {
-        const local = localPointsMap.get(doc.id);
-        const serverUpdatedAt = (toDate(doc.updatedAt) ?? new Date()).getTime();
-        const loaclUpdatedAt = toDate(local?.updated_at)?.getTime();
-        const needUpdate = loaclUpdatedAt !== serverUpdatedAt;
-
-        if (needUpdate) {
-          pointsToUpsert.push({
-            ...(local || {}),
-            ...doc,
-            updated_at: serverUpdatedAt,
-          });
-          idsToFetchEmbeddings.push(doc.id);
-        }
-      }
-
-      // 4. Сохраняем обновлённые/новые точки в БД (одним запросом)
-      if (pointsToUpsert.length > 0) {
-        await this.db.points.putMany(pointsToUpsert);
-      }
-
-      // // 5. Загружаем эмбеддинги для изменившихся документов ПАРАЛЛЕЛЬНО (не ждём)
-      // //    При этом используем существующий метод fetchEmbeddingForPoint,
-      // //    который через putMany заменит старые эмбеддинги (благодаря составному ключу).
-      // if (idsToFetchEmbeddings.length > 0) {
-      //   // Создаём временные объекты Point, чтобы воспользоваться fetchEmbeddingForPoint
-      //   const tempPoints = idsToFetchEmbeddings.map((id) => new Point(id, "", 0, 0, "right", new Date()));
-      //   await Promise.all(tempPoints.map((p) => this.fetchEmbeddingForPoint(p)));
-      // }
-
-      // // 6. Загружаем все точки из БД (уже с актуальными координатами) и возвращаем
-      // const allPointsFromDb = ;
-      // const resultPoints = allPointsFromDb.map((p) => new Point(p.id, p.title, p.x, p.y, "right", new Date(p.updated_at)));
-
-      return await this.db.points.getAll();
-    } catch (err) {
-      console.error("syncAll error", err);
-      // При ошибке возвращаем то, что есть в локальной БД
-      const fallback = await this.db.points.getAll();
-      return fallback;
     }
+  }
+
+  private async syncEmbeddingsWithServer(serverEmbeddings: any[]): Promise<void> {
+    // Упрощённая синхронизация: заменяем все эмбеддинги для документа
+    for (const emb of serverEmbeddings) {
+      const embeddingTable: EmbeddingTable = {
+        session_id: emb.sessionId,
+        model_name: emb.modelName || "unknown",
+        value: emb.embedding || [],
+        created_at: Date.now(),
+      };
+      await this.db.embeddings.put(embeddingTable);
+    }
+  }
+
+  // ========== Сохранение изменений (вызывается из PointsTransformer) ==========
+  public async savePointsTable(points: PointTable[]): Promise<void> {
+    await this.db.points.putMany(points);
+  }
+
+  public async saveEmbeddingsTable(embeddings: EmbeddingTable[]): Promise<void> {
+    await this.db.embeddings.putMany(embeddings);
   }
 }
