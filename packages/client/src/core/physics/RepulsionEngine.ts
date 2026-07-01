@@ -9,7 +9,7 @@ export class RepulsionEngineConfig {
   public minDistance = 1e-3;
   public targetDistance = 100;
   public epsilon = 1e-6;
-  public stopTemperature = 0.1;
+  public stopTemperature = 0.10;
 }
 
 export class RepulsionEngine {
@@ -86,7 +86,7 @@ export class RepulsionEngine {
     if (!p2.fixed) {
       p2.sub(d);
     }
-    return 0;
+    return temperature;
   }
 
   private applyStep(): number {

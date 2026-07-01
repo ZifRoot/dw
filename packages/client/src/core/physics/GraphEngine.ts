@@ -4,8 +4,8 @@ import { Edge, EdgeModel } from "../models/Edge";
 
 export class GraphEngineConfig {
   public strength = 0.5;
-  public targetDistance = 101;
-  public stopTemperature: number = 0.1;
+  public targetDistance = 100 * 1.5;
+  public stopTemperature: number = 0.10;
 }
 
 export class GraphEngine {
