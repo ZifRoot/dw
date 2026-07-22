@@ -1,16 +1,25 @@
 // app-db.ts
-import { Database, ITable } from "./db-core";
+import { ITable } from "./IndexDb/ITable";
+import { Database } from "./IndexDb/Database";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
 import { PointTable } from "./tables/PointTable";
 
+type GUID = string;
+type TPointID = GUID;
+
+type TSessionId = GUID;
+type TModel = string;
+
+type TEmbeddingId = [TSessionId, TModel];
+
 export class CanvasPositionsDB extends Database {
-  public points: ITable<PointTable>;
-  public embeddings: ITable<EmbeddingTable>;
+  public points: ITable<PointTable, TPointID>;
+  public embeddings: ITable<EmbeddingTable, TEmbeddingId>;
 
   constructor() {
     super("CanvasPositions", 3);
 
-    this.points = this.addTable<PointTable>({
+    this.points = this.addTable<PointTable, TPointID>({
       name: "points",
       keyPath: "id",
       indexes: [
@@ -18,7 +27,7 @@ export class CanvasPositionsDB extends Database {
         { name: "by_title", keyPath: "title" },
       ],
     });
-    this.embeddings = this.addTable<EmbeddingTable>({
+    this.embeddings = this.addTable<EmbeddingTable, TEmbeddingId>({
       name: "embeddings",
       keyPath: ["session_id", "model_name"],
       indexes: [

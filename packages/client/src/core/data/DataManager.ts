@@ -1,5 +1,3 @@
-// DataManager.ts
-
 import { CanvasPositionsDB } from "./CanvasPositionsDB";
 import { AppMediator } from "../AppMediator";
 import { PointTable } from "./tables/PointTable";
@@ -14,6 +12,8 @@ export class DataManager {
   private documentsApi: fetch.DocumentsApi;
   private embeddingsApi: fetch.EmbeddingsApi;
   private unsubReload: () => void;
+
+  lowDate = new Date(2000, 1, 1, 1, 1, 1, 1);
 
   constructor(private mediator: AppMediator) {
     const config = new fetch.Configuration({ basePath: "http://localhost:3000/api" });
@@ -31,11 +31,12 @@ export class DataManager {
   // ========== Загрузка локальных данных ==========
   private async loadLocalDataAndEmit(): Promise<void> {
     const points = await this.db.points.getAll();
-    const embeddings = await this.db.embeddings.getAll();
+    const embeddings: EmbeddingTable[] = await this.db.embeddings.getAll();
 
     this.mediator.pointsTable = points;
     this.mediator.embeddingsTable = embeddings;
   }
+
   reloadTables() {
     this.reloadTablesSingle().catch(() => {});
   }
@@ -47,13 +48,15 @@ export class DataManager {
     await this.loadLocalDataAndEmit();
     // 1. Загружаем документы с сервера
     const serverDocs = await this.documentsApi.documentsGet();
+    await this.syncPointsWithServer(serverDocs);
+
+    let embeddings = await this.embeddingsApi.embeddingsQueryGet({ updateat: this.lowDate });
+    await this.syncEmbeddingsWithServer(embeddings);
 
     // 2. Загружаем эмбеддинги для всех документов
-    const serverEmbeddings = await this.fetchAllEmbeddings(serverDocs);
+    //const serverEmbeddings = await this.fetchAllEmbeddings(serverDocs);
 
     // 3. Синхронизируем таблицы
-    await this.syncPointsWithServer(serverDocs);
-    await this.syncEmbeddingsWithServer(serverEmbeddings);
 
     // 4. Отправляем обновлённые локальные данные
     await this.loadLocalDataAndEmit();
@@ -82,25 +85,71 @@ export class DataManager {
           id: doc.id,
           x: existing?.x, // начальные координаты, если нет локальных
           y: existing?.y,
+          z: existing?.z,
           title: doc.title,
           updated_at: serverUpdatedAt,
         };
         await this.db.points.put(pointTable);
       }
     }
+
+    const points = await this.db.points.getAll();
+
+    this.mediator.pointsTable = points;
   }
 
-  private async syncEmbeddingsWithServer(serverEmbeddings: any[]): Promise<void> {
-    // Упрощённая синхронизация: заменяем все эмбеддинги для документа
+  private async syncEmbeddingsWithServer(serverEmbeddings: fetch.EmbeddingsSessionIdGet200ResponseInner[]): Promise<void> {
+    let sessions = new Set<string>();
     for (const emb of serverEmbeddings) {
-      const embeddingTable: EmbeddingTable = {
-        session_id: emb.sessionId,
-        model_name: emb.modelName || "unknown",
-        value: emb.embedding || [],
-        created_at: Date.now(),
-      };
-      await this.db.embeddings.put(embeddingTable);
+      const sessionId = emb.sessionId;
+      const modelName = emb.modelName;
+      const local = await this.db.embeddings.get([sessionId, modelName]);
+
+      const serverCreatedAt = toDate(emb.createdAt)?.getTime() ?? 0;
+      const localValue = local?.value ?? [];
+      const localCreatedAt = toDate(local?.created_at)?.getTime() ?? 0;
+
+      if (localValue.length === 0 || serverCreatedAt > localCreatedAt) {
+        sessions.add(sessionId);
+      }
     }
+
+    for (const session of sessions) {
+      let embs = await this.embeddingsApi.embeddingsSessionIdGet({ id: session });
+
+      for (const emb of embs) {
+        const sessionId = emb.sessionId;
+        const modelName = emb.modelName;
+        const local = await this.db.embeddings.get([sessionId, modelName]);
+
+        const serverCreatedAt = toDate(emb.createdAt)?.getTime() ?? 0;
+        const serverEmbedding = emb.embedding ?? [];
+        const localValue = local?.value ?? [];
+        const localCreatedAt = toDate(local?.created_at)?.getTime() ?? 0;
+
+        // Единое условие обновления:
+        // 1. Нет локальной записи -> создаём
+        // 2. Сервер прислал непустой массив -> обновляем, если локальный пустой ИЛИ дата сервера новее
+        // 3. Сервер прислал пустой массив -> обновляем дату только если локальный тоже пустой И дата сервера новее
+        const shouldUpdate =
+          local === undefined ||
+          (serverEmbedding.length > 0 && (localValue.length === 0 || serverCreatedAt > localCreatedAt)) ||
+          (serverEmbedding.length === 0 && localValue.length === 0 && serverCreatedAt > localCreatedAt);
+
+        if (shouldUpdate) {
+          await this.db.embeddings.put({
+            session_id: sessionId,
+            model_name: modelName,
+            value: serverEmbedding,
+            created_at: serverCreatedAt,
+            processingTimeMs: emb.processingTimeMs,
+          });
+        }
+      }  
+    }
+
+    let embs = await this.db.embeddings.getAll();
+    this.mediator.embeddingsTable = embs;
   }
 
   // ========== Сохранение изменений (вызывается из PointsTransformer) ==========

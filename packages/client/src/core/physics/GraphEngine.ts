@@ -38,7 +38,6 @@ export class GraphEngine {
 
   step(): void {
     this.temperature = this.applyStep();
-    this.mediator.pointsUpdating([]);
     this.mediator.temperature = this.temperature;
     if (this.temperature < this.config.stopTemperature) {
       this.stop();

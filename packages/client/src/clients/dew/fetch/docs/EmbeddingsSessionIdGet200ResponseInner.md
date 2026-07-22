@@ -11,6 +11,7 @@ Name | Type
 `dimension` | number
 `processingTimeMs` | number
 `sessionId` | string
+`createdAt` | Date
 
 ## Example
 
@@ -24,6 +25,7 @@ const example = {
   "dimension": null,
   "processingTimeMs": null,
   "sessionId": null,
+  "createdAt": null,
 } satisfies EmbeddingsSessionIdGet200ResponseInner
 
 console.log(example)

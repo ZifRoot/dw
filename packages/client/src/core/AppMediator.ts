@@ -180,7 +180,6 @@ export class AppMediator extends BaseMediator {
   public onSizeText(callback: (value: number) => void): () => void {
     return this.on(AppMediator.SIZE_TEXT, callback);
   }
-
   public onEdgeUpdate(callback: (detail: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> }) => void): () => void {
     return this.on(AppMediator.EDGE_UPDATE, callback);
   }

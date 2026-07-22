@@ -34,6 +34,10 @@ export class Point implements PointMath {
     return Point.Normalize(this);
   }
 
+  smoothMove(target: PointMath, factor: number): Point {
+    return Point.Add(this, Point.SubNew(target, this).scale(factor));
+  }
+
   // ============================================================
   //  ВЫЧИСЛИТЕЛЬНЫЕ МЕТОДЫ (без мутации)
   // ============================================================

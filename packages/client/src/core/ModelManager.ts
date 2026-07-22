@@ -1,150 +1,174 @@
-import { Point } from "./Point";
-import { ModelData } from "./ModelData";
-import { Pair } from "./Pair";
+// ModelManager.ts
 import { AppMediator } from "./AppMediator";
-import { EmbeddingTable } from "./data/tables/EmbeddingTable";
+import { PointModel } from "./models/PointModel";
+import { EmbeddingModel } from "./models/EmbeddingModel";
 
-/**
- * Управляет моделями, покрытием, генерацией пар.
- * Реализует "двойной толкач" для ускорения генерации пар
- * через анимационный цикл и setInterval/delay.
- */
 export class ModelManager {
-  private models: ModelData[] = [];
-  private modelsMap = new Map<string, ModelData>();
-  private pairs: Pair[] = [];
-  private coverage = new Map<string, number>();
-  private topModelNames: string[] = [];
-  private allModelsGen: Generator<{ progress: number; done: boolean }, void, unknown> | null = null;
-  private generatorInterval: number | null = null;
-  private processingCompleted = false;
+  private points: PointModel[] = [];
+  private neighbors: Map<string, string[]> = new Map();
+  private readonly K = 3; // количество соседей на точку
+  private readonly maxCandidates = 9; // соседи соседей + текущие
+  private distanceCache: Map<string, number> = new Map();
+  private selectedModel: string; // имя модели, используемой для расстояний
 
-  constructor(private mediator: AppMediator) {}
+  private unsubPoints: () => void;
+  private unsubStep: () => void;
 
-  public async updateModelStats(points: Point[], embeddingsStore: Map<string, EmbeddingTable[]>): Promise<void> {
-    this.coverage = this.computeCoverage(embeddingsStore);
-    this.topModelNames = ["sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"]; // берём вторую модель – магия
-    this.initModels(this.topModelNames);
+  constructor(
+    private mediator: AppMediator,
+    selectedModel: string = "default", // можно указать нужную модель
+  ) {
+    this.selectedModel = selectedModel;
 
-    for (const point of points) {
-      const embList = embeddingsStore.get(point.id);
-      if (!embList) continue;
-      for (const emb of embList) {
-        const model = this.modelsMap.get(emb.model_name);
-        if (model && emb) {
-          model.addPointRef(point, emb.value);
-        }
-      }
-    }
+    // 1. Подписка на модельные точки (с эмбеддингами)
+    this.unsubPoints = this.mediator.onPointsModelReady((points: PointModel[]) => {
+      this.points = points;
+      this.initRandomNeighbors();
+      this.emitEdges();
+    });
 
-    // Запускаем генератор пар (генератор, который будет выдавать пары порциями)
-    this.allModelsGen = this.processAllModels(this.models, 50000, 8);
-    this.processingCompleted = false;
-  }
-
-  private computeCoverage(embeddingsStore: Map<string, EmbeddingTable[]>): Map<string, number> {
-    const coverage = new Map<string, number>();
-    for (const [, embList] of embeddingsStore) {
-      for (const emb of embList) {
-        const cnt = coverage.get(emb.model_name) ?? 0;
-        coverage.set(emb.model_name, cnt + 1);
-      }
-    }
-    return coverage;
-  }
-
-  private selectTopModels(topN: number): string[] {
-    const entries = Array.from(this.coverage.entries());
-    entries.sort((a, b) => b[1] - a[1]);
-    return entries.slice(0, topN).map(([name]) => name);
-  }
-
-  private initModels(modelNames: string[]): void {
-    this.models = modelNames.map((name) => {
-      const model = new ModelData(name);
-      this.modelsMap.set(name, model);
-      return model;
+    // 2. Подписка на команду шага улучшения
+    this.unsubStep = this.mediator.onModelManagerStep(() => {
+      this.improveNeighbors();
+      this.emitEdges();
     });
   }
 
-  private *processAllModels(models: ModelData[], maxPx: number, maxTimeMs: number): Generator<{ progress: number; done: boolean }, void, unknown> {
-    let totalPairs = 0;
-    for (const m of models) {
-      const n = m.pointModels.length;
-      totalPairs += (n * (n - 1)) / 2;
+  public destroy(): void {
+    this.unsubPoints();
+    this.unsubStep();
+  }
+
+  // ========== Получение эмбеддинга для точки ==========
+  private getEmbedding(point: PointModel): number[] | undefined {
+    // Берём эмбеддинг по выбранной модели, если нет — пробуем первую попавшуюся
+    const emb = point.embeddings.get(this.selectedModel);
+    if (emb) return emb.value;
+    // fallback: берём первый доступный эмбеддинг
+    const first = point.embeddings.values().next().value;
+    return first?.value;
+  }
+
+  // ========== Инициализация случайных соседей ==========
+  private initRandomNeighbors(): void {
+    const ids = this.points.map((p) => p.id);
+    if (ids.length === 0) return;
+    this.neighbors.clear();
+    for (const id of ids) {
+      const candidates = this.randomDistinct(ids, id, this.K);
+      this.neighbors.set(id, candidates);
     }
-    let processedPairs_l = 0;
-    for (const model of models) {
-      const gen = model.processInSteps(maxPx);
-      const modelTotalPairs = (model.pointModels.length * (model.pointModels.length - 1)) / 2;
-      let result;
-      do {
-        result = gen.next();
-        if (!result.done) {
-          const modelProgress = result.value.progress;
-          const modelProcessed = modelProgress * modelTotalPairs;
-          const processedPairs = processedPairs_l + modelProcessed;
-          const overall = processedPairs / totalPairs;
-          yield { progress: overall, done: false };
+  }
+
+  private randomDistinct(allIds: string[], excludeId: string, count: number): string[] {
+    const filtered = allIds.filter((id) => id !== excludeId);
+    const shuffled = [...filtered];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, count);
+  }
+
+  // ========== Вычисление расстояния между эмбеддингами ==========
+  private distance(id1: string, id2: string): number {
+    if (id1 === id2) return 0;
+    const key = `${id1}|${id2}`;
+    let d = this.distanceCache.get(key);
+    if (d !== undefined) return d;
+
+    const p1 = this.points.find((p) => p.id === id1);
+    const p2 = this.points.find((p) => p.id === id2);
+    if (!p1 || !p2) return Infinity;
+
+    const v1 = this.getEmbedding(p1);
+    const v2 = this.getEmbedding(p2);
+    if (!v1 || !v2) return Infinity;
+
+    let sum = 0;
+    for (let i = 0; i < v1.length; i++) {
+      const diff = v1[i] - v2[i];
+      sum += diff * diff;
+    }
+    d = Math.sqrt(sum);
+    this.distanceCache.set(key, d);
+    return d;
+  }
+
+  // ========== Один шаг улучшения соседей ==========
+  private improveNeighbors(): void {
+    const allIds = Array.from(this.neighbors.keys());
+    let changed = false;
+    for (const id of allIds) {
+      const current = this.neighbors.get(id) || [];
+      // Собираем кандидатов: текущие соседи + соседи соседей
+      const candidateSet = new Set<string>(current);
+      for (const nid of current) {
+        const neighborsOfNeighbor = this.neighbors.get(nid) || [];
+        for (const nn of neighborsOfNeighbor) {
+          if (nn !== id) candidateSet.add(nn);
         }
-      } while (!result.done);
-      processedPairs_l += modelTotalPairs;
-    }
-    this.pairs = models.flatMap((m) => m.pairs);
-    yield { progress: 0.9, done: false };
-    this.pairs.sort((a, b) => a.cosineDist - b.cosineDist);
-    yield { progress: 1, done: true };
-  }
-
-  // Вызывается из анимационного цикла – один шаг
-  public stepAllModels(): boolean {
-    if (!this.allModelsGen || this.processingCompleted) return false;
-    const result = this.allModelsGen.next();
-    if (!result.done) {
-      this.mediator.progress = result.value.progress;
-      return true;
-    } else {
-      this.processingCompleted = true;
-      if (this.generatorInterval) {
-        clearInterval(this.generatorInterval);
-        this.generatorInterval = null;
       }
-      return false;
-    }
-  }
-
-  // Запуск "двойного толкача": анимационный цикл + setInterval для ускорения
-  public startDoublePush(): void {
-    if (this.generatorInterval) return;
-    this.generatorInterval = window.setInterval(() => {
-      if (this.allModelsGen && !this.processingCompleted) {
-        this.stepAllModels();
-      } else if (this.processingCompleted && this.generatorInterval) {
-        clearInterval(this.generatorInterval);
-        this.generatorInterval = null;
+      const candidates = Array.from(candidateSet);
+      candidates.sort((a, b) => this.distance(id, a) - this.distance(id, b));
+      const newNeighbors = candidates.slice(0, this.K);
+      if (!this.arraysEqual(current, newNeighbors)) {
+        this.neighbors.set(id, newNeighbors);
+        changed = true;
       }
-    }, 10); // каждые 10 мс
-  }
-
-  public getPairs(): Pair[] {
-    return this.pairs;
-  }
-
-  public hasPairs(): boolean {
-    return this.pairs.length > 0;
-  }
-
-  public clear(): void {
-    this.models = [];
-    this.modelsMap.clear();
-    this.pairs = [];
-    this.coverage.clear();
-    this.topModelNames = [];
-    this.allModelsGen = null;
-    this.processingCompleted = false;
-    if (this.generatorInterval) {
-      clearInterval(this.generatorInterval);
-      this.generatorInterval = null;
     }
+    if (changed) {
+      // Очищаем часть кэша, если он слишком большой
+      if (this.distanceCache.size > 10000) {
+        const entries = Array.from(this.distanceCache.entries());
+        const toDelete = entries.slice(0, Math.floor(entries.length * 0.2));
+        for (const [key] of toDelete) {
+          this.distanceCache.delete(key);
+        }
+      }
+    }
+  }
+
+  private arraysEqual(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false;
+    const sa = [...a].sort();
+    const sb = [...b].sort();
+    for (let i = 0; i < sa.length; i++) {
+      if (sa[i] !== sb[i]) return false;
+    }
+    return true;
+  }
+
+  // ========== Отправка рёбер ==========
+  private emitEdges(): void {
+    const edges: { sourceId: string; targetId: string; distance: number }[] = [];
+    for (const [sourceId, targets] of this.neighbors.entries()) {
+      for (const targetId of targets) {
+        if (sourceId < targetId) {
+          // добавляем каждое ребро один раз
+          edges.push({
+            sourceId,
+            targetId,
+            distance: this.distance(sourceId, targetId),
+          });
+        }
+      }
+    }
+    this.mediator.edges = edges;
+  }
+
+  // ========== Метод для физики (EmbeddingEngine) ==========
+  public getPairs(): { source: PointModel; target: PointModel }[] {
+    const pointMap = new Map(this.points.map((p) => [p.id, p]));
+    const pairs: { source: PointModel; target: PointModel }[] = [];
+    for (const [sourceId, targets] of this.neighbors.entries()) {
+      const source = pointMap.get(sourceId);
+      if (!source) continue;
+      for (const targetId of targets) {
+        const target = pointMap.get(targetId);
+        if (target) pairs.push({ source, target });
+      }
+    }
+    return pairs;
   }
 }

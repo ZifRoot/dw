@@ -12,6 +12,7 @@ export const EmbeddingDtoSchema = z.object({
   dimension: z.number().int().positive(),
   processing_time_ms: z.number().nonnegative(),
   sessionId: z.string().uuid(),
+  createdAt: z.date(),
 });
 export type EmbeddingDto = z.infer<typeof EmbeddingDtoSchema>;
 
@@ -99,10 +100,8 @@ export class EmbeddingsController extends BaseController {
       async (c) => {
         try {
           const { updateat, modelname } = c.req.valid("query");
-          if (!updateat) {
-            return c.json({ error: "updateat" }, 400);
-          }
-          const embeddings = await this.repo.findEmbeddingsByDate(toDate(updateat as any) ?? undefined, modelname);
+          let updateat_up = updateat ?? new Date();
+          const embeddings = await this.repo.findEmbeddingsByDate(toDate(updateat_up as any) ?? undefined, modelname);
           return c.json(embeddings, 200);
         } catch (err) {
           console.error(err);

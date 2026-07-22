@@ -7,7 +7,7 @@ import { PointModel } from "../models/PointModel";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  public entities: EntityCollection<PointModel>; // исправлено имя
+  private entities: EntityCollection<PointModel>; // исправлено имя
   private points: PointModel[] = [];
 
   private unregisterDrag: (() => void) | null = null;
@@ -45,6 +45,10 @@ export class PointsScene {
     return this.entities.getPointById(id);
   }
 
+  public get Entities() {
+    return this.entities;
+  }
+
   public removePoints(ids: string[]): void {
     if (ids.length === 0) return;
     for (const id of ids) {
@@ -67,7 +71,7 @@ export class PointsScene {
 
   public updateAllPointsPositions(): void {
     if (!this.groupSelection) return;
-    this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y}) `); // scale(${d.z})
     if (this.mediator.autoZoom) this.fitView();
   }
 
@@ -145,12 +149,17 @@ export class PointsScene {
 
     const s = this.svgEngine.getTransform().k;
     const inv = 1 / s;
-    target.attr("transform", (d) => `translate(${d.x},${d.y})`);
-    target.select("text.point-label").text((d) => d.text);
     target
-      .select("circle.point")
-      // .attr("r",(d)=>d.z 20 * inv)
-      .attr("fill", (d) => (d.fixed ? "#ffaa44" : "#00ff001e"));
+      .classed("gragged", (d) => d.dragged)
+      .classed("selected", (d) => d.selected)
+      .classed("pinned", (d) => d.pinned)
+      .attr("transform", (d) => `translate(${d.x},${d.y})`); // scale(${d.z})
+    target.select("text.point-label").text((d) => d.text);
+    // target
+    //   .select("circle.point")
+    //   // .attr("r",(d)=>d.z 20 * inv)
+    //   .attr("fill", (d) => (d.fixed ? "#ffaa44" : "#00ff001e"));
+    if (this.mediator.autoZoom) this.fitView();
   }
 
   private updatePointStyles(scale?: number): void {
@@ -170,6 +179,7 @@ export class PointsScene {
     this.unregisterDrag = this.svgEngine.registerDragDetector((event) => {
       const target = event.target as Element;
       const element = target.closest?.(".point-group");
+      if (event.type === "wheel") return null;
       if (!element) return null;
 
       const group = d3.select<SVGGElement, PointModel>(element as SVGGElement);
@@ -177,7 +187,7 @@ export class PointsScene {
       if (!point) return null;
 
       // Временно фиксируем точку на время перетаскивания
-      point.fixed = true;
+      point.dragged = true;
       this.applyUpdatesToGroups(group);
 
       return {
@@ -193,9 +203,9 @@ export class PointsScene {
           },
           onDragEnd: (el) => {
             const p = d3.select<SVGGElement, PointModel>(el as SVGGElement).datum();
-            p.fixed = false;
+            p.dragged = false;
             this.applyUpdatesToGroups(d3.select(el as SVGGElement));
-            this.mediator.startRepulsion();            
+            this.mediator.startRepulsion();
           },
         },
       };
@@ -205,10 +215,17 @@ export class PointsScene {
   private setupClickHandler(): void {
     this.rootGroup.on("click", (event) => {
       const target = event.target as Element;
-      const group = target.closest?.(".point-group");
-      if (!group) return;
-      const point = d3.select<SVGGElement, PointModel>(group as SVGGElement).datum();
+      const domEle = target.closest?.(".point-group");
+      if (!domEle) return;
+
+      let d3Ele = d3.select<SVGGElement, PointModel>(domEle as SVGGElement);
+      const point = d3.select<SVGGElement, PointModel>(domEle as SVGGElement).datum();
       if (!point) return;
+      point.selected = true;
+
+      d3Ele.classed("selected", (d) => {
+        return d.selected;
+      });
       const uiPoint: UIPoint = {
         id: point.id,
         x: point.x,
@@ -226,7 +243,7 @@ export class PointsScene {
       const point = this.getPointById(pointId);
       if (!point) return;
       if (changes.text !== undefined) point.text = changes.text;
-      if (changes.fixed !== undefined) point.fixed = changes.fixed;
+      if (changes.fixed !== undefined) point.pinned = changes.fixed;
       if (changes.x !== undefined) point.x = changes.x;
       if (changes.y !== undefined) point.y = changes.y;
       this.applyUpdatesToGroups(this.groupSelection);

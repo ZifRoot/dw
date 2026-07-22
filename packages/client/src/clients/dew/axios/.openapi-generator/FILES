@@ -1,0 +1,17 @@
+.gitignore
+.npmignore
+.openapi-generator-ignore
+api.ts
+base.ts
+common.ts
+configuration.ts
+docs/ActionsApi.md
+docs/DocumentIdGet200Response.md
+docs/DocumentsApi.md
+docs/DocumentsGet200ResponseInner.md
+docs/DocumentsGet500Response.md
+docs/EmbeddingsApi.md
+docs/EmbeddingsPost200Response.md
+docs/EmbeddingsSessionIdGet200ResponseInner.md
+git_push.sh
+index.ts

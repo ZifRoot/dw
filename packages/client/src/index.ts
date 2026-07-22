@@ -8,6 +8,9 @@ import { createControlPanel, createInfoPanel } from "./ui";
 import { RepulsionEngine, RepulsionEngineConfig } from "./core/physics/RepulsionEngine";
 import { AnimationEngine } from "./core/Engines/AnimationEngine";
 import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
+import { ZDampingConfig, ZDampingEngine } from "./core/physics/ZDampingEngine";
+import { PointsTransformer } from "./core/PointsTransformer";
+import { DataManager } from "./core/data/DataManager";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -49,11 +52,17 @@ pointsScene.init();
 
 const animationEngine = new AnimationEngine();
 
-const repulsionEngine = new RepulsionEngine(mediator, animationEngine, new RepulsionEngineConfig());
+const dataManager = new DataManager(mediator);
+const pointsTransformer = new PointsTransformer(mediator, dataManager, pointsScene);
+
+const zdampingEngine = new ZDampingEngine(mediator, animationEngine, new ZDampingConfig());
 const graphEngine = new GraphEngine(mediator, animationEngine, new GraphEngineConfig());
+const repulsionEngine = new RepulsionEngine(mediator, animationEngine, new RepulsionEngineConfig());
+
+animationEngine.AfterStep = () => mediator.pointsUpdating([]);
 
 graphEngine.setEdges(edgesScene.getEdges());
-
+zdampingEngine.setPoints(pointsScene.getPoints());
 repulsionEngine.setPoints(pointsScene.getPoints());
 
 const tester = new PointsSceneTester(mediator, pointsScene, edgesScene, {

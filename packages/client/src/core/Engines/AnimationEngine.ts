@@ -4,6 +4,8 @@ export class AnimationEngine {
   private rafId: number | null = null;
   private callbacks: Set<AnimationCallback> = new Set();
   private isRunning = false;
+  public AfterStep: AnimationCallback | null = null;
+  public onStop: AnimationCallback | null = null;
 
   /** Добавить колбэк в очередь. Возвращает функцию для удаления. */
   public addCallback(cb: AnimationCallback): AnimationCallback {
@@ -39,7 +41,7 @@ export class AnimationEngine {
     for (const cb of this.callbacks) {
       cb();
     }
-
+    if (this.AfterStep) this.AfterStep();
     this.rafId = requestAnimationFrame(() => this.step());
   }
 

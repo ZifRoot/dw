@@ -1,7 +1,7 @@
 // PointsSceneTester.ts
 import { PointsScene } from "./Scene/PointsScene";
 import { EdgesScene } from "./Scene/EdgesScene";
-import { Edge, EdgeModel } from "./models/Edge";
+import { EdgeModel } from "./models/Edge";
 import { AppMediator } from "./AppMediator";
 import { Safe } from "@utils/logger";
 import { DocumentsGet200ResponseInner } from "src/clients/dew/fetch";
@@ -53,9 +53,9 @@ export class PointsSceneTester {
   public start(): void {
     if (this.intervalId !== null) return;
     this.log("Тест запущен");
-    // this._start().catch(console.error);
+    this._start().catch(console.error);
 
-    this.iteration();
+    //this.iteration();
   }
 
   private async _start() {
@@ -63,11 +63,15 @@ export class PointsSceneTester {
     //this.pointsScene.setPoints(documents.map((d) => this.generatePointf(d)));
   }
   generatePointf(doc: PointTable): PointModel {
-    return new PointModel(doc.id, doc.title, false, {
-      x: doc.x ?? Math.random() * 800,
-      y: doc.y ?? Math.random() * 600,
-      z: Math.random(),
-    });
+    return new PointModel(
+      {
+        x: doc.x ?? Math.random() * 800,
+        y: doc.y ?? Math.random() * 600,
+        z: Math.random(),
+      },
+      doc.id,
+      doc.title,
+    );
   }
 
   public stop(): void {
@@ -79,23 +83,26 @@ export class PointsSceneTester {
   }
 
   private iteration(): void {
-    this._iteration();
-    this.intervalId = window.setTimeout(() => {
-      requestAnimationFrame(() => this.iteration());
-    }, this.config.intervalMs);
+    this._iteration().then((i) => {
+      if (i) {
+        this.intervalId = window.setTimeout(() => {
+          requestAnimationFrame(() => this.iteration());
+        }, this.config.intervalMs);
+      }
+    });
   }
 
   @Safe
-  private _iteration() {
+  private async _iteration() {
     const start = performance.now();
 
     let points = this.pointsScene.getPoints(); // получаем актуальные точки
-    let validation = this.pointsScene.entities.validate();
+    let validation = this.pointsScene.Entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
 
-    let backupCollection = this.pointsScene.entities.clone();
+    let backupCollection = this.pointsScene.Entities.clone();
     let [minP, maxP] = this.config.removeFrationRange;
 
     // 1. Удаляем лишние точки (если пул превышает целевой размер)
@@ -108,13 +115,13 @@ export class PointsSceneTester {
 
     this.pointsScene.removePoints(removedIds);
 
-    validation = this.pointsScene.entities.validate();
+    validation = this.pointsScene.Entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
 
     points = this.pointsScene.getPoints(); // обновляем после мутаций
-    backupCollection = this.pointsScene.entities.clone();
+    backupCollection = this.pointsScene.Entities.clone();
 
     [minP, maxP] = this.config.updateFrationRange;
     let updateCount = this.randomInt(points.length * minP, points.length * maxP);
@@ -132,7 +139,7 @@ export class PointsSceneTester {
 
     this.pointsScene.setPoints(uppoints); // добавление новых
 
-    validation = this.pointsScene.entities.validate();
+    validation = this.pointsScene.Entities.validate();
     if (!validation.ok) {
       console.error("❌ Ошибки после удаления:", validation.errors);
     }
@@ -141,11 +148,12 @@ export class PointsSceneTester {
 
     const duration = performance.now() - start;
     const finalPoints = this.pointsScene.getPoints();
-    
+
     if (this.mediator.autoZoom) this.pointsScene.fitView();
     this.log(
       `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, время=${duration.toFixed(2)}ms`,
     );
+    return Math.abs(finalPoints.length - this.mediator.targetSize) > 1;
   }
 
   /** Построить полный граф (все пары) из текущих точек */
@@ -184,18 +192,26 @@ export class PointsSceneTester {
 
   private generateRandomPoint(): PointModel {
     const id = `p${this.nextId++}`;
-    return new PointModel(id, id.slice(1, 5), false, {
-      x: Math.random() * 800,
-      y: Math.random() * 600,
-      z: Math.random(),
-    });
+    return new PointModel(
+      {
+        x: Math.random() * 800,
+        y: Math.random() * 600,
+        z: Math.random(),
+      },
+      id,
+      id.slice(1, 5),
+    );
   }
   private generatePoint(doc: DocumentsGet200ResponseInner): PointModel {
-    return new PointModel(doc.id, doc.title, false, {
-      x: Math.random() * 800,
-      y: Math.random() * 600,
-      z: Math.random(),
-    });
+    return new PointModel(
+      {
+        x: Math.random() * 800,
+        y: Math.random() * 600,
+        z: Math.random(),
+      },
+      doc.id,
+      doc.title,
+    );
   }
 
   private mutatePoint(point: PointModel): PointModel {
