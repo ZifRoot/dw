@@ -1,7 +1,7 @@
 // ModelManager.ts
 import { AppMediator } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
-import { EdgeRefs } from "./models/Edge";
+import { EdgeRefs } from "./models/EdgeRefs";
 
 export class ModelManager {
   private points: PointModel[] = [];

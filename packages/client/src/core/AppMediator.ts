@@ -2,7 +2,7 @@
 import { BaseMediator } from "./BaseMediator";
 import { EmbeddingTable } from "./data/tables/EmbeddingTable";
 import { PointTable } from "./data/tables/PointTable";
-import { EdgeRefs } from "./models/Edge";
+import { EdgeRefs } from "./models/EdgeRefs";
 import { PointModel } from "./models/PointModel";
 import { UIPoint, UIEdge } from "./ui-models";
 

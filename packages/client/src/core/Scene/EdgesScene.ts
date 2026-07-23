@@ -3,8 +3,11 @@ import { EntityCollection } from "./indexer.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
 import { UIEdge } from "../ui-models.ts";
-import { Edge, EdgeModel, EdgeRef, EdgeRefs } from "../models/Edge.ts";
+import { Edge } from "../models/Edge.ts";
+import { EdgeRefs } from "../models/EdgeRefs.ts";
+import { EdgeRef } from "../models/EdgeRef.ts";
 import { PointModel } from "../models/PointModel.ts";
+import { EdgeModel } from "../models/EdgeModel.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;

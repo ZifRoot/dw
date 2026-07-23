@@ -8,7 +8,7 @@ export class EmbeddingModel {
     public value: number[],
     public created_at: number,
     public processingTimeMs: number,
-    activationThreshold: number,
+    activationThreshold: number = 0.5,
   ) {
     for (let i = 0; i < value.length; i++) {
       const abs = Math.abs(value[i]);
