@@ -6,6 +6,7 @@ import { PointModel } from "./PointModel";
 export class EdgeModel implements Edge, EdgeRef {
   public sourceId: string;
   public targetId: string;
+  public id:string;
 
   public cosineDistance: number;
   public intersectionCount: number;
@@ -23,6 +24,7 @@ export class EdgeModel implements Edge, EdgeRef {
     color: string = "#888888",
     intersectionSet?: Set<number>,
   ) {
+    this.id=`${source.id}-${target.id}`;
     this.cosineDistance = cosineDistance;
     this.intersectionCount = intersectionCount;
     this.intersectionSet = intersectionSet;
