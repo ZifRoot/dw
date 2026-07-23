@@ -2,6 +2,7 @@
 import { BaseMediator } from "./BaseMediator";
 import { EmbeddingTable } from "./data/tables/EmbeddingTable";
 import { PointTable } from "./data/tables/PointTable";
+import { EdgeRefs } from "./models/Edge";
 import { PointModel } from "./models/PointModel";
 import { UIPoint, UIEdge } from "./ui-models";
 
@@ -43,6 +44,9 @@ export class AppMediator extends BaseMediator {
   static START_GRAPH = "start-graph";
   static RELOAD_TABLES = "reload-tables";
   static POINTS_UPDATING = "points-updating";
+
+  static POINTS_MODEL_READY = "points-model-ready";
+  static MODEL_MANAGER_STEP = "model-manager-step";
 
   // ========== Геттеры/сеттеры ==========
   public get progress(): number {
@@ -118,10 +122,10 @@ export class AppMediator extends BaseMediator {
     this.set(AppMediator.EMBEDDINGS_TABLE, value);
   }
 
-  public get edges(): { sourceId: string; targetId: string; distance: number }[] {
+  public get edges(): EdgeRefs {
     return this.get(AppMediator.EDGES) ?? [];
   }
-  public set edges(value: { sourceId: string; targetId: string; distance: number }[]) {
+  public set edges(value: EdgeRefs) {
     this.set(AppMediator.EDGES, value);
   }
 
@@ -155,6 +159,16 @@ export class AppMediator extends BaseMediator {
   public pointsUpdated(points: PointModel[]): void {
     this.emit(AppMediator.POINTS_UPDATED, points);
   }
+
+  // Команды
+  public pointsModelReady(points: PointModel[]): void {
+    this.emit(AppMediator.POINTS_MODEL_READY, points);
+  }
+
+  public modelManagerStep(): void {
+    this.emit(AppMediator.MODEL_MANAGER_STEP);
+  }
+
   // ========== Методы подписки ==========
   public onProgress(callback: (value: number) => void): () => void {
     return this.on(AppMediator.PROGRESS, callback);
@@ -189,7 +203,7 @@ export class AppMediator extends BaseMediator {
   public onEmbeddingsTable(callback: (embeddings: EmbeddingTable[]) => void): () => void {
     return this.on(AppMediator.EMBEDDINGS_TABLE, callback);
   }
-  public onEdges(callback: (edges: { sourceId: string; targetId: string; distance: number }[]) => void): () => void {
+  public onEdges(callback: (edges: EdgeRefs) => void): () => void {
     return this.on(AppMediator.EDGES, callback);
   }
   public onClearPoints(callback: () => void): () => void {
@@ -215,5 +229,12 @@ export class AppMediator extends BaseMediator {
   }
   public onPointUpdated(callback: (point: PointModel) => void): () => void {
     return this.on(AppMediator.POINT_UPDATED, callback);
+  }
+  public onPointsModelReady(callback: (points: PointModel[]) => void): () => void {
+    return this.on(AppMediator.POINTS_MODEL_READY, callback);
+  }
+
+  public onModelManagerStep(callback: () => void): () => void {
+    return this.on(AppMediator.MODEL_MANAGER_STEP, () => callback());
   }
 }

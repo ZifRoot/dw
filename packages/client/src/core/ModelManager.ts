@@ -1,7 +1,7 @@
 // ModelManager.ts
 import { AppMediator } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
-import { EmbeddingModel } from "./models/EmbeddingModel";
+import { EdgeRefs } from "./models/Edge";
 
 export class ModelManager {
   private points: PointModel[] = [];
@@ -141,7 +141,7 @@ export class ModelManager {
 
   // ========== Отправка рёбер ==========
   private emitEdges(): void {
-    const edges: { sourceId: string; targetId: string; distance: number }[] = [];
+    const edges: EdgeRefs = [];
     for (const [sourceId, targets] of this.neighbors.entries()) {
       for (const targetId of targets) {
         if (sourceId < targetId) {

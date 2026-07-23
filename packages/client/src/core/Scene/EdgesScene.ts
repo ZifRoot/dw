@@ -3,13 +3,16 @@ import { EntityCollection } from "./indexer.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
 import { UIEdge } from "../ui-models.ts";
-import { Edge, EdgeModel } from "../models/Edge.ts";
+import { Edge, EdgeModel, EdgeRef, EdgeRefs } from "../models/Edge.ts";
+import { PointModel } from "../models/PointModel.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
   private edges: EdgeModel[] = [];
-  public entites: EntityCollection<EdgeModel>;
+  public entities: EntityCollection<EdgeModel>;
   private groupSelection: d3.Selection<SVGLineElement, EdgeModel, SVGGElement, unknown> | null = null;
+  public PointEntities!: EntityCollection<PointModel>; // исправлено имя
+
   unregisterSelectedPoint: () => void;
 
   constructor(
@@ -17,8 +20,9 @@ export class EdgesScene {
     private mediator: AppMediator,
     groupName = "edges-scene",
   ) {
-    this.entites = new EntityCollection<EdgeModel>((p) => p.id);
-    this.edges = this.entites.items;
+    this.mediator.onEdges((e) => this.onEdgeRefsUpd(e));
+    this.entities = new EntityCollection<EdgeModel>((p) => p.id);
+    this.edges = this.entities.items;
     this.svgEngine = svgEngine;
     this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
@@ -41,6 +45,29 @@ export class EdgesScene {
       this.mediator.selectedEdge = uiEdge;
       // this.mediator.selectedPoint = null;
     });
+  }
+
+  private onEdgeRefsUpd(edges: EdgeRefs) {
+    this.setEdges(edges.map((e) => this.conv(e)).filter((a) => a != null));
+  }
+
+  private conv(edge: EdgeRef): EdgeModel | null {
+    let sourceIndex = this.PointEntities.indexMap.get(edge.sourceId);
+    let targetIndex = this.PointEntities.indexMap.get(edge.targetId);
+
+    if (sourceIndex == null || targetIndex == null) {
+      return null;
+    }
+
+    if (sourceIndex > targetIndex) {
+      [sourceIndex, targetIndex] = [targetIndex, sourceIndex];
+    }
+    let source = this.PointEntities.items[sourceIndex];
+    let target = this.PointEntities.items[targetIndex];
+
+    let distance = edge.distance * 1000;
+
+    return { id: `${source.id}-${target.id}`, source: source, target: target, sourceId: source.id, targetId: target.id, distance: distance };
   }
 
   // Подсветка рёбер, инцидентных данной точке (или снятие подсветки)
@@ -72,9 +99,9 @@ export class EdgesScene {
   public setEdges(edges: EdgeModel[]): void {
     const toInsert: EdgeModel[] = [];
     const toUpdate: EdgeModel[] = [];
-    this.entites.clear();
+    this.entities.clear();
 
-    this.entites._setPoints(edges, toInsert, toUpdate);
+    this.entities._setPoints(edges, toInsert, toUpdate);
 
     // Синхронизируем DOM
     this.renderLines();
@@ -82,7 +109,7 @@ export class EdgesScene {
 
   /** Удалить рёбра по списку id */
   public removeEdges(ids: string[]): void {
-    this.entites._removePoints(ids);
+    this.entities._removePoints(ids);
     // После мутации перерисовываем DOM
     this.renderLines();
   }
@@ -96,7 +123,7 @@ export class EdgesScene {
   /** Очистить все рёбра */
   public clear(): void {
     this.rootGroup.selectAll("*").remove();
-    this.entites.clear();
+    this.entities.clear();
     this.groupSelection = null;
   }
 
@@ -137,7 +164,7 @@ export class EdgesScene {
   }
 
   public getEdgeById(id: string): Edge | undefined {
-    const idx = this.entites.indexMap.get(id);
+    const idx = this.entities.indexMap.get(id);
     return idx !== undefined ? this.edges[idx] : undefined;
   }
 }

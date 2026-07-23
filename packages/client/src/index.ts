@@ -11,6 +11,7 @@ import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
 import { ZDampingConfig, ZDampingEngine } from "./core/physics/ZDampingEngine";
 import { PointsTransformer } from "./core/PointsTransformer";
 import { DataManager } from "./core/data/DataManager";
+import { ModelManager } from "./core/ModelManager";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -50,10 +51,14 @@ const pointsScene = new PointsScene(svgEngine, mediator);
 
 pointsScene.init();
 
+edgesScene.PointEntities = pointsScene.Entities;
+
 const animationEngine = new AnimationEngine();
 
 const dataManager = new DataManager(mediator);
 const pointsTransformer = new PointsTransformer(mediator, dataManager, pointsScene);
+
+const modelManager = new ModelManager(mediator, "DeepPavlov/rubert-base-cased-sentence");
 
 const zdampingEngine = new ZDampingEngine(mediator, animationEngine, new ZDampingConfig());
 const graphEngine = new GraphEngine(mediator, animationEngine, new GraphEngineConfig());
@@ -79,6 +84,10 @@ tester.start();
 createControlPanel(controlPanelDiv, mediator);
 
 createInfoPanel(infoPanelDiv, mediator);
+
+setInterval(() => {
+  mediator.modelManagerStep();
+}, 1000);
 // // Монтируем React UI
 // const root = createRoot(uiDiv);
 // root.render(React.createElement(ControlPanel, { mediator }));

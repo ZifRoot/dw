@@ -149,7 +149,6 @@ export class DataManager {
     }
 
     let embs = await this.db.embeddings.getAll();
-    this.mediator.embeddingsTable = embs;
   }
 
   // ========== Сохранение изменений (вызывается из PointsTransformer) ==========

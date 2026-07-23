@@ -5,7 +5,15 @@ export interface Edge {
   target: PointModel;
 }
 
-export interface EdgeModel extends Edge {
+export interface EdgeRef {
+  sourceId: string;
+  targetId: string;
+  distance: number;
+}
+
+export type EdgeRefs = EdgeRef[];
+
+export interface EdgeModel extends Edge, EdgeRef {
   id: string; // уникальный идентификатор ребра (например, "sourceId-targetId")
   sourceId: string;
   targetId: string;

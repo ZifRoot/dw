@@ -30,6 +30,8 @@ export class PointsTransformer {
       let points = this.pointsScene.getPoints();
       points = this.convertEmbeddingsTableToModel(points, embeddingsTable);
       this.pointsScene.setPoints(points);
+
+      this.mediator.pointsModelReady(points);
     });
 
     // 3. Подписка на редкое массовое обновление точек (по окончании физики)
