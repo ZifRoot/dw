@@ -1,6 +1,5 @@
 import { AppMediator } from "../AppMediator";
 import { AnimationCallback, AnimationEngine } from "../Engines/AnimationEngine";
-import { Point } from "../models/Point";
 import { PointModel } from "../models/PointModel";
 
 export class ZDampingConfig {

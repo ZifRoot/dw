@@ -5,6 +5,11 @@ export class EntityCollection<T> {
   public indexMap: Map<string, number> = new Map(); // id → индекс в массиве
 
   constructor(public getId: (p: T) => string) {}
+
+  public getById(sourceId: string) {
+    const index = this.indexMap.get(sourceId);
+    return index != null ? this.items[index] : index;
+  }
   public _setPoints(points: T[], toInsert: T[], toUpdate: T[]) {
     for (const p of points) {
       const idx = this.indexMap.get(this.getId(p));

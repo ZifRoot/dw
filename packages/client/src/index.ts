@@ -9,9 +9,10 @@ import { RepulsionEngine, RepulsionEngineConfig } from "./core/physics/Repulsion
 import { AnimationEngine } from "./core/Engines/AnimationEngine";
 import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
 import { ZDampingConfig, ZDampingEngine } from "./core/physics/ZDampingEngine";
-import { PointsTransformer } from "./core/PointsTransformer";
+
 import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
+import { PointsTransformer } from "./core/PointsTransformer";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
@@ -46,8 +47,9 @@ setTimeout(() => (mediator.autoZoom = false), 0);
 let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
 
-const edgesScene = new EdgesScene(svgEngine, mediator);
 const pointsScene = new PointsScene(svgEngine, mediator);
+
+const edgesScene = new EdgesScene(svgEngine, mediator, pointsScene);
 
 pointsScene.init();
 
@@ -58,7 +60,7 @@ const animationEngine = new AnimationEngine();
 const dataManager = new DataManager(mediator);
 const pointsTransformer = new PointsTransformer(mediator, dataManager, pointsScene);
 
-const modelManager = new ModelManager(mediator, "DeepPavlov/rubert-base-cased-sentence");
+const modelManager = new ModelManager(mediator);
 
 const zdampingEngine = new ZDampingEngine(mediator, animationEngine, new ZDampingConfig());
 const graphEngine = new GraphEngine(mediator, animationEngine, new GraphEngineConfig());

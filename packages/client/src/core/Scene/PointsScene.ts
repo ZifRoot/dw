@@ -11,7 +11,7 @@ export class PointsScene {
   private points: PointModel[] = [];
 
   private unregisterDrag: (() => void) | null = null;
-  private groupSelection: d3.Selection<SVGGElement, PointModel, SVGGElement, unknown> | null = null;
+  private d3Points: d3.Selection<SVGGElement, PointModel, SVGGElement, unknown> | null = null;
   private groupMap: Map<string, SVGGElement> = new Map();
 
   constructor(
@@ -70,8 +70,8 @@ export class PointsScene {
   }
 
   public updateAllPointsPositions(): void {
-    if (!this.groupSelection) return;
-    this.groupSelection.attr("transform", (d) => `translate(${d.x},${d.y}) `); // scale(${d.z})
+    if (!this.d3Points) return;
+    this.d3Points.attr("transform", (d) => `translate(${d.x},${d.y}) `); // scale(${d.z})
     if (this.mediator.autoZoom) this.fitView();
   }
 
@@ -131,20 +131,20 @@ export class PointsScene {
       map.set(d.id, this);
     });
 
-    this.groupSelection = selection.merge(enter);
+    this.d3Points = selection.merge(enter);
     this.applyUpdatesToGroups();
     this.updatePointStyles();
   }
 
   private syncGroupSelectionAndStyles(): void {
     // Пересоздаём groupSelection без удаления DOM (группы уже удалены отдельно)
-    this.groupSelection = this.rootGroup.selectAll<SVGGElement, PointModel>("g.point-group").data(this.points, (d) => d.id);
+    this.d3Points = this.rootGroup.selectAll<SVGGElement, PointModel>("g.point-group").data(this.points, (d) => d.id);
     this.applyUpdatesToGroups();
     this.updatePointStyles();
   }
 
   private applyUpdatesToGroups(selection?: d3.Selection<SVGGElement, PointModel, any, any> | null): void {
-    const target = selection ?? this.groupSelection;
+    const target = selection ?? this.d3Points;
     if (!target) return;
 
     const s = this.svgEngine.getTransform().k;
@@ -163,15 +163,15 @@ export class PointsScene {
   }
 
   private updatePointStyles(scale?: number): void {
-    if (!this.groupSelection) return;
+    if (!this.d3Points) return;
     const s = scale ?? this.svgEngine.getTransform().k;
     const inv = 1 / s;
     const fontSize = this.mediator.sizeText;
-    this.groupSelection
+    this.d3Points
       .selectAll("circle.point")
       .attr("r", 20 * inv)
       .attr("stroke-width", 2 * inv);
-    this.groupSelection.selectAll("text.point-label").style("font-size", `${fontSize * inv}px`);
+    this.d3Points.selectAll("text.point-label").style("font-size", `${fontSize * inv}px`);
   }
 
   // ========== Инициализация подсистем ==========
@@ -246,7 +246,7 @@ export class PointsScene {
       if (changes.fixed !== undefined) point.pinned = changes.fixed;
       if (changes.x !== undefined) point.x = changes.x;
       if (changes.y !== undefined) point.y = changes.y;
-      this.applyUpdatesToGroups(this.groupSelection);
+      this.applyUpdatesToGroups(this.d3Points);
     });
     this.mediator.onPointsUpdating(() => this.updateAllPointsPositions());
     this.mediator.onSizeText(() => this.updatePointStyles());

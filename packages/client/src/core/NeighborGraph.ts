@@ -1,4 +1,5 @@
 // core/NeighborGraph.ts
+import { EdgeRefs } from "./models/EdgeRefs";
 import { EmbeddingModel } from "./models/EmbeddingModel";
 import { PatternMatcher } from "./PatternMatcher";
 
@@ -24,7 +25,7 @@ export class NeighborGraph {
   }
 
   private randomDistinct(allIds: string[], excludeId: string, count: number): string[] {
-    const filtered = allIds.filter(id => id !== excludeId);
+    const filtered = allIds.filter((id) => id !== excludeId);
     const shuffled = [...filtered];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -65,7 +66,11 @@ export class NeighborGraph {
         if (bestCandidates.length < this.K) {
           const existingSet = new Set(bestCandidates);
           const missing = this.K - bestCandidates.length;
-          const extra = this.randomDistinct(ids.filter(x => !existingSet.has(x) && x !== id), id, missing);
+          const extra = this.randomDistinct(
+            ids.filter((x) => !existingSet.has(x) && x !== id),
+            id,
+            missing,
+          );
           bestCandidates = [...bestCandidates, ...extra];
         }
       }
@@ -129,7 +134,7 @@ export class NeighborGraph {
     const sourceBinary = binaryMap.get(id);
     if (!sourceBinary) return [];
 
-    const filtered = candidates.filter(otherId => {
+    const filtered = candidates.filter((otherId) => {
       const otherBinary = binaryMap.get(otherId);
       return otherBinary && sourceBinary.intersect(otherBinary).size > 0;
     });
@@ -166,8 +171,8 @@ export class NeighborGraph {
   }
 
   /** Получить все ребра (пары source-target) */
-  public getAllEdgeIndexes(): { sourceId: string; targetId: string }[] {
-    const result: { sourceId: string; targetId: string }[] = [];
+  public getAllEdgeIndexes(): EdgeRefs {
+    const result: EdgeRefs = [];
     for (const [sourceId, targets] of this.neighbors.entries()) {
       for (const targetId of targets) {
         if (sourceId < targetId) {

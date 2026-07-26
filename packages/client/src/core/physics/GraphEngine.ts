@@ -1,6 +1,6 @@
 import { AppMediator } from "../AppMediator";
 import { AnimationCallback, AnimationEngine } from "../Engines/AnimationEngine";
-import { EdgeModel } from "../models/Edge";
+import { EdgeModel } from "../models/EdgeModel";
 
 export class GraphEngineConfig {
   public strength = 0.5;

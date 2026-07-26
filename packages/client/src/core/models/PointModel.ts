@@ -10,7 +10,7 @@ export class PointModel extends Point {
     point: PointMath,
     public id: string,
     public text: string,
-    public gragged: boolean = false,
+    public dragged: boolean = false,
     public selected: boolean = false,
     public pinned: boolean = false,
   ) {
@@ -18,10 +18,10 @@ export class PointModel extends Point {
   }
 
   get fixed(): boolean {
-    return this.gragged || this.selected || this.pinned;
+    return this.dragged || this.selected || this.pinned;
   }
 
   clone(): PointModel {
-    return new PointModel(this, this.id, this.text, this.gragged, this.selected, this.pinned);
+    return new PointModel(this, this.id, this.text, this.dragged, this.selected, this.pinned);
   }
 }
