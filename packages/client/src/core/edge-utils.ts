@@ -8,7 +8,7 @@ import { PointModel } from "./models/PointModel";
 
 export interface EdgeModelOptions {
   modelName?: string;
-  weight?: number;
+  distance?: number;
   color?: string;
   cosineDistance?: number;
   intersectionCount?: number;
@@ -21,6 +21,20 @@ export function edgeIndexToEdgeModel(
   matcher: PatternMatcher,
   options: EdgeModelOptions = {},
 ): EdgeModel | null {
+  const sourceIndex = pointCollection.indexMap.get(edgeIndex.sourceId);
+  const targetIndex = pointCollection.indexMap.get(edgeIndex.targetId);
+
+  if (sourceIndex == null || targetIndex == null) {
+    console.warn(`edgeIndexToEdgeModel: point not found: ${edgeIndex.sourceId} or ${edgeIndex.targetId}`);
+    return null;
+  }
+
+  if (sourceIndex > targetIndex) {
+    const [targetId, sourceId] = [edgeIndex.sourceId, edgeIndex.targetId];
+    edgeIndex.sourceId = sourceId;
+    edgeIndex.targetId = targetId;
+  }
+
   const source = pointCollection.getById(edgeIndex.sourceId);
   const target = pointCollection.getById(edgeIndex.targetId);
   if (!source || !target) {
@@ -31,12 +45,10 @@ export function edgeIndexToEdgeModel(
   // Определяем модель для сравнения (первая общая)
   let modelName = options.modelName;
   if (!modelName) {
-    for (const [name] of source.embeddings) {
-      if (target.embeddings.has(name)) {
-        modelName = name;
-        break;
-      }
-    }
+    let source_embs = [...source.embeddings.keys()];
+    let target_embs = [...target.embeddings.keys()];
+    const models = source_embs.intersection(target_embs);
+    modelName = models[0];
   }
   if (!modelName) {
     console.warn(`edgeIndexToEdgeModel: no common embedding model for ${source.id} and ${target.id}`);
@@ -50,13 +62,7 @@ export function edgeIndexToEdgeModel(
     return null;
   }
 
-  const cosineDist = options.cosineDistance ?? cosineDistance(embSource.value, embTarget.value);
-  const intersection = embSource.intersect(embTarget);
-  const interCount = options.intersectionCount ?? intersection.size;
-  const color = options.color ?? matcher.colorForPair(embSource, embTarget);
-  const weight = options.weight ?? 100;
-
-  return new EdgeModel(source, target, cosineDist, interCount, weight, color, options.intersectionSet ?? (interCount > 0 ? intersection : undefined));
+  return new EdgeModel(source, target, 100, modelName);
 }
 
 export function edgeIndexesToEdgeModels(

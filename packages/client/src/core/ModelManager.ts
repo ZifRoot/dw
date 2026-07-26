@@ -95,7 +95,7 @@ export class ModelManager {
 
   private rebuildEdges(): void {
     const edgeIndexes = this.graph.getAllEdgeIndexes();
-    this.edges = edgeIndexesToEdgeModels(edgeIndexes, this.pointCollection, this.matcher, { weight: this.edgeWeight });
+    this.edges = edgeIndexesToEdgeModels(edgeIndexes, this.pointCollection, this.matcher, { distance: this.edgeWeight });
     // Отправляем в медиатор
     const edgeData = this.edges.map((e) => ({
       sourceId: e.source.id,
