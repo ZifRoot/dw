@@ -53,8 +53,6 @@ const edgesScene = new EdgesScene(svgEngine, mediator, pointsScene);
 
 pointsScene.init();
 
-edgesScene.PointEntities = pointsScene.Entities;
-
 const animationEngine = new AnimationEngine();
 
 const dataManager = new DataManager(mediator);
