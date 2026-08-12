@@ -187,6 +187,7 @@ function removeByIndices<T>(array: T[], indices: number[], del: (item: T) => voi
   const toDelete = [...new Set(indices)].filter((i) => Number.isInteger(i) && i >= 0 && i < array.length).sort((a, b) => b - a);
 
   let prev = -1;
+  let len1 = array.length - 1;
   for (const idx of toDelete) {
     if (idx === prev) continue;
     prev = idx;
@@ -194,14 +195,14 @@ function removeByIndices<T>(array: T[], indices: number[], del: (item: T) => voi
     const removed = array[idx];
     del(removed);
 
-    if (idx === array.length - 1) {
-      array.pop();
-    } else {
-      const last = array.pop()!;
+    if (idx < len1) {
+      const last = array[len1];
       array[idx] = last;
       add(last, idx);
     }
+    --len1;
   }
+  array.length = len1 + 1;
 }
 
 /**

@@ -110,7 +110,7 @@ export class EdgesScene {
 
   /** Удалить рёбра по списку id */
   public removeEdges(ids: string[]): void {
-    this.entities._removePoints(ids);
+    this.entities.removes(ids);
     // После мутации перерисовываем DOM
     this.renderLines();
   }

@@ -30,7 +30,7 @@ export const userTable = pgTable("user", {
 });
 
 // ========================
-// Таблица сессий (уже существовала)
+// Таблица сессий
 // ========================
 export const chatSessionsTable = pgTable("chat_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -166,8 +166,6 @@ export const embeddingsTable = pgTable(
   },
   (table) => [primaryKey({ columns: [table.sessionId, table.model_name, table.createdAt] })],
 );
-
-// Добавьте этот импорт в начало файла, если его нет
 
 // ====================================================================
 // 1. Простые представления через query builder

@@ -10,6 +10,9 @@ export class EntityCollection<T> {
     const index = this.indexMap.get(sourceId);
     return index != null ? this.items[index] : index;
   }
+  public add(model: T) {
+    this._setPoints([model], [], []);
+  }
   public _setPoints(points: T[], toInsert: T[], toUpdate: T[]) {
     for (const p of points) {
       const idx = this.indexMap.get(this.getId(p));
@@ -32,7 +35,7 @@ export class EntityCollection<T> {
       for (let i = startIdx; i < endIdx; i++) this.indexMap.set(this.getId(this.items[i]), i);
     }
   }
-  public _removePoints(ids: string[]) {
+  public removes(ids: string[]) {
     this.items.removeByIndices(
       ids.map((id) => this.indexMap.get(id)!),
       (p) => this.indexMap.delete(this.getId(p)),

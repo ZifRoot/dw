@@ -56,7 +56,7 @@ export class PointsScene {
       if (group) d3.select(group).remove();
       this.groupMap.delete(id);
     }
-    this.entities._removePoints(ids);
+    this.entities.removes(ids);
     this.syncGroupSelectionAndStyles();
   }
 

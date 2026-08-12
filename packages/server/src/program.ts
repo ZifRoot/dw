@@ -34,8 +34,8 @@ export class Program implements IProgram {
 
     app.use(express.static(clientPath));
 
-    const PORT = process.env.PORT || 8081;
-    app.listen(PORT, () => {
+    const PORT = +(process.env.PORT || 8081);
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running http://localhost:${PORT}/ |`);
     });
 

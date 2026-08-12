@@ -1,185 +1,154 @@
 // core/NeighborGraph.ts
-import { EdgeRefs } from "./models/EdgeRefs";
-import { EmbeddingModel } from "./models/EmbeddingModel";
-import { PatternMatcher } from "./PatternMatcher";
+import { EdgeRef } from "./models/EdgeRef";
+import { EdgeModel } from "./models/EdgeModel";
+import { EntityCollection } from "./Scene/indexer";
+import { IEdgeModelFactory } from "./IEdgeModelFactory";
 
+/**
+ * NeighborGraph – единое хранилище графа связей и плоского списка рёбер.
+ * Обеспечивает консистентность: при добавлении ребра модель добавляется в оба направления.
+ * При обнаружении несимметричности выдаётся предупреждение.
+ */
 export class NeighborGraph {
-  private neighbors: Map<string, string[]> = new Map();
-  private readonly K: number;
-  private readonly maxCandidates: number;
-  private matcher: PatternMatcher;
+  private edgeCollection: EntityCollection<EdgeModel>;
+  private adjacency: Map<string, EdgeModel[]> = new Map();
 
-  constructor(K: number = 3, maxCandidates: number = 20, matcher: PatternMatcher) {
-    this.K = K;
-    this.maxCandidates = maxCandidates;
-    this.matcher = matcher;
+  constructor(private factory: IEdgeModelFactory) {
+    this.edgeCollection = new EntityCollection<EdgeModel>((model) => model.id);
   }
 
-  /** Инициализация случайными соседями */
-  public initRandom(ids: string[]): void {
-    this.neighbors.clear();
-    for (const id of ids) {
-      const candidates = this.randomDistinct(ids, id, this.K);
-      this.neighbors.set(id, candidates);
+  /**
+   * Проверить наличие ребра.
+   * Если ребро присутствует только в одном направлении, выдаётся предупреждение о неконсистентности.
+   * Возвращает true, если ребро есть хотя бы в одном направлении.
+   */
+  public hasEdge(edgeRef: EdgeRef): boolean {
+    const { sourceId, targetId, modelName } = edgeRef;
+    if (sourceId === targetId) return false;
+
+    const edgesFromSource = this.adjacency.get(sourceId);
+    const hasForward = edgesFromSource ? edgesFromSource.some((e) => e.sourceId === targetId && e.modelName === modelName) : false;
+
+    const edgesFromTarget = this.adjacency.get(targetId);
+    const hasBackward = edgesFromTarget ? edgesFromTarget.some((e) => e.sourceId === sourceId && e.modelName === modelName) : false;
+
+    if (hasForward && hasBackward) {
+      return true;
     }
-  }
-
-  private randomDistinct(allIds: string[], excludeId: string, count: number): string[] {
-    const filtered = allIds.filter((id) => id !== excludeId);
-    const shuffled = [...filtered];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    if (hasForward || hasBackward) {
+      console.warn(`[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId} for model "${modelName}". Only one direction present.`);
+      return true; // считаем, что ребро существует, но с предупреждением
     }
-    return shuffled.slice(0, count);
+    return false;
   }
 
-  /** Получить текущих соседей для точки */
-  public getNeighbors(id: string): string[] {
-    return this.neighbors.get(id) ?? [];
+  /**
+   * Добавить ребро (кандидат на создание)
+   */
+  public addEdge(edgeRef: EdgeRef): void {
+    const { sourceId, targetId } = edgeRef;
+    if (sourceId === targetId) return;
+    if (this.hasEdge(edgeRef)) return;
+
+    const model = this.factory.create(edgeRef);
+    if (!model) return;
+
+    // Добавляем в плоский список
+    this.edgeCollection.add(model);
+
+    // Добавляем в граф (в обе стороны)
+    const { sourceId: src, targetId: tgt } = model;
+    if (!this.adjacency.has(src)) {
+      this.adjacency.set(src, []);
+    }
+    this.adjacency.get(src)!.push(model);
+
+    if (!this.adjacency.has(tgt)) {
+      this.adjacency.set(tgt, []);
+    }
+    this.adjacency.get(tgt)!.push(model);
   }
 
-  /** Обновить соседей, используя двухэтапный поиск (бинарный + косинусный) */
-  public improve(
-    ids: string[],
-    binaryMap: Map<string, EmbeddingModel>,
-    vectorMap: Map<string, number[]>,
-    cosineDistance: (v1: number[], v2: number[]) => number,
-  ): void {
-    let changed = false;
-    for (const id of ids) {
-      const current = this.neighbors.get(id) || [];
-      const candidateSet = new Set<string>(current);
-      for (const nid of current) {
-        const neighborsOfNeighbor = this.neighbors.get(nid) || [];
-        for (const nn of neighborsOfNeighbor) {
-          if (nn !== id) candidateSet.add(nn);
+  /**
+   * Удалить ребро по существующей модели
+   */
+  public removeEdge(model: EdgeModel): void {
+    const { sourceId, targetId, id } = model;
+
+    this.edgeCollection.removes([id]);
+
+    this.removeFrom(sourceId, id);
+    this.removeFrom(targetId, id);
+  }
+
+  public removeFrom(pointId: string, modelId: string) {
+    const edges = this.adjacency.get(pointId);
+    if (edges) {
+      const idx = edges.findIndex((e) => e.id === modelId);
+      if (idx !== -1) {
+        edges.splice(idx, 1);
+        if (edges.length === 0) {
+          this.adjacency.delete(pointId);
         }
       }
-      const candidateArray = Array.from(candidateSet);
-      let bestCandidates: string[];
-      if (candidateArray.length < this.K) {
-        // Поиск по всем точкам
-        bestCandidates = this.findBestCandidates(id, ids, binaryMap, vectorMap, cosineDistance);
-      } else {
-        bestCandidates = this.filterAndSortCandidates(id, candidateArray, binaryMap, vectorMap, cosineDistance);
-        if (bestCandidates.length < this.K) {
-          const existingSet = new Set(bestCandidates);
-          const missing = this.K - bestCandidates.length;
-          const extra = this.randomDistinct(
-            ids.filter((x) => !existingSet.has(x) && x !== id),
-            id,
-            missing,
-          );
-          bestCandidates = [...bestCandidates, ...extra];
-        }
-      }
-      if (!this.arraysEqual(current, bestCandidates)) {
-        this.neighbors.set(id, bestCandidates);
-        changed = true;
-      }
     }
   }
 
-  private findBestCandidates(
-    id: string,
-    allIds: string[],
-    binaryMap: Map<string, EmbeddingModel>,
-    vectorMap: Map<string, number[]>,
-    cosineDistance: (v1: number[], v2: number[]) => number,
-  ): string[] {
-    const sourceBinary = binaryMap.get(id);
-    if (!sourceBinary) return [];
+  /**
+   * Получить все рёбра, инцидентные данной точке
+   */
+  public getEdgesForPoint(id: string): EdgeModel[] {
+    return this.adjacency.get(id) ?? [];
+  }
 
-    const candidates: string[] = [];
-    for (const otherId of allIds) {
-      if (otherId === id) continue;
-      const otherBinary = binaryMap.get(otherId);
-      if (!otherBinary) continue;
-      if (sourceBinary.intersect(otherBinary).size > 0) {
-        candidates.push(otherId);
-      }
-    }
-    if (candidates.length === 0) {
-      return this.randomDistinct(allIds, id, this.K);
-    }
-    if (candidates.length > this.maxCandidates) {
-      // сортируем по patternScore и оставляем maxCandidates
-      candidates.sort((a, b) => {
-        const sa = sourceBinary.intersect(binaryMap.get(a)!).size;
-        const sb = sourceBinary.intersect(binaryMap.get(b)!).size;
-        return sb - sa;
+  /**
+   * Получить id соседей точки
+   */
+  public getNeighbors(id: string): Set<string> {
+    const neighbors = new Set(
+      ...this.getEdgesForPoint(id)
+        .map((e) => [e.sourceId, e.targetId])
+        .flat(),
+    );
+
+    neighbors.delete(id);
+    return neighbors;
+  }
+
+  /**
+   * Получить модель ребра по id
+   */
+  public getEdgeById(id: string): EdgeModel | undefined {
+    return this.edgeCollection.getById(id);
+  }
+
+  /**
+   * Получить все модели рёбер (уникальные)
+   */
+  public getAllEdgeModels(): EdgeModel[] {
+    return this.edgeCollection.items;
+  }
+
+  /**
+   * Получить все рёбра в виде EdgeRef
+   */
+  public getAllEdgeRefs(): EdgeRef[] {
+    const result: EdgeRef[] = [];
+    for (const model of this.edgeCollection.items) {
+      result.push({
+        sourceId: model.sourceId,
+        targetId: model.targetId,
+        modelName: model.modelName,
       });
-      candidates.splice(this.maxCandidates);
-    }
-    // Косинусное расстояние среди оставшихся
-    const sourceVec = vectorMap.get(id);
-    if (!sourceVec) return candidates.slice(0, this.K);
-    candidates.sort((a, b) => {
-      const va = vectorMap.get(a);
-      const vb = vectorMap.get(b);
-      if (!va || !vb) return 0;
-      return cosineDistance(sourceVec, va) - cosineDistance(sourceVec, vb);
-    });
-    return candidates.slice(0, this.K);
-  }
-
-  private filterAndSortCandidates(
-    id: string,
-    candidates: string[],
-    binaryMap: Map<string, EmbeddingModel>,
-    vectorMap: Map<string, number[]>,
-    cosineDistance: (v1: number[], v2: number[]) => number,
-  ): string[] {
-    const sourceBinary = binaryMap.get(id);
-    if (!sourceBinary) return [];
-
-    const filtered = candidates.filter((otherId) => {
-      const otherBinary = binaryMap.get(otherId);
-      return otherBinary && sourceBinary.intersect(otherBinary).size > 0;
-    });
-
-    if (filtered.length === 0) {
-      return this.randomDistinct(candidates, id, this.K);
-    }
-
-    filtered.sort((a, b) => {
-      const sa = sourceBinary.intersect(binaryMap.get(a)!).size;
-      const sb = sourceBinary.intersect(binaryMap.get(b)!).size;
-      return sb - sa;
-    });
-    const top = filtered.slice(0, this.maxCandidates);
-    const sourceVec = vectorMap.get(id);
-    if (!sourceVec) return top.slice(0, this.K);
-    top.sort((a, b) => {
-      const va = vectorMap.get(a);
-      const vb = vectorMap.get(b);
-      if (!va || !vb) return 0;
-      return cosineDistance(sourceVec, va) - cosineDistance(sourceVec, vb);
-    });
-    return top.slice(0, this.K);
-  }
-
-  private arraysEqual(a: string[], b: string[]): boolean {
-    if (a.length !== b.length) return false;
-    const sa = [...a].sort();
-    const sb = [...b].sort();
-    for (let i = 0; i < sa.length; i++) {
-      if (sa[i] !== sb[i]) return false;
-    }
-    return true;
-  }
-
-  /** Получить все ребра (пары source-target) */
-  public getAllEdgeIndexes(): EdgeRefs {
-    const result: EdgeRefs = [];
-    for (const [sourceId, targets] of this.neighbors.entries()) {
-      for (const targetId of targets) {
-        if (sourceId < targetId) {
-          result.push({ sourceId, targetId });
-        }
-      }
     }
     return result;
+  }
+
+  /**
+   * Очистить граф
+   */
+  public clear(): void {
+    this.adjacency.clear();
+    this.edgeCollection.clear();
   }
 }
