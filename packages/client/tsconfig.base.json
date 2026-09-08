@@ -19,7 +19,8 @@
     "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
-      "@utils/*": ["src/shared/utils/*"]
+      "@utils/*": ["src/shared/utils/*"],
+      "@clients/*": ["src/clients/*"]
     }
   },
   "include": ["src"]

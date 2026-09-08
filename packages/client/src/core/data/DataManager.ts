@@ -5,7 +5,7 @@ import { EmbeddingTable } from "./tables/EmbeddingTable";
 import { LogSafe, Safe } from "@utils/logger";
 import { toDate } from "@utils/date-utils";
 import { SingleExecution } from "@utils/single-runner";
-import * as fetch from "src/clients/dew/fetch";
+import * as fetch from "@clients/dew/fetch";
 
 export class DataManager {
   private db: CanvasPositionsDB;
@@ -16,7 +16,7 @@ export class DataManager {
   lowDate = new Date(2000, 1, 1, 1, 1, 1, 1);
 
   constructor(private mediator: AppMediator) {
-    const config = new fetch.Configuration({ basePath: "http://localhost:3000/api" });
+    const config = new fetch.Configuration({ basePath: "/api" });
     this.documentsApi = new fetch.DocumentsApi(config);
     this.embeddingsApi = new fetch.EmbeddingsApi(config);
     this.db = new CanvasPositionsDB();
