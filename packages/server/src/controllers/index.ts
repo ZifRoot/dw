@@ -5,7 +5,7 @@ import { SystemController } from "./system.controller";
 import { swaggerUI } from "@hono/swagger-ui";
 import type { Express } from "express";
 import { getRequestListener } from "@hono/node-server";
-import type { IProgram } from "src/iprogram";
+import { IProgram } from "../iprogram";
 
 export function setupControllers(app: OpenAPIHono, program: IProgram) {
   const docsCtrl = new DocumentsController(program);

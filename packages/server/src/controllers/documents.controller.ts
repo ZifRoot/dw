@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 // import { HeadingCodeParser } from "mdforge";
 import { BaseController, ErrorResponseSchema, ParamsFragmentSchema, ParamsIdSchema, SessionInfoSchema } from "./base.controller";
-import { IProgram } from "src/iprogram";
+import { IProgram } from "../iprogram";
 
 const ChatSessionSchema = z.object({
   id: z.string(),

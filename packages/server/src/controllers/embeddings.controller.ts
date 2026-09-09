@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import { BaseController, ParamsIdSchema } from "./base.controller";
 import type { EmbeddingCreate } from "@models/EmbeddingCreate";
-import { IProgram } from "src/iprogram";
+import { IProgram } from "../iprogram";
 import "@utils/array-extensions";
 import { toDate } from "@utils/date-utils";
 

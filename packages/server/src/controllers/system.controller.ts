@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { BaseController } from "./base.controller";
-import { IProgram } from "src/iprogram";
+import { IProgram } from "../iprogram";
 
 export class SystemController extends BaseController {
   public router = new OpenAPIHono();

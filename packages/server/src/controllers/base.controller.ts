@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { IProgram } from "src/iprogram";
+import { IProgram } from "../iprogram";
 
 export const ErrorResponseSchema = z.object({
   error: z.string(),
