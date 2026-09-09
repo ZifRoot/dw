@@ -7,6 +7,7 @@
  * - removeByIndices – удаление элементов с колбэками
  * - shuffle – перемешивание
  * - intersection – пересечение множеств
+ * - mapAsync – асинхронный маппинг с контролем параллелизма
  *
  * Все методы добавляются в прототип Array безопасно (с проверкой на существование)
  * и также доступны как статические функции.
@@ -93,6 +94,23 @@ declare global {
      * arr1.intersection(arr2); // [2,3]
      */
     intersection(other: T[]): T[];
+
+    /**
+     * Асинхронно преобразует каждый элемент массива с помощью промис-колбэка.
+     * Позволяет ограничить количество одновременно выполняющихся операций (параллелизм).
+     * @param callbackfn - асинхронная функция, применяемая к каждому элементу. Принимает (значение, индекс, массив).
+     * @param concurrency - максимальное количество одновременных задач. Если 0 или меньше, выполняется без ограничений.
+     * @returns Promise, разрешающийся в массив результатов того же порядка, что и исходный.
+     *
+     * @example
+     * const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+     * const result = await [1, 2, 3, 4, 5].mapAsync(async (x) => {
+     *   await delay(1000);
+     *   return x * 2;
+     * }, 2); // Не более 2 задач одновременно
+     * // result: [2, 4, 6, 8, 10]
+     */
+    mapAsync<U>(callbackfn: (value: T, index: number, array: T[]) => Promise<U>, concurrency?: number): Promise<U[]>;
   }
 }
 
@@ -238,6 +256,51 @@ function intersection<T>(first: T[], second: T[]): T[] {
   return result;
 }
 
+/**
+ * Асинхронно преобразует массив с ограничением параллелизма.
+ * @param array - исходный массив
+ * @param callbackfn - асинхронная функция преобразования
+ * param concurrency - лимит одновременных задач (0 = без лимита)
+ * @returns Promise с массивом результатов
+ */
+async function mapAsync<T, U>(array: T[], callbackfn: (value: T, index: number, array: T[]) => Promise<U>, concurrency: number = 0): Promise<U[]> {
+  const limit = concurrency <= 0 ? array.length : concurrency;
+  if (limit === 0 || array.length === 0) return [];
+
+  const results: U[] = new Array(array.length);
+  let currentIndex = 0;
+  let activeTasks = 0;
+
+  return new Promise((resolve, reject) => {
+    const next = () => {
+      while (activeTasks < limit && currentIndex < array.length) {
+        const index = currentIndex++;
+        const item = array[index];
+
+        activeTasks++;
+
+        Promise.resolve(callbackfn(item, index, array))
+          .then((result) => {
+            results[index] = result;
+          })
+          .catch((err) => {
+            reject(err); // Прерываем всё при первой ошибке
+            return;
+          })
+          .finally(() => {
+            activeTasks--;
+            if (currentIndex === array.length && activeTasks === 0) {
+              resolve(results);
+            } else {
+              next();
+            }
+          });
+      }
+    };
+    next();
+  });
+}
+
 // ============================================================
 // 3. Добавление методов в прототип Array (с проверками и Object.defineProperty)
 // ============================================================
@@ -300,7 +363,18 @@ if (!Array.prototype.intersection) {
   });
 }
 
+if (!Array.prototype.mapAsync) {
+  Object.defineProperty(Array.prototype, "mapAsync", {
+    value: function <T, U>(this: T[], callbackfn: (value: T, index: number, array: T[]) => Promise<U>, concurrency: number = 0): Promise<U[]> {
+      return mapAsync(this, callbackfn, concurrency);
+    },
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
 // ============================================================
 // 4. Единый экспорт всех функций
 // ============================================================
-export { uniqueBy, uniqueById, groupToMap, groupToMapEm, removeByIndices, shuffle, intersection };
+export { uniqueBy, uniqueById, groupToMap, groupToMapEm, removeByIndices, shuffle, intersection, mapAsync };
