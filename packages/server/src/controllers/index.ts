@@ -1,7 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { DocumentsController } from "./documents.controller";
 import { EmbeddingsController } from "./embeddings.controller";
-import { SystemController } from "./system.controller";
+import { ActionController } from "./action.controller";
 import { swaggerUI } from "@hono/swagger-ui";
 import type { Express } from "express";
 import { getRequestListener } from "@hono/node-server";
@@ -10,10 +10,10 @@ import { IProgram } from "../iprogram";
 export function setupControllers(app: OpenAPIHono, program: IProgram) {
   const docsCtrl = new DocumentsController(program);
   const embedsCtrl = new EmbeddingsController(program);
-  const systemCtrl = new SystemController(program);
+  const actionCtrl = new ActionController(program);
   app.route("/", docsCtrl.router);
   app.route("/", embedsCtrl.router);
-  app.route("/", systemCtrl.router);
+  app.route("/", actionCtrl.router);
 }
 
 /**

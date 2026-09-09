@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { BaseController } from "./base.controller";
 import { IProgram } from "../iprogram";
 
-export class SystemController extends BaseController {
+export class ActionController extends BaseController {
   public router = new OpenAPIHono();
 
   constructor(program: IProgram) {
