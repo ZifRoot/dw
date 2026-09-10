@@ -25,15 +25,27 @@ export class Deepseek {
   }
 
   async fetch_page(updated_at?: number | null) {
-    return (await this.fetch_page_raw(updated_at)).data.biz_data;
+    const raw = await this.fetch_page_raw(updated_at);
+    if (raw.code != 0) {
+      throw new Error(raw.msg);
+    }
+    return raw.data.biz_data;
   }
 
   async history_messages(chat_session_id: string, version?: number) {
-    return (await this.history_messages_raw(chat_session_id, version)).data.biz_data;
+    const raw = await this.history_messages_raw(chat_session_id, version);
+    if (raw.code != 0) {
+      throw new Error(raw.msg);
+    }
+    return raw.data.biz_data;
   }
 
   async file_preview(file_id: string, chat_session_id: string, message_id: string | number) {
-    return (await this.file_preview_raw(file_id, chat_session_id, message_id)).data.biz_data;
+    const raw = await this.file_preview_raw(file_id, chat_session_id, message_id);
+    if (raw.code != 0) {
+      throw new Error(raw.msg);
+    }
+    return raw.data.biz_data;
   }
 
   async file(file_id: string, chat_session_id: string, message_id: string | number) {
@@ -45,9 +57,7 @@ export class Deepseek {
 
   async fetch_page_raw(updated_at?: number | null) {
     let resp = await this.fetch_page_resp(updated_at);
-
-    let fetchpage = (await resp.json()) as SessionsResponse;
-    return fetchpage;
+    return (await resp.json()) as SessionsResponse;
   }
 
   async history_messages_raw(chat_session_id: string, version?: number) {
