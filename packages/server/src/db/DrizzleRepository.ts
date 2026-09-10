@@ -52,7 +52,7 @@ export class DrizzleRepository implements IRepository {
 
   // ========== Фрагменты ==========
   async findAllFragments(sessionId: string, messageId?: number): Promise<MessageFragment[]> {
-    let s: SQL<unknown> = eq(messageFragmentsTable.sessionId, sessionId);
+    let s: SQL = eq(messageFragmentsTable.sessionId, sessionId);
     if (messageId != null) {
       s = and(s, eq(messageFragmentsTable.messageId, messageId))!;
     }
@@ -486,7 +486,9 @@ export class DrizzleRepository implements IRepository {
 
     const chatMessages = messages.map((msg) => new ChatMessage({ ...msg, sessionId }));
 
-    const messageFiles = messages.flatMap((msg) => msg.files.map((file) => ({ ...file, sessionId, messageId: msg.message_id }) as MessageFileCreate));
+    const messageFiles = messages.flatMap((msg) =>
+      (msg.files ?? []).map((file) => ({ ...file, sessionId, messageId: msg.message_id }) as MessageFileCreate),
+    );
     const fragments = messages.flatMap((msg) =>
       msg.fragments.map(
         (frag) =>
