@@ -47,3 +47,9 @@ export function removeByIndices<T>(arr: T[], indices: number[], del: (p: T) => v
 export function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
+
+const regex = /^```(?<lang>[^\r\n]*)(?:\r\n|\n|\r)(?<code>[\s\S]*?)^```$/gm;
+
+export function md(text: string) {
+  return [...text.matchAll(regex)].map((match) => ({ lang: match.groups!.lang, code: match.groups!.code }));
+}
