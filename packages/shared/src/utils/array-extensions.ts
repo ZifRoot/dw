@@ -257,46 +257,71 @@ function intersection<T>(first: T[], second: T[]): T[] {
 }
 
 /**
+ * Ошибка, содержащая частично выполненные результаты.
+ */
+class MapAsyncError extends Error {
+  partialResults: any[];
+
+  constructor(message: string, partialResults: any[]) {
+    super(message);
+    this.name = "MapAsyncError";
+    this.partialResults = partialResults;
+  }
+}
+
+/**
  * Асинхронно преобразует массив с ограничением параллелизма.
  * @param array - исходный массив
  * @param callbackfn - асинхронная функция преобразования
- * param concurrency - лимит одновременных задач (0 = без лимита)
+ * @param concurrency - лимит одновременных задач (0 = без лимита)
  * @returns Promise с массивом результатов
+ * @throws MapAsyncError - при ошибке содержит свойство partialResults
  */
 async function mapAsync<T, U>(array: T[], callbackfn: (value: T, index: number, array: T[]) => Promise<U>, concurrency: number = 0): Promise<U[]> {
-  const limit = concurrency <= 0 ? array.length : concurrency;
-  if (limit === 0 || array.length === 0) return [];
+  if (array.length === 0) return [];
+
+  // 🚀 Оптимизация: если лимита нет, используем нативный Promise.all
+  if (concurrency <= 0 || concurrency >= array.length) {
+    return Promise.all(array.map((item, index) => callbackfn(item, index, array)));
+  }
 
   const results: U[] = new Array(array.length);
   let currentIndex = 0;
   let activeTasks = 0;
+  let isRejected = false;
 
   return new Promise((resolve, reject) => {
     const next = () => {
-      while (activeTasks < limit && currentIndex < array.length) {
+      while (!isRejected && activeTasks < concurrency && currentIndex < array.length) {
         const index = currentIndex++;
         const item = array[index];
-
         activeTasks++;
 
         Promise.resolve(callbackfn(item, index, array))
           .then((result) => {
-            results[index] = result;
+            if (!isRejected) results[index] = result;
           })
           .catch((err) => {
-            reject(err); // Прерываем всё при первой ошибке
-            return;
+            if (!isRejected) {
+              isRejected = true;
+              // ❌ Fail-Fast: Reject всего промиса с частичными данными
+              reject(new MapAsyncError(err.message || "Task failed", results));
+            }
           })
           .finally(() => {
             activeTasks--;
-            if (currentIndex === array.length && activeTasks === 0) {
-              resolve(results);
-            } else {
-              next();
+            if (!isRejected) {
+              if (currentIndex === array.length && activeTasks === 0) {
+                resolve(results);
+              } else {
+                queueMicrotask(next);
+              }
             }
           });
       }
     };
+
+    // Запускаем первую итерацию
     next();
   });
 }
