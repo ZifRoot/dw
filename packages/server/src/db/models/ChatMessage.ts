@@ -1,5 +1,6 @@
 import { toDate } from "@utils/date-utils";
 import { ChatMessageCreate } from "./ChatMessageCreate";
+import { MessageFragment } from "./MessageFragment";
 
 export class ChatMessage {
   public sessionId: string;
@@ -17,6 +18,7 @@ export class ChatMessage {
   public searchEnabled: boolean;
   public hasPendingFragment: boolean;
   public autoContinue: boolean;
+  public fragments: MessageFragment[];
 
   constructor(data: ChatMessageCreate) {
     this.sessionId = data.sessionId;
@@ -34,5 +36,7 @@ export class ChatMessage {
     this.searchEnabled = data.search_enabled;
     this.hasPendingFragment = data.has_pending_fragment;
     this.autoContinue = data.auto_continue;
+
+    this.fragments = data.fragments.map((f) => new MessageFragment({ ...f, messageId: data.message_id, sessionId: data.sessionId }));
   }
 }
