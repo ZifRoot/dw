@@ -11,48 +11,51 @@ import { IEdgeModelFactory } from "./IEdgeModelFactory";
  */
 export class NeighborGraph {
   private edgeCollection: EntityCollection<EdgeModel>;
-  // Храним ID рёбер вместо самих объектов для экономии памяти и избегания дублирования ссылок
   private adjacency: Map<string, Set<string>> = new Map();
 
   constructor(private factory: IEdgeModelFactory) {
     this.edgeCollection = new EntityCollection<EdgeModel>((model) => model.id);
   }
 
+  // ───────────────────── private helpers ─────────────────────
+
+  private hasDirection(fromId: string, toId: string, modelName?: string): boolean {
+    const edgeIds = this.adjacency.get(fromId);
+    if (!edgeIds) return false;
+
+    return [...edgeIds]
+      .map((id) => this.edgeCollection.getById(id))
+      .filter((e): e is EdgeModel => e != null)
+      .some((e) => (e.sourceId === toId || e.targetId === toId) && e.modelName === modelName);
+  }
+
+  private addToAdjacency(pointId: string, edgeId: string): void {
+    if (!this.adjacency.has(pointId)) {
+      this.adjacency.set(pointId, new Set());
+    }
+    this.adjacency.get(pointId)!.add(edgeId);
+  }
+
+  // ───────────────────── public API ─────────────────────
+
   /**
    * Проверить наличие ребра.
-   * Если ребро присутствует только в одном направлении, выдаётся предупреждение о неконсистентности.
-   * Возвращает true, если ребро есть хотя бы в одном направлении.
+   * Если ребро присутствует только в одном направлении, выдаётся предупреждение.
    */
   public hasEdge(edgeRef: EdgeRef): boolean {
     const { sourceId, targetId, modelName } = edgeRef;
     if (sourceId === targetId) return false;
 
-    const hasForward = this.checkDirection(sourceId, targetId, modelName);
-    const hasBackward = this.checkDirection(targetId, sourceId, modelName);
+    const hasForward = this.hasDirection(sourceId, targetId, modelName);
+    const hasBackward = this.hasDirection(targetId, sourceId, modelName);
 
-    if (hasForward && hasBackward) {
-      return true;
-    }
+    if (hasForward && hasBackward) return true;
+
     if (hasForward || hasBackward) {
       console.warn(`[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId} for model "${modelName}". Only one direction present.`);
-      return true; // считаем, что ребро существует, но с предупреждением
+      return true;
     }
-    return false;
-  }
 
-  checkDirection(fromId: string, toId: string, modelName?: string): boolean {
-    const edgeIds = this.adjacency.get(fromId);
-    if (!edgeIds) return false;
-
-    for (const edgeId of edgeIds) {
-      const edge = this.edgeCollection.getById(edgeId);
-      if (edge && edge.modelName === modelName) {
-        // Проверяем, что ребро соединяет fromId и toId
-        if (edge.sourceId === toId || edge.targetId === toId) {
-          return true;
-        }
-      }
-    }
     return false;
   }
 
@@ -67,21 +70,9 @@ export class NeighborGraph {
     const model = this.factory.create(edgeRef);
     if (!model) return;
 
-    // Добавляем в плоский список
     this.edgeCollection.add(model);
-
-    // Добавляем ID в граф (в обе стороны)
-    const { sourceId: src, targetId: tgt, id } = model;
-
-    if (!this.adjacency.has(src)) {
-      this.adjacency.set(src, new Set());
-    }
-    this.adjacency.get(src)!.add(id);
-
-    if (!this.adjacency.has(tgt)) {
-      this.adjacency.set(tgt, new Set());
-    }
-    this.adjacency.get(tgt)!.add(id);
+    this.addToAdjacency(model.sourceId, model.id);
+    this.addToAdjacency(model.targetId, model.id);
   }
 
   /**
@@ -94,13 +85,13 @@ export class NeighborGraph {
     this.removeFrom(targetId, id);
   }
 
-  public removeFrom(pointId: string, modelId: string) {
+  public removeFrom(pointId: string, edgeId: string): void {
     const edges = this.adjacency.get(pointId);
-    if (edges) {
-      edges.delete(modelId);
-      if (edges.size === 0) {
-        this.adjacency.delete(pointId);
-      }
+    if (!edges) return;
+
+    edges.delete(edgeId);
+    if (edges.size === 0) {
+      this.adjacency.delete(pointId);
     }
   }
 
@@ -111,67 +102,38 @@ export class NeighborGraph {
     const edgeIds = this.adjacency.get(id);
     if (!edgeIds) return [];
 
-    const result: EdgeModel[] = [];
-    for (const edgeId of edgeIds) {
-      const edge = this.edgeCollection.getById(edgeId);
-      if (edge) result.push(edge);
-    }
-    return result;
+    return [...edgeIds].map((edgeId) => this.edgeCollection.getById(edgeId)).filter((e): e is EdgeModel => e != null);
   }
 
   /**
    * Получить id соседей точки
    */
   public getNeighbors(id: string): Set<string> {
-    const edgeIds = this.adjacency.get(id);
-    const neighbors = new Set<string>();
-
-    if (edgeIds) {
-      for (const edgeId of edgeIds) {
-        const edge = this.edgeCollection.getById(edgeId);
-        if (edge) {
-          neighbors.add(edge.sourceId);
-          neighbors.add(edge.targetId);
-        }
-      }
-    }
-
+    const neighbors = new Set(this.getEdgesForPoint(id).flatMap((e) => [e.sourceId, e.targetId]));
     neighbors.delete(id);
     return neighbors;
   }
 
-  /**
-   * Получить модель ребра по id
-   */
+  /** Получить модель ребра по id */
   public getEdgeById(id: string): EdgeModel | undefined {
     return this.edgeCollection.getById(id);
   }
 
-  /**
-   * Получить все модели рёбер (уникальные)
-   */
+  /** Получить все модели рёбер (уникальные) */
   public getAllEdgeModels(): EdgeModel[] {
     return this.edgeCollection.items;
   }
 
-  /**
-   * Получить все рёбра в виде EdgeRef
-   */
+  /** Получить все рёбра в виде EdgeRef */
   public getAllEdgeRefs(): EdgeRef[] {
-    const result: EdgeRef[] = [];
-    for (const model of this.edgeCollection.items) {
-      result.push({
-        sourceId: model.sourceId,
-        targetId: model.targetId,
-        modelName: model.modelName,
-      });
-    }
-    return result;
+    return this.edgeCollection.items.map((model) => ({
+      sourceId: model.sourceId,
+      targetId: model.targetId,
+      modelName: model.modelName,
+    }));
   }
 
-  /**
-   * Очистить граф
-   */
+  /** Очистить граф */
   public clear(): void {
     this.adjacency.clear();
     this.edgeCollection.clear();
