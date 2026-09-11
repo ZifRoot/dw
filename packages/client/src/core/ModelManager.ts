@@ -3,36 +3,27 @@ import { AppMediator } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
 import { EmbeddingModel } from "./models/EmbeddingModel";
 import { EdgeModel } from "./models/EdgeModel";
-import { EntityCollection } from "./Scene/indexer";
 import { ActiveDimensionsBuilder } from "./ActiveDimensionsBuilder";
-import { PatternMatcher } from "./PatternMatcher";
-import { NeighborGraph } from "./NeighborGraph";
+import { PointGraphManager } from "./PointGraphManager";
 import { edgeIndexesToEdgeModels } from "./edge-utils";
+import { EdgeRef } from "./models/EdgeRef";
 
 /**
  * ModelManager – строит и улучшает граф ближайших соседей на основе эмбеддингов.
- * Использует двухэтапный подход: бинарный отсев (активные размерности) + косинусное расстояние.
- * Отправляет рёбра в медиатор для отображения в EdgesScene.
+ * Использует двухэтапный подход: бинарный отсев + косинусное расстояние.
+ * Не управляет точками напрямую, делегируя это PointGraphManager.
  */
 export class ModelManager {
-  // Коллекция точек (источник истины)
-  private pointCollection: EntityCollection<PointModel> = new EntityCollection((p) => p.id);
-
-  // Кэши бинарных и векторных представлений для быстрого доступа
   private binaryCache: Map<string, EmbeddingModel> = new Map();
   private vectorCache: Map<string, number[]> = new Map();
+  private pointModelMap: Map<string, string> = new Map();
 
-  // Граф соседей
-  private graph: NeighborGraph;
-
-  // Сервисы
+  private pointGraphManager: PointGraphManager;
   private builder: ActiveDimensionsBuilder;
 
-  // Текущие рёбра (модели)
   private edges: EdgeModel[] = [];
   private readonly edgeWeight = 100;
 
-  // Отписки
   private unsubPoints: () => void;
   private unsubStep: () => void;
 
@@ -43,15 +34,12 @@ export class ModelManager {
     private maxCandidates: number = 20,
   ) {
     this.builder = new ActiveDimensionsBuilder(activationThreshold);
-    this.matcher = new PatternMatcher();
-    this.graph = new NeighborGraph(this.K, this.maxCandidates, this.matcher);
+    this.pointGraphManager = new PointGraphManager();
 
-    // Подписка на получение модельных точек
     this.unsubPoints = this.mediator.onPointsModelReady((points) => {
       this.updatePoints(points);
     });
 
-    // Подписка на команду шага улучшения (вызывается из UI или таймера)
     this.unsubStep = this.mediator.onModelManagerStep(() => {
       this.step();
     });
@@ -62,36 +50,30 @@ export class ModelManager {
     this.unsubStep();
   }
 
-  // ========== Приватные методы ==========
-
-  /**
-   * Обновить точки, перестроить кэши и инициализировать граф.
-   */
   private updatePoints(points: PointModel[]): void {
-    this.pointCollection.clear();
-    this.pointCollection._setPoints(points, [], []);
-
+    this.pointGraphManager.updatePoints(points);
     this.buildBinaryCache();
     this.buildVectorCache();
 
-    const ids = Array.from(this.binaryCache.keys());
+    const ids = this.pointGraphManager.getPointIds();
     if (ids.length > 0) {
-      this.graph.initRandom(ids);
+      this.pointGraphManager.initRandom(ids, this.K);
       this.rebuildEdges();
     }
   }
 
-  /**
-   * Построить бинарные эмбеддинги (активные размерности) для каждой точки.
-   * Используется первая доступная модель.
-   */
   private buildBinaryCache(): void {
     this.binaryCache.clear();
-    const threshold = this.builder.computeThreshold(this.pointCollection.items);
+    this.pointModelMap.clear();
 
-    for (const point of this.pointCollection.items) {
+    const points = this.pointGraphManager.getPoints();
+    const threshold = this.builder.computeThreshold(points);
+
+    for (const point of points) {
       const firstModel = point.embeddings.keys().next().value;
       if (!firstModel) continue;
+
+      this.pointModelMap.set(point.id, firstModel);
 
       const binary = this.builder.buildForPoint(point, firstModel, threshold);
       if (binary) {
@@ -100,55 +82,146 @@ export class ModelManager {
     }
   }
 
-  /**
-   * Построить кэш полных векторов для косинусного расстояния.
-   * Используется первая доступная модель.
-   */
   private buildVectorCache(): void {
     this.vectorCache.clear();
-    for (const point of this.pointCollection.items) {
-      const firstModel = point.embeddings.keys().next().value;
-      if (!firstModel) continue;
-      const emb = point.embeddings.get(firstModel);
+    const points = this.pointGraphManager.getPoints();
+
+    for (const point of points) {
+      const modelName = this.pointModelMap.get(point.id);
+      if (!modelName) continue;
+
+      const emb = point.embeddings.get(modelName);
       if (emb) {
         this.vectorCache.set(point.id, emb.value);
       }
     }
   }
 
-  /**
-   * Один шаг улучшения соседей.
-   */
   private step(): void {
-    const ids = Array.from(this.binaryCache.keys());
+    const ids = this.pointGraphManager.getPointIds();
     if (ids.length === 0) return;
 
-    this.graph.improve(ids, this.binaryCache, this.vectorCache, this.cosineDistance);
+    this.improve(ids);
     this.rebuildEdges();
   }
 
   /**
-   * Перестроить рёбра из текущего графа и отправить в медиатор.
+   * Один шаг улучшения: для каждой точки объединяем текущих соседей и новых кандидатов,
+   * сортируем по расстоянию и оставляем только топ-K. "Плохие" связи удаляются.
    */
+  private improve(ids: string[]): void {
+    for (const sourceId of ids) {
+      const sourceModel = this.pointModelMap.get(sourceId);
+      const sourceBinary = this.binaryCache.get(sourceId);
+      const sourceVector = this.vectorCache.get(sourceId);
+      if (!sourceModel || !sourceBinary || !sourceVector) continue;
+
+      // 1. Собираем текущие рёбра этой точки с нужной моделью + их расстояния
+      const currentEdges = this.pointGraphManager.getEdgesForPoint(sourceId).filter((e) => e.modelName === sourceModel);
+
+      type ScoredEdge = {
+        ref: EdgeRef;
+        distance: number;
+        model?: EdgeModel;
+        isNew: boolean;
+      };
+
+      const scored: ScoredEdge[] = [];
+      const existingTargets = new Set<string>();
+
+      for (const edge of currentEdges) {
+        const otherId = edge.sourceId === sourceId ? edge.targetId : edge.sourceId;
+        const otherVector = this.vectorCache.get(otherId);
+        if (!otherVector) continue;
+
+        const distance = this.cosineDistance(sourceVector, otherVector);
+        scored.push({
+          ref: { sourceId, targetId: otherId, modelName: sourceModel },
+          distance,
+          model: edge,
+          isNew: false,
+        });
+        existingTargets.add(otherId);
+      }
+
+      // 2. Собираем новых кандидатов (исключая уже существующих соседей)
+      const newCandidates: { id: string; distance: number }[] = [];
+
+      for (const targetId of ids) {
+        if (targetId === sourceId) continue;
+        if (existingTargets.has(targetId)) continue;
+
+        const targetModel = this.pointModelMap.get(targetId);
+        if (targetModel !== sourceModel) continue;
+
+        const targetBinary = this.binaryCache.get(targetId);
+        const targetVector = this.vectorCache.get(targetId);
+        if (!targetBinary || !targetVector) continue;
+
+        if (this.countIntersection(sourceBinary, targetBinary) === 0) continue;
+
+        const distance = this.cosineDistance(sourceVector, targetVector);
+        newCandidates.push({ id: targetId, distance });
+      }
+
+      // Берём только maxCandidates лучших новых кандидатов
+      newCandidates.sort((a, b) => a.distance - b.distance);
+      for (const c of newCandidates.slice(0, this.maxCandidates)) {
+        scored.push({
+          ref: { sourceId, targetId: c.id, modelName: sourceModel },
+          distance: c.distance,
+          isNew: true,
+        });
+      }
+
+      // 3. Сортируем всех (старые + новые) по расстоянию и оставляем топ-K
+      scored.sort((a, b) => a.distance - b.distance);
+      const topK = scored.slice(0, this.K);
+      const topKTargets = new Set(topK.map((c) => c.ref.targetId));
+
+      // 4. Синхронизируем: удаляем "плохие" существующие, добавляем новые из топ-K
+      for (const existing of scored) {
+        if (existing.isNew) continue;
+        if (!topKTargets.has(existing.ref.targetId) && existing.model) {
+          this.pointGraphManager.removeEdge(existing.model);
+        }
+      }
+
+      for (const candidate of topK) {
+        if (candidate.isNew) {
+          this.pointGraphManager.addEdge(candidate.ref);
+        }
+      }
+    }
+  }
+
+  private countIntersection(binary1: EmbeddingModel, binary2: EmbeddingModel): number {
+    const set1 = new Set(binary1.value);
+    let count = 0;
+    for (const dim of binary2.value) {
+      if (set1.has(dim)) count++;
+    }
+    return count;
+  }
+
   private rebuildEdges(): void {
-    const edgeIndexes = this.graph.getAllEdgeIndexes();
+    const edgeRefs = this.pointGraphManager.getAllEdgeRefs();
+    const pointCollection = this.pointGraphManager.getPointCollection();
 
-    // Преобразуем EdgeRef → EdgeModel с константным весом
-    this.edges = edgeIndexesToEdgeModels(edgeIndexes, this.pointCollection, this.matcher, { distance: this.edgeWeight });
+    this.edges = edgeIndexesToEdgeModels(edgeRefs, pointCollection, {
+      distance: this.edgeWeight,
+    });
 
-    // Отправляем упрощённое представление для EdgesScene
     const edgeData = this.edges.map((e) => ({
       sourceId: e.source.id,
       targetId: e.target.id,
       distance: e.distance,
       color: e.color,
     }));
+
     this.mediator.edges = edgeData;
   }
 
-  /**
-   * Косинусное расстояние между двумя векторами.
-   */
   private cosineDistance(v1: number[], v2: number[]): number {
     if (!v1 || !v2 || v1.length === 0 || v2.length === 0) return 1;
     let dot = 0,
@@ -163,11 +236,6 @@ export class ModelManager {
     return 1 - dot / (Math.sqrt(norm1) * Math.sqrt(norm2));
   }
 
-  // ========== Публичные методы для внешнего использования ==========
-
-  /**
-   * Возвращает пары точек (source, target) для использования в физике (EmbeddingEngine / GraphEngine).
-   */
   public getPairs(): { source: PointModel; target: PointModel }[] {
     return this.edges.map((edge) => ({
       source: edge.source,
