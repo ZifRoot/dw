@@ -11,7 +11,8 @@ import { IEdgeModelFactory } from "./IEdgeModelFactory";
  */
 export class NeighborGraph {
   private edgeCollection: EntityCollection<EdgeModel>;
-  private adjacency: Map<string, EdgeModel[]> = new Map();
+  // Храним ID рёбер вместо самих объектов для экономии памяти и избегания дублирования ссылок
+  private adjacency: Map<string, Set<string>> = new Map();
 
   constructor(private factory: IEdgeModelFactory) {
     this.edgeCollection = new EntityCollection<EdgeModel>((model) => model.id);
@@ -26,11 +27,8 @@ export class NeighborGraph {
     const { sourceId, targetId, modelName } = edgeRef;
     if (sourceId === targetId) return false;
 
-    const edgesFromSource = this.adjacency.get(sourceId);
-    const hasForward = edgesFromSource ? edgesFromSource.some((e) => e.sourceId === targetId && e.modelName === modelName) : false;
-
-    const edgesFromTarget = this.adjacency.get(targetId);
-    const hasBackward = edgesFromTarget ? edgesFromTarget.some((e) => e.sourceId === sourceId && e.modelName === modelName) : false;
+    const hasForward = this.checkDirection(sourceId, targetId, modelName);
+    const hasBackward = this.checkDirection(targetId, sourceId, modelName);
 
     if (hasForward && hasBackward) {
       return true;
@@ -38,6 +36,22 @@ export class NeighborGraph {
     if (hasForward || hasBackward) {
       console.warn(`[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId} for model "${modelName}". Only one direction present.`);
       return true; // считаем, что ребро существует, но с предупреждением
+    }
+    return false;
+  }
+
+  checkDirection(fromId: string, toId: string, modelName?: string): boolean {
+    const edgeIds = this.adjacency.get(fromId);
+    if (!edgeIds) return false;
+
+    for (const edgeId of edgeIds) {
+      const edge = this.edgeCollection.getById(edgeId);
+      if (edge && edge.modelName === modelName) {
+        // Проверяем, что ребро соединяет fromId и toId
+        if (edge.sourceId === toId || edge.targetId === toId) {
+          return true;
+        }
+      }
     }
     return false;
   }
@@ -56,17 +70,18 @@ export class NeighborGraph {
     // Добавляем в плоский список
     this.edgeCollection.add(model);
 
-    // Добавляем в граф (в обе стороны)
-    const { sourceId: src, targetId: tgt } = model;
+    // Добавляем ID в граф (в обе стороны)
+    const { sourceId: src, targetId: tgt, id } = model;
+
     if (!this.adjacency.has(src)) {
-      this.adjacency.set(src, []);
+      this.adjacency.set(src, new Set());
     }
-    this.adjacency.get(src)!.push(model);
+    this.adjacency.get(src)!.add(id);
 
     if (!this.adjacency.has(tgt)) {
-      this.adjacency.set(tgt, []);
+      this.adjacency.set(tgt, new Set());
     }
-    this.adjacency.get(tgt)!.push(model);
+    this.adjacency.get(tgt)!.add(id);
   }
 
   /**
@@ -74,9 +89,7 @@ export class NeighborGraph {
    */
   public removeEdge(model: EdgeModel): void {
     const { sourceId, targetId, id } = model;
-
     this.edgeCollection.removes([id]);
-
     this.removeFrom(sourceId, id);
     this.removeFrom(targetId, id);
   }
@@ -84,12 +97,9 @@ export class NeighborGraph {
   public removeFrom(pointId: string, modelId: string) {
     const edges = this.adjacency.get(pointId);
     if (edges) {
-      const idx = edges.findIndex((e) => e.id === modelId);
-      if (idx !== -1) {
-        edges.splice(idx, 1);
-        if (edges.length === 0) {
-          this.adjacency.delete(pointId);
-        }
+      edges.delete(modelId);
+      if (edges.size === 0) {
+        this.adjacency.delete(pointId);
       }
     }
   }
@@ -98,18 +108,33 @@ export class NeighborGraph {
    * Получить все рёбра, инцидентные данной точке
    */
   public getEdgesForPoint(id: string): EdgeModel[] {
-    return this.adjacency.get(id) ?? [];
+    const edgeIds = this.adjacency.get(id);
+    if (!edgeIds) return [];
+
+    const result: EdgeModel[] = [];
+    for (const edgeId of edgeIds) {
+      const edge = this.edgeCollection.getById(edgeId);
+      if (edge) result.push(edge);
+    }
+    return result;
   }
 
   /**
    * Получить id соседей точки
    */
   public getNeighbors(id: string): Set<string> {
-    const neighbors = new Set(
-      ...this.getEdgesForPoint(id)
-        .map((e) => [e.sourceId, e.targetId])
-        .flat(),
-    );
+    const edgeIds = this.adjacency.get(id);
+    const neighbors = new Set<string>();
+
+    if (edgeIds) {
+      for (const edgeId of edgeIds) {
+        const edge = this.edgeCollection.getById(edgeId);
+        if (edge) {
+          neighbors.add(edge.sourceId);
+          neighbors.add(edge.targetId);
+        }
+      }
+    }
 
     neighbors.delete(id);
     return neighbors;
