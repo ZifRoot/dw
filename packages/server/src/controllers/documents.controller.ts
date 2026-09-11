@@ -3,6 +3,8 @@ import { z } from "zod";
 // import { HeadingCodeParser } from "mdforge";
 import { BaseController, ErrorResponseSchema, ParamsFragmentSchema, ParamsIdSchema, SessionInfoSchema } from "./base.controller";
 import { IProgram } from "../iprogram";
+import "@utils/array-extensions";
+import { md } from "@utils/data-utils";
 
 const ChatSessionSchema = z.object({
   id: z.string(),
@@ -123,6 +125,29 @@ export class DocumentsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
+        path: "/document/{id}/md", // ← было :id, стало {id}
+        tags: ["Documents"],
+        request: { params: ParamsIdSchema },
+        responses: {
+          200: { description: "Результат парсинга", content: { "application/json": { schema: z.unknown() } } },
+          404: { description: "Не найдено" },
+        },
+      }),
+      async (c) => {
+        const { id } = c.req.valid("param");
+        const session = await this.repo.findSessionById(id);
+        if (!session) return c.text("Not found", 404);
+
+        //session.
+        const msgs = await this.fragmentsList(id);
+        const parsed = msgs.flatMap((m) => m.fragments).flatMap((f) => md(f.content));
+        return c.json(parsed, 200);
+      },
+    );
+
+    this.router.openapi(
+      createRoute({
+        method: "get",
         path: "/document/{id}/fragment/{fragment_id}/text", // ← было :id/:fragment_id, стало {id}/{fragment_id}
         tags: ["Documents"],
         request: { params: ParamsFragmentSchema },
@@ -191,5 +216,14 @@ export class DocumentsController extends BaseController {
         });
     }
     return fragmentsList;
+  }
+
+  private async fragmentsList(sessionId: string) {
+    const msgs = await this.repo.findAllMessages(sessionId);
+
+    return msgs.mapAsync(async (m) => {
+      m.fragments = await this.repo.findAllFragments(sessionId, m.messageId);
+      return m;
+    }, 1);
   }
 }
