@@ -17,7 +17,7 @@
       "name": "Debug: Server",
       "type": "node",
       "request": "attach",
-      "port": 9229,
+      "port": 5858,
       "restart": true,
       "preLaunchTask": "debug:server"
     },

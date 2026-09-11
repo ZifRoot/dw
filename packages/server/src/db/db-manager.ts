@@ -168,7 +168,7 @@ DB_PORT=${CONFIG.hostPort}
     throw new Error("Database did not become ready in time.");
   }
 
-  static async waitForDatabaseReadyAsync(maxRetries = 30, delayMs = 2000) {
+  static async waitForDatabaseReadyAsync(maxRetries = 3000, delayMs = 2000) {
     console.log("Waiting for database to be ready (async)...");
     for (let i = 0; i < maxRetries; i++) {
       if (await DbManager.IsReadyAsync()) return true;

@@ -38,9 +38,6 @@ export class Program implements IProgram {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running http://localhost:${PORT}/ |`);
     });
-
-    // await this.Update();
-    console.log("repository ready");
   }
 
   @LogSafe
@@ -62,7 +59,7 @@ export class Program implements IProgram {
       return;
     }
     let users = await this.repository.findAllUsers();
-    await Promise.all(users.map((user) => this.ExecUser(user, true)));
+    await Promise.all(users.map((user) => this.ExecUser(user, false)));
   }
 
   async ExecUser(user: User, all: boolean) {

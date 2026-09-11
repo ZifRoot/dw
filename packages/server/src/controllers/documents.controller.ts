@@ -86,7 +86,7 @@ export class DocumentsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/document/{id}/text", // ← было :id, стало {id}
+        path: "/document/{id}/text",
         tags: ["Documents"],
         request: { params: ParamsIdSchema },
         responses: { 200: { description: "Полный текст", content: { "text/plain": { schema: z.string() } } }, 404: { description: "Не найдено" } },
@@ -103,7 +103,7 @@ export class DocumentsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/document/{id}/parse", // ← было :id, стало {id}
+        path: "/document/{id}/parse",
         tags: ["Documents"],
         request: { params: ParamsIdSchema },
         responses: {
@@ -125,7 +125,7 @@ export class DocumentsController extends BaseController {
     this.router.openapi(
       createRoute({
         method: "get",
-        path: "/document/{id}/md", // ← было :id, стало {id}
+        path: "/document/{id}/md",
         tags: ["Documents"],
         request: { params: ParamsIdSchema },
         responses: {
