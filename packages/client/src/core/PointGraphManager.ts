@@ -1,11 +1,16 @@
 // core/PointGraphManager.ts
 import { PointModel } from "./models/PointModel";
+import { EdgeModel } from "./models/EdgeModel";
 import { EntityCollection } from "./Scene/indexer";
 import { NeighborGraph } from "./NeighborGraph";
 import { EdgeRef } from "./models/EdgeRef";
 import { edgeIndexToEdgeModel } from "./edge-utils";
 import "@utils/array-extensions";
 
+/**
+ * PointGraphManager – инкапсулирует управление коллекцией точек и графом связей.
+ * Гарантирует консистентность: при изменении точек автоматически очищает "висячие" рёбра.
+ */
 export class PointGraphManager {
   private pointCollection: EntityCollection<PointModel> = new EntityCollection((p) => p.id);
   private graph: NeighborGraph;
@@ -16,6 +21,9 @@ export class PointGraphManager {
     });
   }
 
+  /**
+   * Обновить коллекцию точек и синхронизировать граф.
+   */
   public updatePoints(points: PointModel[]): void {
     const oldIds = new Set(this.pointCollection.indexMap.keys());
     const newIds = new Set(points.map((p) => p.id));
@@ -73,6 +81,20 @@ export class PointGraphManager {
 
   public addEdge(edgeRef: EdgeRef): void {
     this.graph.addEdge(edgeRef);
+  }
+
+  /**
+   * Удалить ребро по модели.
+   */
+  public removeEdge(model: EdgeModel): void {
+    this.graph.removeEdge(model);
+  }
+
+  /**
+   * Получить все рёбра, инцидентные данной точке.
+   */
+  public getEdgesForPoint(id: string): EdgeModel[] {
+    return this.graph.getEdgesForPoint(id);
   }
 
   public getPoints(): PointModel[] {
