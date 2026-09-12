@@ -18,7 +18,6 @@ export interface EdgeModelOptions {
 export function edgeIndexToEdgeModel(
   edgeIndex: EdgeRef,
   pointCollection: EntityCollection<PointModel>,
-  matcher: PatternMatcher,
   options: EdgeModelOptions = {},
 ): EdgeModel | null {
   const sourceIndex = pointCollection.indexMap.get(edgeIndex.sourceId);
@@ -68,12 +67,12 @@ export function edgeIndexToEdgeModel(
 export function edgeIndexesToEdgeModels(
   edgeIndexes: EdgeRefs,
   pointCollection: EntityCollection<PointModel>,
-  matcher: PatternMatcher,
+
   options: EdgeModelOptions = {},
 ): EdgeModel[] {
   const result: EdgeModel[] = [];
   for (const idx of edgeIndexes) {
-    const model = edgeIndexToEdgeModel(idx, pointCollection, matcher, options);
+    const model = edgeIndexToEdgeModel(idx, pointCollection, options);
     if (model) result.push(model);
   }
   return result;

@@ -110,6 +110,7 @@ export class ModelManager {
    * сортируем по расстоянию и оставляем только топ-K. "Плохие" связи удаляются.
    */
   private improve(ids: string[]): void {
+    console.log("improve");
     for (const sourceId of ids) {
       const sourceModel = this.pointModelMap.get(sourceId);
       const sourceBinary = this.binaryCache.get(sourceId);

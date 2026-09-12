@@ -16,7 +16,7 @@ export class PatternMatcher {
 
   /** Цвет для пары на основе пересечения */
   public colorForPair(a: EmbeddingModel, b: EmbeddingModel): string {
-    const intersection = a.intersect(b);
+    const intersection = a.getIntersectionIndices(b);
     return this.palette.getColor(intersection);
   }
 }

@@ -28,7 +28,7 @@ export class EdgeModel implements Edge, EdgeRef {
     const s_e = source.embeddings.get(modelName);
     const t_e = target.embeddings.get(modelName);
     if (s_e != null && t_e != null) {
-      this.intersectionSet = s_e.intersect(t_e);
+      this.intersectionSet = s_e.getIntersectionIndices(t_e);
     }
   }
 }
