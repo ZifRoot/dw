@@ -8,7 +8,7 @@ export class EmbeddingModel {
     public value: number[],
     public created_at: number,
     public processingTimeMs: number,
-    activationThreshold: number = 0.5,
+    activationThreshold: number = 0.05,
   ) {
     this.activeIndices = EmbeddingModel.getActiveIndices(value, activationThreshold);
   }

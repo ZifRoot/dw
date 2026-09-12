@@ -1,5 +1,4 @@
 // core/utils/edge-utils.ts
-import { PatternMatcher } from "./PatternMatcher";
 import { EntityCollection } from "./Scene/indexer";
 import { EdgeModel } from "./models/EdgeModel";
 import { EdgeRef } from "./models/EdgeRef";
@@ -28,27 +27,43 @@ export function edgeIndexToEdgeModel(
     return null;
   }
 
+  // Нормализуем порядок source/target по индексу для консистентности id ребра
   if (sourceIndex > targetIndex) {
-    const [targetId, sourceId] = [edgeIndex.sourceId, edgeIndex.targetId];
-    edgeIndex.sourceId = sourceId;
-    edgeIndex.targetId = targetId;
+    [edgeIndex.sourceId, edgeIndex.targetId] = [edgeIndex.targetId, edgeIndex.sourceId];
   }
 
   const source = pointCollection.getById(edgeIndex.sourceId);
   const target = pointCollection.getById(edgeIndex.targetId);
+
   if (!source || !target) {
     console.warn(`edgeIndexToEdgeModel: point not found: ${edgeIndex.sourceId} or ${edgeIndex.targetId}`);
     return null;
   }
 
-  // Определяем модель для сравнения (первая общая)
-  let modelName = options.modelName;
+  // Определяем модель для связи
+  let modelName = edgeIndex.modelName ?? options.modelName;
+
   if (!modelName) {
-    let source_embs = [...source.embeddings.keys()];
-    let target_embs = [...target.embeddings.keys()];
-    const models = source_embs.intersection(target_embs);
-    modelName = models[0];
+    let bestModel: string | null = null;
+    let maxIntersection = -1;
+
+    const sourceModels = new Set(source.embeddings.keys());
+
+    // Ищем общую модель с максимальным пересечением активных размерностей
+    for (const [targetModelName, targetEmb] of target.embeddings.entries()) {
+      if (sourceModels.has(targetModelName)) {
+        const sourceEmb = source.embeddings.get(targetModelName)!;
+        const intersection = sourceEmb.intersectionCount(targetEmb);
+
+        if (intersection > maxIntersection) {
+          maxIntersection = intersection;
+          bestModel = targetModelName;
+        }
+      }
+    }
+    modelName = bestModel ?? undefined;
   }
+
   if (!modelName) {
     console.warn(`edgeIndexToEdgeModel: no common embedding model for ${source.id} and ${target.id}`);
     return null;
@@ -56,18 +71,18 @@ export function edgeIndexToEdgeModel(
 
   const embSource = source.embeddings.get(modelName);
   const embTarget = target.embeddings.get(modelName);
+
   if (!embSource || !embTarget) {
     console.warn(`edgeIndexToEdgeModel: missing embedding for model ${modelName}`);
     return null;
   }
 
-  return new EdgeModel(source, target, 100, modelName);
+  return new EdgeModel(source, target, options.distance ?? 100, modelName);
 }
 
 export function edgeIndexesToEdgeModels(
   edgeIndexes: EdgeRefs,
   pointCollection: EntityCollection<PointModel>,
-
   options: EdgeModelOptions = {},
 ): EdgeModel[] {
   const result: EdgeModel[] = [];
@@ -76,18 +91,4 @@ export function edgeIndexesToEdgeModels(
     if (model) result.push(model);
   }
   return result;
-}
-
-function cosineDistance(v1: number[], v2: number[]): number {
-  if (!v1 || !v2 || v1.length === 0 || v2.length === 0) return 1;
-  let dot = 0,
-    norm1 = 0,
-    norm2 = 0;
-  for (let i = 0; i < v1.length; i++) {
-    dot += v1[i] * v2[i];
-    norm1 += v1[i] * v1[i];
-    norm2 += v2[i] * v2[i];
-  }
-  if (norm1 === 0 || norm2 === 0) return 1;
-  return 1 - dot / (Math.sqrt(norm1) * Math.sqrt(norm2));
 }

@@ -14,7 +14,8 @@
   "author": "",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/client",
+    "packages/server"
   ],
   "scripts": {
     "generate:all": "npm run generate:dew && npm run generate:embedder",

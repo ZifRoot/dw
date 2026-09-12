@@ -58,23 +58,34 @@ export class PointGraphManager {
    * Инициализировать граф случайными связями (до K на точку).
    * Создаёт связи только между точками с общей моделью эмбеддинга.
    */
-  public initRandom(ids: string[], K: number = 3): void {
+  public initRandom(K: number = 3): void {
+    const ids = this.getPointIds();
     this.graph.clear();
     if (ids.length < 2) return;
 
     for (const sourceId of ids) {
-      const candidates = ids.filter((id) => id !== sourceId);
-      const validCandidates = candidates.filter((targetId) => {
-        return this.getCommonModel(sourceId, targetId) !== null;
+      const point = this.pointCollection.getById(sourceId);
+      if (!point) continue;
+
+      const sourceModels = new Set(point.embeddings.keys());
+
+      // Фильтруем только те точки, у которых есть хотя бы одна общая модель
+      const validCandidates = ids.filter((targetId) => {
+        if (targetId === sourceId) return false;
+        const targetPoint = this.pointCollection.getById(targetId);
+        if (!targetPoint) return false;
+
+        for (const model of targetPoint.embeddings.keys()) {
+          if (sourceModels.has(model)) return true;
+        }
+        return false;
       });
 
       const neighbors = [...validCandidates].shuffle().slice(0, Math.min(K, validCandidates.length));
 
       for (const targetId of neighbors) {
-        const modelName = this.getCommonModel(sourceId, targetId);
-        if (!modelName) continue;
-
-        this.graph.addEdge({ sourceId, targetId, modelName });
+        // modelName оставляем пустым, фабрика сама выберет лучшую общую модель
+        this.graph.addEdge({ sourceId, targetId, modelName: "" });
       }
     }
   }

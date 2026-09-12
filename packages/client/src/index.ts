@@ -85,9 +85,9 @@ createControlPanel(controlPanelDiv, mediator);
 
 createInfoPanel(infoPanelDiv, mediator);
 
-setInterval(() => {
+setTimeout(() => {
   mediator.modelManagerStep();
-}, 1000);
+}, 3000);
 // // Монтируем React UI
 // const root = createRoot(uiDiv);
 // root.render(React.createElement(ControlPanel, { mediator }));
