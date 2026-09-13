@@ -70,16 +70,7 @@ graphEngine.setEdges(edgesScene.getEdges());
 zdampingEngine.setPoints(pointsScene.getPoints());
 repulsionEngine.setPoints(pointsScene.getPoints());
 
-const tester = new PointsSceneTester(mediator, pointsScene, edgesScene, {
-  updateFrationRange: [0 / 100, 0 / 100],
-  removeFrationRange: [0 / 100, 0 / 100],
-  targetSize: 5,
-  intervalMs: 3000,
-  verbose: true,
-  fullGraph: true,
-});
-
-tester.start();
+let documents = await dataManager.reloadTables();
 
 createControlPanel(controlPanelDiv, mediator);
 
