@@ -3,7 +3,7 @@ import { AnimationCallback, AnimationEngine } from "../Engines/AnimationEngine";
 import { PointModel } from "../models/PointModel";
 
 export class ZDampingConfig {
-  public dampingFactor = 0.99;
+  public dampingFactor = 0.999;
   public threshold = 1;
   public stopTemperature = 1;
 }
