@@ -216,25 +216,54 @@ export class PointsScene {
     this.rootGroup.on("click", (event) => {
       const target = event.target as Element;
       const domEle = target.closest?.(".point-group");
-      if (!domEle) return;
+      
+      // Получаем предыдущую выбранную точку из медиатора
+      const previousSelectedId = this.mediator.selectedPoint?.id;
+      
+      // Если кликнули по пустому месту - снимаем выделение
+      if (!domEle) {
+        if (previousSelectedId) {
+          const pointObj = this.entities.get(previousSelectedId);
+          if (pointObj) {
+            pointObj.selected = false;
+          }
+          this.applyUpdatesToGroups(this.d3Points);
+          this.mediator.unselectPoint();
+        }
+        return;
+      }
 
       let d3Ele = d3.select<SVGGElement, PointModel>(domEle as SVGGElement);
-      const point = d3.select<SVGGElement, PointModel>(domEle as SVGGElement).datum();
+      const point = d3Ele.datum();
       if (!point) return;
-      point.selected = true;
-
-      d3Ele.classed("selected", (d) => {
-        return d.selected;
-      });
-      const uiPoint: UIPoint = {
-        id: point.id,
-        x: point.x,
-        y: point.y,
-        z: point.z,
-        text: point.text,
-        fixed: point.fixed ?? false,
-      };
-      this.mediator.selectedPoint = uiPoint;
+      
+      // Снимаем выделение с предыдущей точки (если была и это не та же самая)
+      if (previousSelectedId && previousSelectedId !== point.id) {
+        const prevPointObj = this.entities.get(previousSelectedId);
+        if (prevPointObj) {
+          prevPointObj.selected = false;
+        }
+      }
+      
+      // Переключаем состояние текущей точки
+      point.selected = !point.selected;
+      
+      this.applyUpdatesToGroups(this.d3Points);
+      
+      // Обновляем selectedPoint в медиаторе
+      if (point.selected) {
+        const uiPoint: UIPoint = {
+          id: point.id,
+          x: point.x,
+          y: point.y,
+          z: point.z,
+          text: point.text,
+          fixed: point.fixed ?? false,
+        };
+        this.mediator.selectPoint(uiPoint);
+      } else {
+        this.mediator.unselectPoint();
+      }
     });
   }
 
