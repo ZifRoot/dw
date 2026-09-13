@@ -1,13 +1,13 @@
 // PointsSceneTester.ts
 import { PointsScene } from "./Scene/PointsScene";
 import { EdgesScene } from "./Scene/EdgesScene";
-import { EdgeModel } from "./models/Edge";
 import { AppMediator } from "./AppMediator";
 import { Safe } from "@utils/logger";
-import { DocumentsGet200ResponseInner } from "src/clients/dew/fetch";
 import { DataManager } from "./data/DataManager";
 import { PointTable } from "./data/tables/PointTable";
 import { PointModel } from "./models/PointModel";
+import { DocumentsGet200ResponseInner } from "@clients/dew/fetch/models/DocumentsGet200ResponseInner";
+import { EdgeModel } from "./models/EdgeModel";
 
 interface TestConfig {
   /** Процент точек, которые будут обновлены на каждой итерации (0-100) */
@@ -171,14 +171,7 @@ export class PointsSceneTester {
         if (i === jj) continue;
         let pi = points[i];
         let pj = points[jj];
-        edges.push({
-          id: `${pi.id}-${pj.id}`,
-          sourceId: pi.id,
-          targetId: pj.id,
-          source: pi,
-          target: pj,
-          distance: 150 + Math.random() * 200,
-        });
+        edges.push(new EdgeModel(pi, pj, 150 + Math.random() * 200, "", "#888888"));
       }
     }
     this.edgesScene.setEdges(edges);
