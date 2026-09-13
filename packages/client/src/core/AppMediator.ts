@@ -44,6 +44,8 @@ export class AppMediator extends BaseMediator {
   static START_GRAPH = "start-graph";
   static RELOAD_TABLES = "reload-tables";
   static POINTS_UPDATING = "points-updating";
+  static SAVE_POSITIONS = "save-positions";
+  static POSITIONS_SAVED = "positions-saved";
 
   static POINTS_MODEL_READY = "points-model-ready";
   static MODEL_MANAGER_STEP = "model-manager-step";
@@ -147,6 +149,14 @@ export class AppMediator extends BaseMediator {
   public reloadTables(): void {
     this.emit(AppMediator.RELOAD_TABLES);
   }
+  /** Команда: сохранить позиции точек и связи (вызывается из UI) */
+  public savePositions(): void {
+    this.emit(AppMediator.SAVE_POSITIONS);
+  }
+  /** Событие: сохранение позиций точек и связей завершено */
+  public positionsSaved(): void {
+    this.emit(AppMediator.POSITIONS_SAVED);
+  }
   /** Точечное событие – изменилась одна точка (dragEnd, текст, fixed) */
   public pointUpdated(point: PointModel): void {
     this.emit(AppMediator.POINT_UPDATED, point);
@@ -220,6 +230,12 @@ export class AppMediator extends BaseMediator {
   }
   public onReloadTables(callback: () => void): () => void {
     return this.on(AppMediator.RELOAD_TABLES, () => callback());
+  }
+  public onSavePositions(callback: () => void): () => void {
+    return this.on(AppMediator.SAVE_POSITIONS, () => callback());
+  }
+  public onPositionsSaved(callback: () => void): () => void {
+    return this.on(AppMediator.POSITIONS_SAVED, () => callback());
   }
   public onPointsUpdating(callback: (points: PointModel[]) => void): () => void {
     return this.on(AppMediator.POINTS_UPDATING, callback);

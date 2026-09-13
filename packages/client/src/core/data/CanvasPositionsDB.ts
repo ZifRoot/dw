@@ -3,6 +3,7 @@ import { ITable } from "./IndexDb/ITable";
 import { Database } from "./IndexDb/Database";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
 import { PointTable } from "./tables/PointTable";
+import { EdgeTable } from "./tables/EdgeTable";
 
 type GUID = string;
 type TPointID = GUID;
@@ -15,9 +16,10 @@ type TEmbeddingId = [TSessionId, TModel];
 export class CanvasPositionsDB extends Database {
   public points: ITable<PointTable, TPointID>;
   public embeddings: ITable<EmbeddingTable, TEmbeddingId>;
+  public edges: ITable<EdgeTable, string>;
 
   constructor() {
-    super("CanvasPositions", 3);
+    super("CanvasPositions", 4);
 
     this.points = this.addTable<PointTable, TPointID>({
       name: "points",
@@ -33,6 +35,14 @@ export class CanvasPositionsDB extends Database {
       indexes: [
         { name: "by_session", keyPath: "session_id" },
         { name: "by_model", keyPath: "model_name" },
+      ],
+    });
+    this.edges = this.addTable<EdgeTable, string>({
+      name: "edges",
+      keyPath: "id",
+      indexes: [
+        { name: "by_source", keyPath: "source_id" },
+        { name: "by_target", keyPath: "target_id" },
       ],
     });
   }

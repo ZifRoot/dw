@@ -2,6 +2,7 @@ import { CanvasPositionsDB } from "./CanvasPositionsDB";
 import { AppMediator } from "../AppMediator";
 import { PointTable } from "./tables/PointTable";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
+import { EdgeTable } from "./tables/EdgeTable";
 import { LogSafe, Safe } from "@utils/logger";
 import { toDate } from "@utils/date-utils";
 import { SingleExecution } from "@utils/single-runner";
@@ -158,5 +159,9 @@ export class DataManager {
 
   public async saveEmbeddingsTable(embeddings: EmbeddingTable[]): Promise<void> {
     await this.db.embeddings.putMany(embeddings);
+  }
+
+  public async saveEdgesTable(edges: EdgeTable[]): Promise<void> {
+    await this.db.edges.putMany(edges);
   }
 }

@@ -3,8 +3,10 @@ import { AppMediator } from "./AppMediator";
 import { DataManager } from "./data/DataManager";
 import { PointTable } from "./data/tables/PointTable";
 import { EmbeddingTable } from "./data/tables/EmbeddingTable";
+import { EdgeTable } from "./data/tables/EdgeTable";
 import { PointModel } from "./models/PointModel";
 import { EmbeddingModel } from "./models/EmbeddingModel";
+import { EdgeRefs } from "./models/EdgeRefs";
 import { PointsScene } from "./Scene/PointsScene";
 
 export class PointsTransformer {
@@ -12,6 +14,7 @@ export class PointsTransformer {
   private unsubEmbeddingsTable: () => void;
   private unsubPointsUpdated: () => void;
   private unsubPointUpdated: () => void;
+  private unsubSavePositions: () => void;
 
   constructor(
     private mediator: AppMediator,
@@ -42,6 +45,11 @@ export class PointsTransformer {
     this.unsubPointUpdated = this.mediator.onPointUpdated(async (point: PointModel) => {
       await this.savePoints([point]);
     });
+
+    // 5. Подписка на команду сохранения позиций точек и связей (кнопка в UI)
+    this.unsubSavePositions = this.mediator.onSavePositions(async () => {
+      await this.saveScene();
+    });
   }
 
   public destroy(): void {
@@ -49,6 +57,7 @@ export class PointsTransformer {
     this.unsubEmbeddingsTable();
     this.unsubPointsUpdated();
     this.unsubPointUpdated();
+    this.unsubSavePositions();
   }
 
   private convertPointsTableToModel(pointsTable: PointTable[]): PointModel[] {
@@ -89,5 +98,27 @@ export class PointsTransformer {
       updated_at: Date.now(),
     }));
     await this.dataManager.savePointsTable(pointTables);
+  }
+
+  private async saveEdges(edges: EdgeRefs): Promise<void> {
+    const edgeTables: EdgeTable[] = edges.map((e) => ({
+      id: `${e.sourceId}-${e.targetId}`,
+      source_id: e.sourceId,
+      target_id: e.targetId,
+      model_name: e.modelName,
+      distance: e.distance,
+      updated_at: Date.now(),
+    }));
+    await this.dataManager.saveEdgesTable(edgeTables);
+  }
+
+  /** Сохранить текущую сцену: позиции точек + связи (из mediator.edges) */
+  private async saveScene(): Promise<void> {
+    try {
+      await this.savePoints(this.pointsScene.getPoints());
+      await this.saveEdges(this.mediator.edges);
+    } finally {
+      this.mediator.positionsSaved();
+    }
   }
 }
