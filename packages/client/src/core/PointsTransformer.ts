@@ -25,7 +25,7 @@ export class PointsTransformer {
     this.unsubPointsTable = this.mediator.onPointsTable((pointsTable: PointTable[]) => {
       const modelPoints = this.convertPointsTableToModel(pointsTable);
       this.pointsScene.setPoints(modelPoints);
-      this.mediator.pointsModelReady(modelPoints);
+      this.mediator.pointsModelReady({ points: modelPoints, edges: this.savedEdges() });
     });
 
     // 2. Подписка на табличные эмбеддинги
@@ -33,7 +33,7 @@ export class PointsTransformer {
       let points = this.pointsScene.getPoints();
       this.mergeEmbeddingsIntoPoints(points, embeddingsTable);
       this.pointsScene.setPoints(points);
-      this.mediator.pointsModelReady(points);
+      this.mediator.pointsModelReady({ points, edges: this.savedEdges() });
     });
 
     // 3. Подписка на редкое массовое обновление точек
@@ -65,6 +65,16 @@ export class PointsTransformer {
       const math = { x: pt.x ?? 0, y: pt.y ?? 0, z: pt.z ?? 0 };
       return new PointModel(math, pt.id, pt.title);
     });
+  }
+
+  /** Сохранённые связи из локальной БД в виде EdgeRefs (пакет POINTS_MODEL_READY) */
+  private savedEdges(): EdgeRefs {
+    return this.mediator.edgesTable.map((e) => ({
+      sourceId: e.source_id,
+      targetId: e.target_id,
+      modelName: e.model_name,
+      distance: e.distance,
+    }));
   }
 
   private mergeEmbeddingsIntoPoints(points: PointModel[], embeddingsTable: EmbeddingTable[]): void {

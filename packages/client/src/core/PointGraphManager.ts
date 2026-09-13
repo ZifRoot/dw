@@ -4,6 +4,7 @@ import { EdgeModel } from "./models/EdgeModel";
 import { EntityCollection } from "./Scene/indexer";
 import { NeighborGraph } from "./NeighborGraph";
 import { EdgeRef } from "./models/EdgeRef";
+import { EdgeRefs } from "./models/EdgeRefs";
 import { edgeIndexToEdgeModel } from "./edge-utils";
 import "@utils/array-extensions";
 
@@ -87,6 +88,21 @@ export class PointGraphManager {
         // modelName оставляем пустым, фабрика сама выберет лучшую общую модель
         this.graph.addEdge({ sourceId, targetId, modelName: "" });
       }
+    }
+  }
+
+  /**
+   * Инициализировать граф из сохранённых связей (вместо initRandom).
+   * Пропускает рёбра с несуществующими концами; фабрика сама отбрасывает рёбра,
+   * у которых нет общей модели эмбеддинга.
+   */
+  public initFromRefs(refs: EdgeRefs): void {
+    this.graph.clear();
+    for (const ref of refs) {
+      if (!ref.sourceId || !ref.targetId || ref.sourceId === ref.targetId) continue;
+      if (!this.pointCollection.indexMap.has(ref.sourceId)) continue;
+      if (!this.pointCollection.indexMap.has(ref.targetId)) continue;
+      this.graph.addEdge({ sourceId: ref.sourceId, targetId: ref.targetId, modelName: ref.modelName ?? "" });
     }
   }
 

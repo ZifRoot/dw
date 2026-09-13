@@ -31,9 +31,12 @@ export class DataManager {
 
   // ========== Загрузка локальных данных ==========
   private async loadLocalDataAndEmit(): Promise<void> {
+    const edges = await this.db.edges.getAll();
     const points = await this.db.points.getAll();
     const embeddings: EmbeddingTable[] = await this.db.embeddings.getAll();
 
+    // Сначала связи: POINTS_MODEL_READY должен уже нести сохранённые связи
+    this.mediator.edgesTable = edges;
     this.mediator.pointsTable = points;
     this.mediator.embeddingsTable = embeddings;
   }

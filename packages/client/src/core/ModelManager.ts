@@ -1,5 +1,5 @@
 // core/ModelManager.ts
-import { AppMediator } from "./AppMediator";
+import { AppMediator, PointsModelReadyPayload } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
 import { EdgeModel } from "./models/EdgeModel";
 import { PointGraphManager } from "./PointGraphManager";
@@ -27,8 +27,8 @@ export class ModelManager {
   ) {
     this.pointGraphManager = new PointGraphManager();
 
-    this.unsubPoints = this.mediator.onPointsModelReady((points) => {
-      this.updatePoints(points);
+    this.unsubPoints = this.mediator.onPointsModelReady((payload) => {
+      this.updatePoints(payload);
     });
 
     this.unsubStep = this.mediator.onModelManagerStep(() => {
@@ -41,12 +41,18 @@ export class ModelManager {
     this.unsubStep();
   }
 
-  private updatePoints(points: PointModel[]): void {
+  private updatePoints(payload: PointsModelReadyPayload): void {
+    const { points, edges } = payload;
     this.pointGraphManager.updatePoints(points);
-    if (this.pointGraphManager.getPoints().length > 0) {
+    if (this.pointGraphManager.getPoints().length === 0) return;
+
+    if (edges.length > 0) {
+      // Восстанавливаем сохранённые связи вместо случайной инициализации
+      this.pointGraphManager.initFromRefs(edges);
+    } else {
       this.pointGraphManager.initRandom(this.K);
-      this.rebuildEdges();
     }
+    this.rebuildEdges();
   }
 
   private step(): void {

@@ -2,9 +2,19 @@
 import { BaseMediator } from "./BaseMediator";
 import { EmbeddingTable } from "./data/tables/EmbeddingTable";
 import { PointTable } from "./data/tables/PointTable";
+import { EdgeTable } from "./data/tables/EdgeTable";
 import { EdgeRefs } from "./models/EdgeRefs";
 import { PointModel } from "./models/PointModel";
 import { UIPoint, UIEdge } from "./ui-models";
+
+/**
+ * Пакет события POINTS_MODEL_READY:
+ * точки сцены + сохранённые связи (могут быть пустыми – тогда граф инициализируется случайно).
+ */
+export interface PointsModelReadyPayload {
+  points: PointModel[];
+  edges: EdgeRefs;
+}
 
 export interface AppEventMap {
   [AppMediator.PROGRESS]: number;
@@ -15,6 +25,8 @@ export interface AppEventMap {
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
   [AppMediator.POINT_UPDATED]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
+  [AppMediator.EDGES_TABLE]: EdgeTable[];
+  [AppMediator.POINTS_MODEL_READY]: PointsModelReadyPayload;
   // команды
   [AppMediator.CLEAR_POINTS]: undefined;
   [AppMediator.ADD_POINT]: undefined;
@@ -36,6 +48,7 @@ export class AppMediator extends BaseMediator {
   static POINTS_TABLE = "points-table";
   static EMBEDDINGS_TABLE = "embeddings-table";
   static EDGES = "edges";
+  static EDGES_TABLE = "edges-table";
 
   // ========== Команды (события без данных и с данными) ==========
   static CLEAR_POINTS = "clear-points";
@@ -124,6 +137,13 @@ export class AppMediator extends BaseMediator {
     this.set(AppMediator.EMBEDDINGS_TABLE, value);
   }
 
+  public get edgesTable(): EdgeTable[] {
+    return this.get(AppMediator.EDGES_TABLE) ?? [];
+  }
+  public set edgesTable(value: EdgeTable[]) {
+    this.set(AppMediator.EDGES_TABLE, value);
+  }
+
   public get edges(): EdgeRefs {
     return this.get(AppMediator.EDGES) ?? [];
   }
@@ -171,8 +191,8 @@ export class AppMediator extends BaseMediator {
   }
 
   // Команды
-  public pointsModelReady(points: PointModel[]): void {
-    this.emit(AppMediator.POINTS_MODEL_READY, points);
+  public pointsModelReady(payload: PointsModelReadyPayload): void {
+    this.emit(AppMediator.POINTS_MODEL_READY, payload);
   }
 
   public modelManagerStep(): void {
@@ -213,6 +233,9 @@ export class AppMediator extends BaseMediator {
   public onEmbeddingsTable(callback: (embeddings: EmbeddingTable[]) => void): () => void {
     return this.on(AppMediator.EMBEDDINGS_TABLE, callback);
   }
+  public onEdgesTable(callback: (edges: EdgeTable[]) => void): () => void {
+    return this.on(AppMediator.EDGES_TABLE, callback);
+  }
   public onEdges(callback: (edges: EdgeRefs) => void): () => void {
     return this.on(AppMediator.EDGES, callback);
   }
@@ -246,7 +269,7 @@ export class AppMediator extends BaseMediator {
   public onPointUpdated(callback: (point: PointModel) => void): () => void {
     return this.on(AppMediator.POINT_UPDATED, callback);
   }
-  public onPointsModelReady(callback: (points: PointModel[]) => void): () => void {
+  public onPointsModelReady(callback: (payload: PointsModelReadyPayload) => void): () => void {
     return this.on(AppMediator.POINTS_MODEL_READY, callback);
   }
 
