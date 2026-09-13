@@ -1,7 +1,7 @@
 // components/PointInfoPanel.tsx
 import React, { useState, useEffect } from 'react';
-import { AppMediator } from 'src/core/AppMediator';
-import { UIPoint } from 'src/core/ui-models';
+import { AppMediator } from '../../core/AppMediator';
+import { UIPoint } from '../../core/ui-models';
 
 
 interface PointInfoPanelProps {
