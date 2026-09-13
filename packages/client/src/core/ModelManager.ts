@@ -171,14 +171,7 @@ export class ModelManager {
       distance: this.edgeWeight,
     });
 
-    const edgeData = this.edges.map((e) => ({
-      sourceId: e.source.id,
-      targetId: e.target.id,
-      distance: e.distance,
-      color: e.color,
-    }));
-
-    this.mediator.edges = edgeData;
+    this.mediator.edges = this.edges;
   }
 
   public getPairs(): { source: PointModel; target: PointModel }[] {
