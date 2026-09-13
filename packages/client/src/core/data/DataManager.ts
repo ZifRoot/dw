@@ -42,7 +42,8 @@ export class DataManager {
   }
 
   reloadTables() {
-    this.reloadTablesSingle().catch(() => {});
+    // Возвращаем промис, чтобы вызывающий код мог ждать завершения загрузки (await reloadTables())
+    return this.reloadTablesSingle().catch(() => {});
   }
 
   // ========== Полная синхронизация с сервером ==========
