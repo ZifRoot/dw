@@ -1,7 +1,12 @@
-import http from "node:http";
 import { LogSafe } from "@utils/logger";
 import { SingleExecution } from "@utils/single-runner";
 import { IRepository } from "./db/IRepository";
+
+interface LmStudioLoadedInstance {
+  identifier?: string;
+  context_length?: number;
+  state?: string;
+}
 
 interface LmStudioModel {
   type: string;
@@ -15,7 +20,7 @@ interface LmStudioModel {
   };
   size_bytes?: number;
   params_string?: string | null;
-  loaded_instances?: unknown[];
+  loaded_instances?: LmStudioLoadedInstance[];
   max_context_length?: number;
   format?: string;
   capabilities?: {
@@ -36,21 +41,11 @@ interface LmStudioModelsResponse {
 export class EmbedderLmStudio {
   private repository: IRepository;
   private baseUrl: string;
-  private httpAgent: http.Agent;
-  private availableEmbeddingModels: LmStudioModel[] | null = null;
+  private models: LmStudioModel[] | null = null;
 
   constructor(repository: IRepository, baseUrl: string = "http://localhost:1234") {
     this.repository = repository;
     this.baseUrl = baseUrl;
-
-    // Единый keep-alive агент для HTTP соединений
-    this.httpAgent = new http.Agent({
-      keepAlive: true,
-      maxSockets: 50,
-      maxFreeSockets: 10,
-      timeout: 60000,
-      keepAliveMsecs: 1000,
-    });
   }
 
   /**
@@ -59,10 +54,6 @@ export class EmbedderLmStudio {
    * Кэширует результат для последующих вызовов.
    */
   private async getAvailableEmbeddingModels(): Promise<LmStudioModel[]> {
-    if (this.availableEmbeddingModels !== null) {
-      return this.availableEmbeddingModels;
-    }
-
     const url = `${this.baseUrl}/api/v1/models`;
 
     try {
@@ -71,7 +62,6 @@ export class EmbedderLmStudio {
         headers: {
           "Content-Type": "application/json",
         },
-        agent: this.httpAgent,
       });
 
       if (!response.ok) {
@@ -86,22 +76,27 @@ export class EmbedderLmStudio {
       }
 
       // Фильтруем только embedding модели по полю type
-      this.availableEmbeddingModels = data.models.filter(model => model.type === "embedding");
 
-      console.log(`Доступные embedding модели LM Studio: ${this.availableEmbeddingModels.map(m => m.key).join(", ")}`);
-
-      return this.availableEmbeddingModels;
+      return data.models.filter((model) => model.type === "embedding");
     } catch (error) {
       console.error(`Ошибка получения списка моделей LM Studio: ${error}`);
       throw error;
     }
   }
 
+  private async getModels(): Promise<LmStudioModel[]> {
+    if (this.models !== null) {
+      return this.models;
+    }
+    this.models = this.prioritizeModels(await this.getAvailableEmbeddingModels());
+    return this.models;
+  }
+
   /**
    * Сбрасывает кэш моделей для принудительного обновления.
    */
   public resetModelsCache(): void {
-    this.availableEmbeddingModels = null;
+    this.models = null;
   }
 
   /**
@@ -114,46 +109,73 @@ export class EmbedderLmStudio {
 
   /**
    * Обрабатывает все pending эмбеддинги для сессий.
+   * Оптимизировано: сначала получаем модели, затем обрабатываем сессии,
+   * используя уже загруженные модели в приоритете.
    */
   @SingleExecution
   @LogSafe
   async processPendingEmbeddings(): Promise<void> {
+    // Получаем доступные embedding-модели один раз для всех сессий
+    const models = await this.getModels();
+
+    if (models.length === 0) {
+      console.warn("LM Studio не имеет доступных embedding-моделей");
+      return;
+    }
+
     const sessions = await this.getAllSessionsWithPendingEmbeddings();
-    for (const session of sessions) {
-      await this.processSessionEmbedding(session);
+
+    // Обрабатываем по сессиям, затем по моделям (избегаем переключения моделей)
+    for (const model of models) {
+      for (const session of sessions) {
+        await this.processSessionWithModels(session, model);
+      }
     }
   }
 
   /**
    * Получает все сессии, для которых нужны эмбеддинги.
    */
-  private async getAllSessionsWithPendingEmbeddings(): Promise<Array<{ id: string; user_id: string }>> {
+  private async getAllSessionsWithPendingEmbeddings(): Promise<string[]> {
     const users = await this.repository.findAllUsers();
-    const allSessions: Array<{ id: string; user_id: string }> = [];
+    const allSessions: string[] = [];
 
     for (const user of users) {
       const sessions = await this.repository.findAllSessions(user.id);
-      allSessions.push(...sessions);
+      for (const session of sessions) {
+        allSessions.push(session.id);
+      }
     }
 
     return allSessions;
   }
 
   /**
-   * Обрабатывает эмбеддинг для одной сессии.
-   * Создаёт эмбеддинги для всех доступных embedding-моделей.
+   * Приоритизирует модели: сначала уже загруженные (loaded_instances > 0),
+   * затем остальные. Это минимизирует переключение моделей в LM Studio.
    */
-  private async processSessionEmbedding(session: { id: string; user_id: string }): Promise<void> {
-    // Получаем список доступных embedding-моделей из LM Studio
-    const availableModels = await this.getAvailableEmbeddingModels();
+  private prioritizeModels(models: LmStudioModel[]): LmStudioModel[] {
+    return [...models].sort((a, b) => {
+      const aLoaded = (a.loaded_instances?.length ?? 0) > 0 ? 1 : 0;
+      const bLoaded = (b.loaded_instances?.length ?? 0) > 0 ? 1 : 0;
+      return bLoaded - aLoaded; // Загруженные модели первыми
+    });
+  }
 
-    if (availableModels.length === 0) {
-      console.warn(`LM Studio не имеет доступных embedding-моделей для сессии ${session.id}`);
-      return;
+  /**
+   * Обрабатывает эмбеддинг для одной сессии со списком моделей.
+   * Использует instance identifier если доступен, иначе key модели.
+   */
+  private async processSessionWithModels(sessionid: string, model: LmStudioModel): Promise<void> {
+    // Используем instance identifier если модель загружена, иначе key
+    const modelName = this.getModelIdentifier(model);
+    // Проверяем, есть ли уже эмбеддинг для этой сессии и модели
+    const existingEmbedding = await this.repository.findEmbeddingBySessionAndModel(sessionid, modelName);
+    if (existingEmbedding !== null) {
+      return; // Уже есть эмбеддинг для этой пары (session, model)
     }
-
     // Получаем все фрагменты типа RESPONSE
-    const fragments = await this.repository.findAllFragments(session.id);
+    const fragments = await this.repository.findAllFragments(sessionid);
     const responseFragments = fragments.filter((f) => f.type === "RESPONSE");
 
     if (responseFragments.length === 0) {
@@ -163,33 +185,39 @@ export class EmbedderLmStudio {
     // Объединяем текст всех фрагментов
     const combinedText = responseFragments.map((f) => f.content).join("\n\n");
 
-    // Создаём эмбеддинги для всех доступных embedding-моделей
-    for (const model of availableModels) {
-      const modelName = model.key;
+    // Получаем эмбеддинг через LM Studio
+    const startTime = Date.now();
+    const embedding = await this.getEmbedding(combinedText, modelName);
+    const processingTime = Date.now() - startTime;
 
-      // Проверяем, есть ли уже эмбеддинг для этой сессии и модели
-      const existingEmbedding = await this.repository.findEmbeddingBySessionAndModel(session.id, modelName);
-      if (existingEmbedding !== null) {
-        continue; // Уже есть эмбеддинг для этой пары (session, model)
+    // Сохраняем эмбеддинг в БД
+    await this.repository.createEmbedding(sessionid, {
+      model_name: modelName,
+      dimension: embedding.length,
+      embedding: embedding,
+      createdAt: new Date(),
+      sessionId: sessionid,
+      processing_time_ms: processingTime,
+    });
+
+    console.log(`Обработан эмбеддинг для сессии ${sessionid}, модель: ${modelName}, размер: ${embedding.length}`);
+  }
+
+  /**
+   * Возвращает идентификатор модели для API.
+   * Если модель имеет загруженные экземпляры, использует их identifier.
+   * Иначе использует key модели.
+   */
+  private getModelIdentifier(model: LmStudioModel): string {
+    // Если есть загруженные экземпляры, используем identifier первого
+    if (model.loaded_instances && model.loaded_instances.length > 0) {
+      const instance = model.loaded_instances[0];
+      if (instance.identifier) {
+        return instance.identifier;
       }
-
-      // Получаем эмбеддинг через LM Studio
-      const startTime = Date.now();
-      const embedding = await this.getEmbedding(combinedText, modelName);
-      const processingTime = Date.now() - startTime;
-
-      // Сохраняем эмбеддинг в БД
-      await this.repository.createEmbedding(session.id, {
-        model_name: modelName,
-        dimension: embedding.length,
-        embedding: embedding,
-        createdAt: new Date(),
-        sessionId: session.id,
-        processing_time_ms: processingTime,
-      });
-
-      console.log(`Обработан эмбеддинг для сессии ${session.id}, модель: ${modelName}, размер: ${embedding.length}`);
     }
+    // Иначе используем ключ модели
+    return model.key;
   }
 
   /**
@@ -204,7 +232,6 @@ export class EmbedderLmStudio {
       headers: {
         "Content-Type": "application/json",
       },
-      agent: this.httpAgent,
       body: JSON.stringify({
         input: text,
         model: modelName,
