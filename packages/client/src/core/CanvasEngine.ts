@@ -46,7 +46,7 @@ export class CanvasEngine {
     this.renderer = new CanvasRenderer(element);
     this.repulsion = new RepulsionEngine();
     this.embedding = new EmbeddingEngine();
-    this.dataManager = new DataManager();
+    this.dataManager = new DataManager(mediator);
     this.modelManager = new ModelManager(mediator);
 
     this.dragHandler = new DragHandler(this.renderer.getSvg(), this.renderer);

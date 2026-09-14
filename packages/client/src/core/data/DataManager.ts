@@ -12,6 +12,7 @@ export class DataManager {
   private db: CanvasPositionsDB;
   private documentsApi: fetch.DocumentsApi;
   private embeddingsApi: fetch.EmbeddingsApi;
+  private actionsApi: fetch.ActionsApi;
   private unsubReload: () => void;
 
   lowDate = new Date(2000, 1, 1, 1, 1, 1, 1);
@@ -20,9 +21,12 @@ export class DataManager {
     const config = new fetch.Configuration({ basePath: "/api" });
     this.documentsApi = new fetch.DocumentsApi(config);
     this.embeddingsApi = new fetch.EmbeddingsApi(config);
+    this.actionsApi = new fetch.ActionsApi(config);
     this.db = new CanvasPositionsDB();
     // Подписка на команду перезагрузки таблиц
     this.unsubReload = this.mediator.onReloadTables(() => this.reloadTables());
+    // Подписка на команду вычисления эмбеддингов
+    this.mediator.onComputeEmbeddings(() => this.computeEmbeddings());
   }
 
   public destroy(): void {
@@ -167,5 +171,11 @@ export class DataManager {
 
   public async saveEdgesTable(edges: EdgeTable[]): Promise<void> {
     await this.db.edges.putMany(edges);
+  }
+
+  // ========== Вычисление эмбеддингов ==========
+  @Safe
+  public async computeEmbeddings(): Promise<void> {
+    await this.actionsApi.actionsUpdateEmbeddingPost();
   }
 }

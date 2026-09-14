@@ -59,6 +59,7 @@ export class AppMediator extends BaseMediator {
   static POINTS_UPDATING = "points-updating";
   static SAVE_POSITIONS = "save-positions";
   static POSITIONS_SAVED = "positions-saved";
+  static COMPUTE_EMBEDDINGS = "compute-embeddings";
 
   static POINTS_MODEL_READY = "points-model-ready";
   static MODEL_MANAGER_STEP = "model-manager-step";
@@ -199,6 +200,10 @@ export class AppMediator extends BaseMediator {
     this.emit(AppMediator.MODEL_MANAGER_STEP);
   }
 
+  public computeEmbeddings(): void {
+    this.emit(AppMediator.COMPUTE_EMBEDDINGS);
+  }
+
   // ========== Методы подписки ==========
   public onProgress(callback: (value: number) => void): () => void {
     return this.on(AppMediator.PROGRESS, callback);
@@ -275,5 +280,9 @@ export class AppMediator extends BaseMediator {
 
   public onModelManagerStep(callback: () => void): () => void {
     return this.on(AppMediator.MODEL_MANAGER_STEP, () => callback());
+  }
+
+  public onComputeEmbeddings(callback: () => void): () => void {
+    return this.on(AppMediator.COMPUTE_EMBEDDINGS, () => callback());
   }
 }
