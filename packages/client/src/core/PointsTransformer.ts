@@ -127,8 +127,10 @@ export class PointsTransformer {
     try {
       await this.savePoints(this.pointsScene.getPoints());
       await this.saveEdges(this.mediator.edges);
-    } finally {
+      // Событие успеха – индикатор «Сохранено» в UI
       this.mediator.positionsSaved();
+    } catch (e) {
+      console.error("Не удалось сохранить позиции точек и связи:", e);
     }
   }
 }
