@@ -3,6 +3,32 @@ import { LogSafe } from "@utils/logger";
 import { SingleExecution } from "@utils/single-runner";
 import { IRepository } from "./db/IRepository";
 
+interface LmStudioModel {
+  type: string;
+  publisher?: string;
+  key: string;
+  display_name?: string;
+  architecture?: string;
+  quantization?: {
+    name: string;
+    bits_per_weight: number;
+  };
+  size_bytes?: number;
+  params_string?: string | null;
+  loaded_instances?: unknown[];
+  max_context_length?: number;
+  format?: string;
+  capabilities?: {
+    vision: boolean;
+    trained_for_tool_use?: boolean;
+  };
+  description?: string | null;
+}
+
+interface LmStudioModelsResponse {
+  models: LmStudioModel[];
+}
+
 /**
  * Класс для управления процессом генерации эмбеддингов через LM Studio.
  * Отвечает за получение эмбеддингов напрямую через API LM Studio.
@@ -11,13 +37,13 @@ export class EmbedderLmStudio {
   private repository: IRepository;
   private baseUrl: string;
   private httpAgent: http.Agent;
-  private availableModels: Set<string> | null = null;
+  private availableEmbeddingModels: LmStudioModel[] | null = null;
 
   constructor(repository: IRepository, baseUrl: string = "http://localhost:1234") {
     this.repository = repository;
     this.baseUrl = baseUrl;
 
-    // Единый keep‑alive агент для HTTP соединений
+    // Единый keep-alive агент для HTTP соединений
     this.httpAgent = new http.Agent({
       keepAlive: true,
       maxSockets: 50,
@@ -28,16 +54,17 @@ export class EmbedderLmStudio {
   }
 
   /**
-   * Получает список доступных моделей из LM Studio.
+   * Получает список доступных embedding-моделей из LM Studio.
+   * Использует endpoint /api/v1/models и фильтрует по type: "embedding".
    * Кэширует результат для последующих вызовов.
    */
-  private async getAvailableModels(): Promise<Set<string>> {
-    if (this.availableModels !== null) {
-      return this.availableModels;
+  private async getAvailableEmbeddingModels(): Promise<LmStudioModel[]> {
+    if (this.availableEmbeddingModels !== null) {
+      return this.availableEmbeddingModels;
     }
 
-    const url = `${this.baseUrl}/v1/models`;
-    
+    const url = `${this.baseUrl}/api/v1/models`;
+
     try {
       const response = await fetch(url, {
         method: "GET",
@@ -52,18 +79,18 @@ export class EmbedderLmStudio {
         throw new Error(`LM Studio API error: ${response.status} ${errorText}`);
       }
 
-      const data = await response.json();
-      
-      // LM Studio возвращает ответ в формате OpenAI: { data: [{ id: "model-name" }, ...], ... }
-      if (!data.data || !Array.isArray(data.data)) {
+      const data: LmStudioModelsResponse = await response.json();
+
+      if (!data.models || !Array.isArray(data.models)) {
         throw new Error("Invalid response from LM Studio: no models data");
       }
 
-      this.availableModels = new Set(data.data.map((model: { id: string }) => model.id));
-      
-      console.log(`Доступные модели LM Studio: ${Array.from(this.availableModels).join(", ")}`);
-      
-      return this.availableModels;
+      // Фильтруем только embedding модели по полю type
+      this.availableEmbeddingModels = data.models.filter(model => model.type === "embedding");
+
+      console.log(`Доступные embedding модели LM Studio: ${this.availableEmbeddingModels.map(m => m.key).join(", ")}`);
+
+      return this.availableEmbeddingModels;
     } catch (error) {
       console.error(`Ошибка получения списка моделей LM Studio: ${error}`);
       throw error;
@@ -74,7 +101,7 @@ export class EmbedderLmStudio {
    * Сбрасывает кэш моделей для принудительного обновления.
    */
   public resetModelsCache(): void {
-    this.availableModels = null;
+    this.availableEmbeddingModels = null;
   }
 
   /**
@@ -86,7 +113,7 @@ export class EmbedderLmStudio {
   }
 
   /**
-   * Обрабатывает все_pending эмбеддинги для сессий.
+   * Обрабатывает все pending эмбеддинги для сессий.
    */
   @SingleExecution
   @LogSafe
@@ -114,27 +141,15 @@ export class EmbedderLmStudio {
 
   /**
    * Обрабатывает эмбеддинг для одной сессии.
+   * Создаёт эмбеддинги для всех доступных embedding-моделей.
    */
   private async processSessionEmbedding(session: { id: string; user_id: string }): Promise<void> {
-    // Получаем список доступных моделей из LM Studio
-    const availableModels = await this.getAvailableModels();
-    
-    if (availableModels.size === 0) {
-      console.warn(`LM Studio не имеет доступных моделей для эмбеддинга сессии ${session.id}`);
-      return;
-    }
+    // Получаем список доступных embedding-моделей из LM Studio
+    const availableModels = await this.getAvailableEmbeddingModels();
 
-    // Выбираем подходящую модель для эмбеддинга
-    const modelName = this.selectEmbeddingModel(availableModels);
-    if (!modelName) {
-      console.warn(`Не найдено подходящей модели для эмбеддинга среди доступных: ${Array.from(availableModels).join(", ")}`);
+    if (availableModels.length === 0) {
+      console.warn(`LM Studio не имеет доступных embedding-моделей для сессии ${session.id}`);
       return;
-    }
-
-    // Проверяем, есть ли уже эмбеддинг для этой сессии и модели
-    const existingEmbedding = await this.repository.findEmbeddingBySessionAndModel(session.id, modelName);
-    if (existingEmbedding !== null) {
-      return; // Уже есть эмбеддинг для этой пары (session, model)
     }
 
     // Получаем все фрагменты типа RESPONSE
@@ -148,62 +163,41 @@ export class EmbedderLmStudio {
     // Объединяем текст всех фрагментов
     const combinedText = responseFragments.map((f) => f.content).join("\n\n");
 
-    // Получаем эмбеддинг через LM Studio
-    const startTime = Date.now();
-    const embedding = await this.getEmbedding(combinedText, modelName);
-    const processingTime = Date.now() - startTime;
+    // Создаём эмбеддинги для всех доступных embedding-моделей
+    for (const model of availableModels) {
+      const modelName = model.key;
 
-    // Сохраняем эмбеддинг в БД
-    await this.repository.createEmbedding(session.id, {
-      model_name: modelName,
-      dimension: embedding.length,
-      embedding: embedding,
-      createdAt: new Date(),
-      sessionId: session.id,
-      processing_time_ms: processingTime,
-    });
+      // Проверяем, есть ли уже эмбеддинг для этой сессии и модели
+      const existingEmbedding = await this.repository.findEmbeddingBySessionAndModel(session.id, modelName);
+      if (existingEmbedding !== null) {
+        continue; // Уже есть эмбеддинг для этой пары (session, model)
+      }
 
-    console.log(`Обработан эмбеддинг для сессии ${session.id}, модель: ${modelName}, размер: ${embedding.length}`);
-  }
+      // Получаем эмбеддинг через LM Studio
+      const startTime = Date.now();
+      const embedding = await this.getEmbedding(combinedText, modelName);
+      const processingTime = Date.now() - startTime;
 
-  /**
-   * Выбирает подходящую модель для эмбеддинга из доступных.
-   * Приоритет: модели с "embedding" в названии, затем первая доступная.
-   */
-  private selectEmbeddingModel(availableModels: Set<string>): string | null {
-    const modelsArray = Array.from(availableModels);
-    
-    // Сначала ищем модели с "embedding" в названии
-    const embeddingModel = modelsArray.find(model => 
-      model.toLowerCase().includes("embedding") || 
-      model.toLowerCase().includes("embed")
-    );
-    
-    if (embeddingModel) {
-      return embeddingModel;
+      // Сохраняем эмбеддинг в БД
+      await this.repository.createEmbedding(session.id, {
+        model_name: modelName,
+        dimension: embedding.length,
+        embedding: embedding,
+        createdAt: new Date(),
+        sessionId: session.id,
+        processing_time_ms: processingTime,
+      });
+
+      console.log(`Обработан эмбеддинг для сессии ${session.id}, модель: ${modelName}, размер: ${embedding.length}`);
     }
-    
-    // Если не найдено специализированной модели, используем первую доступную
-    return modelsArray.length > 0 ? modelsArray[0] : null;
   }
 
   /**
    * Получает эмбеддинг для текста через API LM Studio.
    * LM Studio использует OpenAI-compatible API: POST /v1/embeddings
    */
-  private async getEmbedding(text: string, modelName?: string): Promise<number[]> {
+  private async getEmbedding(text: string, modelName: string): Promise<number[]> {
     const url = `${this.baseUrl}/v1/embeddings`;
-    
-    // Если модель не указана, используем первую доступную модель
-    let modelToUse = modelName;
-    if (!modelToUse) {
-      const availableModels = await this.getAvailableModels();
-      if (availableModels.size === 0) {
-        throw new Error("No models available in LM Studio");
-      }
-      // Используем первую доступную модель
-      modelToUse = Array.from(availableModels)[0];
-    }
 
     const response = await fetch(url, {
       method: "POST",
@@ -213,7 +207,7 @@ export class EmbedderLmStudio {
       agent: this.httpAgent,
       body: JSON.stringify({
         input: text,
-        model: modelToUse,
+        model: modelName,
       }),
     });
 
