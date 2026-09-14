@@ -14,17 +14,17 @@ import { createExpressApp } from "./controllers";
 import { SingleExecution } from "@utils/single-runner";
 // import { LogSafe, Safe } from "@utils/logger";
 import { dateStr } from "@utils/date-utils";
-import { Embedder } from "./Embedder";
 import { LogSafe, Safe } from "@utils/logger";
+import { EmbedderLmStudio } from "./EmbedderLmStudio";
 
 export class Program implements IProgram {
   repository!: IRepository;
-  embedder!: Embedder;
+  embedder!: EmbedderLmStudio;
 
   async start() {
     await this.RepositoryAsync();
 
-    this.embedder = new Embedder(this.repo());
+    this.embedder = new EmbedderLmStudio(this.repo());
     const app = express();
     app.use(express.json());
 
