@@ -212,29 +212,49 @@ export class PointsScene {
     });
   }
 
+  dom2Model(domEle?: Element | null): PointModel | null {
+    // Если кликнули по пустому месту - снимаем выделение
+    if (!domEle) return null;
+
+    let d3Ele = d3.select<SVGGElement, PointModel>(domEle as SVGGElement);
+    return d3Ele.datum();
+  }
+
+  model2UI(point?: PointModel | null): UIPoint | null {
+    return point
+      ? {
+          id: point.id,
+          x: point.x,
+          y: point.y,
+          z: point.z,
+          text: point.text,
+          fixed: point.pinned ?? false,
+        }
+      : null;
+  }
+
   private setupClickHandler(): void {
     this.rootGroup.on("click", (event) => {
       const target = event.target as Element;
       const domEle = target.closest?.(".point-group");
-      if (!domEle) return;
 
-      let d3Ele = d3.select<SVGGElement, PointModel>(domEle as SVGGElement);
-      const point = d3.select<SVGGElement, PointModel>(domEle as SVGGElement).datum();
-      if (!point) return;
-      point.selected = true;
+      // Получаем предыдущую выбранную точку из медиатора
+      const previousSelectedId = this.mediator.selectedPoint?.id;
+      const previousPoint = previousSelectedId ? (this.entities.getById(previousSelectedId) ?? null) : null;
 
-      d3Ele.classed("selected", (d) => {
-        return d.selected;
-      });
-      const uiPoint: UIPoint = {
-        id: point.id,
-        x: point.x,
-        y: point.y,
-        z: point.z,
-        text: point.text,
-        fixed: point.fixed ?? false,
-      };
-      this.mediator.selectedPoint = uiPoint;
+      if (previousPoint) {
+        previousPoint.selected = false;
+      }
+
+      // Если кликнули по пустому месту - снимаем выделение
+      const point = this.dom2Model(domEle);
+
+      // Переключаем состояние текущей точки
+      if (point) point.selected = point.id != previousSelectedId;
+
+      this.mediator.selectedPoint = this.model2UI(point);
+
+      this.applyUpdatesToGroups(this.d3Points);
     });
   }
 
