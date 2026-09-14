@@ -1,4 +1,3 @@
-import http from "node:http";
 import { LogSafe } from "@utils/logger";
 import { SingleExecution } from "@utils/single-runner";
 import { IRepository } from "./db/IRepository";
@@ -102,6 +101,14 @@ export class EmbedderLmStudio {
     }
   }
 
+  private async getModels(): Promise<LmStudioModel[]> {
+    if (this.models !== null) {
+      return this.models;
+    }
+    this.models = this.prioritizeModels(await this.getAvailableEmbeddingModels());
+    return this.models;
+  }
+
   /**
    * Сбрасывает кэш моделей для принудительного обновления.
    */
@@ -147,9 +154,9 @@ export class EmbedderLmStudio {
   /**
    * Получает все сессии, для которых нужны эмбеддинги.
    */
-  private async getAllSessionsWithPendingEmbeddings(): Promise<Array<{ id: string; user_id: string }>> {
+  private async getAllSessionsWithPendingEmbeddings(): Promise<string[]> {
     const users = await this.repository.findAllUsers();
-    const allSessions: Array<{ id: string; user_id: string }> = [];
+    const allSessions: string[] = [];
 
     for (const user of users) {
       const sessions = await this.repository.findAllSessions(user.id);
@@ -182,7 +189,7 @@ export class EmbedderLmStudio {
     models: LmStudioModel[]
   ): Promise<void> {
     // Получаем все фрагменты типа RESPONSE
-    const fragments = await this.repository.findAllFragments(session.id);
+    const fragments = await this.repository.findAllFragments(sessionid);
     const responseFragments = fragments.filter((f) => f.type === "RESPONSE");
 
     if (responseFragments.length === 0) {
@@ -249,6 +256,34 @@ export class EmbedderLmStudio {
     await this.processSessionWithModels(session, availableModels);
   }
 
+  /**
+   * Загружает модель в LM Studio через API.
+   */
+  private async loadModel(modelKey: string): Promise<void> {
+    const url = `${this.baseUrl}/api/v1/models/load`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model_path: modelKey,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`LM Studio API error loading model: ${response.status} ${errorText}`);
+      }
+
+      console.log(`Модель ${modelKey} успешно загружена`);
+    } catch (error) {
+      console.error(`Ошибка загрузки модели ${modelKey}: ${error}`);
+      throw error;
+    }
+  }
   /**
    * Получает эмбеддинг для текста через API LM Studio.
    * LM Studio использует OpenAI-compatible API: POST /v1/embeddings
