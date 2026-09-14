@@ -1,4 +1,4 @@
-import "../../shared/utils/array-extensions";
+import "@utils/array-extensions";
 
 export class EntityCollection<T> {
   public items: T[] = [];
@@ -6,8 +6,8 @@ export class EntityCollection<T> {
 
   constructor(public getId: (p: T) => string) {}
 
-  public getById(sourceId: string) {
-    const index = this.indexMap.get(sourceId);
+  public getById(sourceId?: string | null) {
+    const index = sourceId != null ? this.indexMap.get(sourceId) : null;
     return index != null ? this.items[index] : index;
   }
   public add(model: T) {
