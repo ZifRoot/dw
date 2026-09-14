@@ -116,22 +116,25 @@ export class EmbedderLmStudio {
    * Обрабатывает эмбеддинг для одной сессии.
    */
   private async processSessionEmbedding(session: { id: string; user_id: string }): Promise<void> {
-    const modelName = "lm-studio";
+    // Получаем список доступных моделей из LM Studio
+    const availableModels = await this.getAvailableModels();
+    
+    if (availableModels.size === 0) {
+      console.warn(`LM Studio не имеет доступных моделей для эмбеддинга сессии ${session.id}`);
+      return;
+    }
+
+    // Выбираем подходящую модель для эмбеддинга
+    const modelName = this.selectEmbeddingModel(availableModels);
+    if (!modelName) {
+      console.warn(`Не найдено подходящей модели для эмбеддинга среди доступных: ${Array.from(availableModels).join(", ")}`);
+      return;
+    }
 
     // Проверяем, есть ли уже эмбеддинг для этой сессии и модели
     const existingEmbedding = await this.repository.findEmbeddingBySessionAndModel(session.id, modelName);
     if (existingEmbedding !== null) {
       return; // Уже есть эмбеддинг для этой пары (session, model)
-    }
-
-    // Получаем список доступных моделей из LM Studio
-    const availableModels = await this.getAvailableModels();
-    
-    // Проверяем, есть ли нужная модель в LM Studio
-    // Ищем модель, содержащую "embedding" или любую доступную модель для эмбеддингов
-    if (availableModels.size === 0) {
-      console.warn(`LM Studio не имеет доступных моделей для эмбеддинга сессии ${session.id}`);
-      return;
     }
 
     // Получаем все фрагменты типа RESPONSE
@@ -147,7 +150,7 @@ export class EmbedderLmStudio {
 
     // Получаем эмбеддинг через LM Studio
     const startTime = Date.now();
-    const embedding = await this.getEmbedding(combinedText);
+    const embedding = await this.getEmbedding(combinedText, modelName);
     const processingTime = Date.now() - startTime;
 
     // Сохраняем эмбеддинг в БД
@@ -160,7 +163,28 @@ export class EmbedderLmStudio {
       processing_time_ms: processingTime,
     });
 
-    console.log(`Обработан эмбеддинг для сессии ${session.id}, размер: ${embedding.length}`);
+    console.log(`Обработан эмбеддинг для сессии ${session.id}, модель: ${modelName}, размер: ${embedding.length}`);
+  }
+
+  /**
+   * Выбирает подходящую модель для эмбеддинга из доступных.
+   * Приоритет: модели с "embedding" в названии, затем первая доступная.
+   */
+  private selectEmbeddingModel(availableModels: Set<string>): string | null {
+    const modelsArray = Array.from(availableModels);
+    
+    // Сначала ищем модели с "embedding" в названии
+    const embeddingModel = modelsArray.find(model => 
+      model.toLowerCase().includes("embedding") || 
+      model.toLowerCase().includes("embed")
+    );
+    
+    if (embeddingModel) {
+      return embeddingModel;
+    }
+    
+    // Если не найдено специализированной модели, используем первую доступную
+    return modelsArray.length > 0 ? modelsArray[0] : null;
   }
 
   /**
