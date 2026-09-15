@@ -58,7 +58,7 @@ pointsScene.init();
 const animationEngine = new AnimationEngine();
 
 const dataManager = new DataManager(mediator);
-const pointsTransformer = new PointsTransformer(mediator, dataManager, pointsScene);
+const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
 
 const modelManager = new ModelManager(mediator);
 

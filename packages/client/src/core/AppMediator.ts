@@ -61,6 +61,7 @@ export class AppMediator extends BaseMediator {
   static POSITIONS_SAVED = "positions-saved";
 
   static POINTS_MODEL_READY = "points-model-ready";
+  static POINTS_GRAPH_UPDATED = "points-graph-updated";
   static MODEL_MANAGER_STEP = "model-manager-step";
 
   // ========== Геттеры/сеттеры ==========
@@ -199,6 +200,11 @@ export class AppMediator extends BaseMediator {
     this.emit(AppMediator.MODEL_MANAGER_STEP);
   }
 
+  /** Событие: граф точек обновлён (точки или рёбра изменены) */
+  public pointsGraphUpdated(): void {
+    this.emit(AppMediator.POINTS_GRAPH_UPDATED);
+  }
+
   // ========== Методы подписки ==========
   public onProgress(callback: (value: number) => void): () => void {
     return this.on(AppMediator.PROGRESS, callback);
@@ -275,5 +281,9 @@ export class AppMediator extends BaseMediator {
 
   public onModelManagerStep(callback: () => void): () => void {
     return this.on(AppMediator.MODEL_MANAGER_STEP, () => callback());
+  }
+
+  public onPointsGraphUpdated(callback: () => void): () => void {
+    return this.on(AppMediator.POINTS_GRAPH_UPDATED, () => callback());
   }
 }
