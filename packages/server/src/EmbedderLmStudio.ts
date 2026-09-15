@@ -3,7 +3,7 @@ import { SingleExecution } from "@utils/single-runner";
 import { IRepository } from "./db/IRepository";
 
 interface LmStudioLoadedInstance {
-  identifier?: string;
+  id?: string;
   context_length?: number;
   state?: string;
 }
@@ -123,10 +123,9 @@ export class EmbedderLmStudio {
       return;
     }
 
-    const sessions = await this.getAllSessionsWithPendingEmbeddings();
-
     // Обрабатываем по сессиям, затем по моделям (избегаем переключения моделей)
     for (const model of models) {
+      const sessions = await this.getAllSessionsWithPendingEmbeddings();
       for (const session of sessions) {
         await this.processSessionWithModels(session, model);
       }
@@ -156,8 +155,8 @@ export class EmbedderLmStudio {
    */
   private prioritizeModels(models: LmStudioModel[]): LmStudioModel[] {
     return [...models].sort((a, b) => {
-      const aLoaded = (a.loaded_instances?.length ?? 0) > 0 ? 1 : 0;
-      const bLoaded = (b.loaded_instances?.length ?? 0) > 0 ? 1 : 0;
+      const aLoaded = a.loaded_instances?.length ?? 0;
+      const bLoaded = b.loaded_instances?.length ?? 0;
       return bLoaded - aLoaded; // Загруженные модели первыми
     });
   }
@@ -203,37 +202,36 @@ export class EmbedderLmStudio {
     console.log(`Обработан эмбеддинг для сессии ${sessionid}, модель: ${modelName}, размер: ${embedding.length}`);
   }
 
+  getIns(model: LmStudioModel) {
+    if (model.loaded_instances && model.loaded_instances.length > 0) {
+      const instance = model.loaded_instances[0];
+      if (instance.id) {
+        return instance.id;
+      }
+    }
+    return null;
+  }
+
   /**
    * Возвращает идентификатор модели для API.
    * Если модель имеет загруженные экземпляры, использует их identifier.
    * Иначе использует key модели.
    */
-  private async getModelIdentifier(model: LmStudioModel): Promise<string> {
+  private async getModelIdentifier(model?: LmStudioModel): Promise<string> {
+    model = (await this.getModels()).find((m) => m.key == model?.key)!;
+    let ins = this.getIns(model);
+    if (ins != null) return ins;
     // Если есть загруженные экземпляры, используем identifier первого
-    if (model.loaded_instances && model.loaded_instances.length > 0) {
-      const instance = model.loaded_instances[0];
-      if (instance.identifier) {
-        return instance.identifier;
-      }
-    }
 
     // Нет загруженных экземпляров - загружаем модель
     console.log(`Модель ${model.key} не загружена, загружаем...`);
     await this.loadModel(model.key);
 
+    this.resetModelsCache();
+
     // После загрузки получаем обновлённый список моделей
-    const refreshedModels = await this.getAvailableEmbeddingModels();
-    const refreshedModel = refreshedModels.find((m) => m.key === model.key);
-
-    if (refreshedModel?.loaded_instances && refreshedModel.loaded_instances.length > 0) {
-      const instance = refreshedModel.loaded_instances[0];
-      if (instance.identifier) {
-        return instance.identifier;
-      }
-    }
-
-    // Если всё ещё нет identifier, используем key модели
-    return model.key;
+    model = (await this.getModels()).find((m) => m.key == model?.key)!;
+    return this.getIns(model) ?? model.key;
   }
 
   /**
@@ -249,7 +247,7 @@ export class EmbedderLmStudio {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model_path: modelKey,
+          model: modelKey,
         }),
       });
 

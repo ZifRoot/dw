@@ -10,7 +10,7 @@
     "db:studio": "drizzle-kit studio",
     "docker:up": "ts-node src/db/db-manager.ts up",
     "docker:down": "ts-node src/db/db-manager.ts down",
-    "debug": "tsx watch --inspect-brk=5858 -r tsconfig-paths/register src/index.ts",
+    "debug": "tsx watch --inspect=5858 -r tsconfig-paths/register src/index.ts",
     "release": "npm run build:release && npm run run:release",
     "build:release": "tsc -p tsconfig.release.json && tsc-alias -p tsconfig.release.json",
     "run:release": "node dist/index.js"
