@@ -8,7 +8,6 @@ import { EdgeRefs } from "../models/EdgeRefs.ts";
 import { EdgeRef } from "../models/EdgeRef.ts";
 import { EdgeModel } from "../models/EdgeModel.ts";
 import { PointModel } from "../models/PointModel.ts";
-import { edgeIndexToEdgeModel } from "../edge-utils.ts";
 import { PatternMatcher } from "../PatternMatcher.ts";
 import { PointGraphManager } from "../PointGraphManager.ts";
 
@@ -64,7 +63,7 @@ export class EdgesScene {
   }
 
   private conv(edge: EdgeRef): EdgeModel | null {
-    return edgeIndexToEdgeModel(edge, this.pointGraphManager.getPointCollection(), new PatternMatcher());
+    return this.pointGraphManager.edgeIndexToEdgeModel(edge);
   }
 
   // Подсветка рёбер, инцидентных данной точке (или снятие подсветки)

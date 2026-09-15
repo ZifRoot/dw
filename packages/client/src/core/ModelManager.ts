@@ -3,7 +3,6 @@ import { AppMediator, PointsModelReadyPayload } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
 import { EdgeModel } from "./models/EdgeModel";
 import { PointGraphManager } from "./PointGraphManager";
-import { edgeIndexesToEdgeModels } from "./edge-utils";
 import { EdgeRef } from "./models/EdgeRef";
 import { Log } from "@utils/logger";
 
@@ -148,7 +147,7 @@ export class ModelManager {
           this.pointGraphManager.addEdge({
             sourceId: source.id,
             targetId: candidate.targetId,
-            modelName: "", // edge-utils сам выберет лучшую модель
+            modelName: "", // PointGraphManager сам выберет лучшую модель
           });
         }
       }
@@ -171,9 +170,8 @@ export class ModelManager {
 
   private rebuildEdges(): void {
     const edgeRefs = this.pointGraphManager.getAllEdgeRefs();
-    const pointCollection = this.pointGraphManager.getPointCollection();
 
-    this.edges = edgeIndexesToEdgeModels(edgeRefs, pointCollection, {
+    this.edges = this.pointGraphManager.edgeIndexesToEdgeModels(edgeRefs, {
       distance: this.edgeWeight,
     });
 
