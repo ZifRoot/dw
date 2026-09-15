@@ -1,13 +1,20 @@
 // core/PointGraphManager.ts
-import { PointModel } from "../models/PointModel";
-import { EdgeModel } from "../models/EdgeModel";
-import { EntityCollection } from "../collections/EntityCollection";
-import { NeighborGraph } from "../collections/NeighborGraph";
-import { EdgeRef } from "../models/EdgeRef";
-import { EdgeRefs } from "../models/EdgeRefs";
+import { PointModel } from "./models/PointModel";
+import { EdgeModel } from "./models/EdgeModel";
+import { EntityCollection } from "./Scene/indexer";
+import { NeighborGraph } from "./NeighborGraph";
+import { EdgeRef } from "./models/EdgeRef";
+import { EdgeRefs } from "./models/EdgeRefs";
 import "@utils/array-extensions";
-import { AppMediator } from "../AppMediator";
-import { IEdgeModelFactory } from "../interfaces/IEdgeModelFactory";
+
+export interface EdgeModelOptions {
+  modelName?: string;
+  distance?: number;
+  color?: string;
+  cosineDistance?: number;
+  intersectionCount?: number;
+  intersectionSet?: Set<number>;
+}
 
 /**
  * PointGraphManager – инкапсулирует управление коллекцией точек и графом связей.
@@ -17,11 +24,79 @@ export class PointGraphManager {
   private pointCollection: EntityCollection<PointModel> = new EntityCollection((p) => p.id);
   private graph: NeighborGraph;
 
-  constructor(
-    private mediator: AppMediator,
-    factory: IEdgeModelFactory,
-  ) {
-    this.graph = new NeighborGraph(factory);
+  constructor() {
+    this.graph = new NeighborGraph({
+      create: (edgeRef) => this.edgeIndexToEdgeModel(edgeRef),
+    });
+  }
+
+  /**
+   * Преобразовать EdgeRef в EdgeModel, используя внутреннюю коллекцию точек.
+   * Инкапсулирует логику преобразования ссылок на рёбра в модели рёбер.
+   */
+  public edgeIndexToEdgeModel(
+    edgeIndex: EdgeRef,
+    options: EdgeModelOptions = {},
+  ): EdgeModel | null {
+    const sourceIndex = this.pointCollection.indexMap.get(edgeIndex.sourceId);
+    const targetIndex = this.pointCollection.indexMap.get(edgeIndex.targetId);
+
+    if (sourceIndex == null || targetIndex == null) {
+      console.warn(`edgeIndexToEdgeModel: point not found: ${edgeIndex.sourceId} or ${edgeIndex.targetId}`);
+      return null;
+    }
+
+    // Нормализуем порядок source/target по индексу для консистентности id ребра
+    if (sourceIndex > targetIndex) {
+      [edgeIndex.sourceId, edgeIndex.targetId] = [edgeIndex.targetId, edgeIndex.sourceId];
+    }
+
+    const source = this.pointCollection.getById(edgeIndex.sourceId);
+    const target = this.pointCollection.getById(edgeIndex.targetId);
+
+    if (!source || !target) {
+      console.warn(`edgeIndexToEdgeModel: point not found: ${edgeIndex.sourceId} or ${edgeIndex.targetId}`);
+      return null;
+    }
+
+    // Определяем модель для связи
+    let modelName = edgeIndex.modelName ?? options.modelName;
+
+    if (!modelName) {
+      let bestModel: string | null = null;
+      let maxIntersection = -1;
+
+      const sourceModels = new Set(source.embeddings.keys());
+
+      // Ищем общую модель с максимальным пересечением активных размерностей
+      for (const [targetModelName, targetEmb] of target.embeddings.entries()) {
+        if (sourceModels.has(targetModelName)) {
+          const sourceEmb = source.embeddings.get(targetModelName)!;
+          const intersection = sourceEmb.intersectionCount(targetEmb);
+
+          if (intersection > maxIntersection) {
+            maxIntersection = intersection;
+            bestModel = targetModelName;
+          }
+        }
+      }
+      modelName = bestModel ?? undefined;
+    }
+
+    if (!modelName) {
+      console.warn(`edgeIndexToEdgeModel: no common embedding model for ${source.id} and ${target.id}`);
+      return null;
+    }
+
+    const embSource = source.embeddings.get(modelName);
+    const embTarget = target.embeddings.get(modelName);
+
+    if (!embSource || !embTarget) {
+      console.warn(`edgeIndexToEdgeModel: missing embedding for model ${modelName}`);
+      return null;
+    }
+
+    return new EdgeModel(source, target, options.distance ?? 100, modelName);
   }
 
   /**
@@ -31,35 +106,16 @@ export class PointGraphManager {
     const oldIds = new Set(this.pointCollection.indexMap.keys());
     const newIds = new Set(points.map((p) => p.id));
 
-    const removedIds = [...oldIds].filter((id) => !newIds.has(id));
-    this.removeEdgesForPoints(removedIds);
-
     this.pointCollection.clear();
     this.pointCollection._setPoints(points, [], []);
-  }
 
-  /**
-   * Удалить точки через менеджер графа.
-   * Сначала удаляются все инцидентные рёбра, затем сами точки.
-   */
-  public removePoints(ids: string[]): void {
-    if (ids.length === 0) return;
-
-    const existingIds = ids.filter((id) => this.pointCollection.indexMap.has(id));
-    if (existingIds.length === 0) return;
-
-    this.removeEdgesForPoints(existingIds);
-    this.pointCollection.removes(existingIds);
-    this.mediator.pointsGraphUpdated();
-  }
-
-  /**
-   * Обновить коллекцию точек и синхронизировать граф.
-   */
-  public update(points: PointModel[], edges: EdgeRefs): void {
-    this.updatePoints(points);
-    this.initFromRefs(edges);
-    this.mediator.pointsGraphUpdated();
+    const removedIds = [...oldIds].filter((id) => !newIds.has(id));
+    for (const removedId of removedIds) {
+      const edges = this.graph.getEdgesForPoint(removedId);
+      for (const edge of edges) {
+        this.graph.removeEdge(edge);
+      }
+    }
   }
 
   /**
@@ -106,7 +162,7 @@ export class PointGraphManager {
       const neighbors = [...validCandidates].shuffle().slice(0, Math.min(K, validCandidates.length));
 
       for (const targetId of neighbors) {
-        // modelName оставляем пустым, фабрика сама выберет лучшую общую модель.
+        // modelName оставляем пустым, фабрика сама выберет лучшую общую модель
         this.graph.addEdge({ sourceId, targetId, modelName: "" });
       }
     }
@@ -120,13 +176,15 @@ export class PointGraphManager {
   public initFromRefs(refs: EdgeRefs): void {
     this.graph.clear();
     for (const ref of refs) {
-      if (ref.modelName == null) continue;
-      this.graph.addEdge(ref);
+      if (!ref.sourceId || !ref.targetId || ref.sourceId === ref.targetId) continue;
+      if (!this.pointCollection.indexMap.has(ref.sourceId)) continue;
+      if (!this.pointCollection.indexMap.has(ref.targetId)) continue;
+      this.graph.addEdge({ sourceId: ref.sourceId, targetId: ref.targetId, modelName: ref.modelName ?? "" });
     }
   }
 
-  public addEdge(edgeRef: EdgeRef) {
-    return this.graph.addEdge(edgeRef);
+  public addEdge(edgeRef: EdgeRef): void {
+    this.graph.addEdge(edgeRef);
   }
 
   /**
@@ -134,20 +192,6 @@ export class PointGraphManager {
    */
   public removeEdge(model: EdgeModel): void {
     this.graph.removeEdge(model);
-  }
-
-  /**
-   * Удалить ребро по модели.
-   */
-  public removeEdges(model: EdgeModel[]): void {
-    this.graph.removeEdges(model);
-  }
-
-  /**
-   * Получить точку по идентификатору.
-   */
-  public getPointById(id: string): PointModel | null {
-    return this.pointCollection.getById(id) ?? null;
   }
 
   /**
@@ -188,25 +232,32 @@ export class PointGraphManager {
     return Array.from(this.pointCollection.indexMap.keys());
   }
 
-  /**
-   * Оставлен для совместимости с существующим кодом.
-   * Изменение количества точек должно выполняться через методы PointGraphManager.
-   */
   public getPointCollection(): EntityCollection<PointModel> {
     return this.pointCollection;
+  }
+
+  public getAllEdgeRefs(): EdgeRef[] {
+    return this.graph.getAllEdgeRefs();
+  }
+
+  /**
+   * Преобразовать массив EdgeRef в массив EdgeModel, используя внутреннюю коллекцию точек.
+   * Инкапсулирует логику преобразования ссылок на рёбра в модели рёбер.
+   */
+  public edgeIndexesToEdgeModels(
+    edgeIndexes: EdgeRef[],
+    options: EdgeModelOptions = {},
+  ): EdgeModel[] {
+    const result: EdgeModel[] = [];
+    for (const idx of edgeIndexes) {
+      const model = this.edgeIndexToEdgeModel(idx, options);
+      if (model) result.push(model);
+    }
+    return result;
   }
 
   public clear(): void {
     this.pointCollection.clear();
     this.graph.clear();
-  }
-
-  private removeEdgesForPoints(ids: string[]): void {
-    for (const id of ids) {
-      const edges = this.graph.getEdgesForPoint(id);
-      for (const edge of edges) {
-        this.graph.removeEdge(edge);
-      }
-    }
   }
 }

@@ -1,419 +1,187 @@
 // core/ModelManager.ts
-import { AppMediator } from "./AppMediator";
-import { AnimationCallback, AnimationEngine } from "./Engines/AnimationEngine";
-import { EdgeModel } from "./models/EdgeModel";
-import { EdgeRef } from "./models/EdgeRef";
+import { AppMediator, PointsModelReadyPayload } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
-import { PointGraphManager } from "./collections/PointGraphManager";
-import { IEdgeModelFactory } from "./interfaces/IEdgeModelFactory";
-import { cosineDistance } from "@utils/vector";
-
-interface ScoredCandidate {
-  targetId: string;
-  distance: number;
-  model?: EdgeModel;
-  isNew: boolean;
-}
-
-export interface ModelPointCount {
-  modelName: string;
-  pointCount: number;
-}
+import { EdgeModel } from "./models/EdgeModel";
+import { PointGraphManager } from "./PointGraphManager";
+import { EdgeRef } from "./models/EdgeRef";
+import { Log } from "@utils/logger";
 
 /**
- * Управляет построением и постепенной оптимизацией графа ближайших соседей.
- *
- * Для каждой точки рассматриваются:
- * - существующие соседи;
- * - соседи ближайших существующих соседей;
- * - небольшая случайная выборка.
- *
- * Оптимизация выполняется через AnimationEngine, поэтому тяжёлая работа
- * разбивается на небольшие кванты и не блокирует UI надолго.
+ * ModelManager – строит и улучшает граф ближайших соседей.
+ * Считает среднее косинусное расстояние по ВСЕМ общим моделям эмбеддингов.
+ * Не использует кэши векторов, работая напрямую с PointModel.embeddings.
  */
 export class ModelManager {
-  private readonly K: number;
-  private readonly randomCandidates: number;
-  private readonly frameBudgetMs: number;
-  private readonly pointGraphManager: PointGraphManager;
+  private pointGraphManager: PointGraphManager;
+  private edges: EdgeModel[] = [];
+  private readonly edgeWeight = 100;
 
-  /** Модель эмбеддинга, по которой сейчас строится граф. */
-  private activeModelName: string | null = null;
-
-  private pointIndex = 0;
-  private iterationChanged = false;
-  private optimizationCallback: AnimationCallback | null = null;
-  private destroyed = false;
-
-  private readonly unsubStep: () => void;
+  private unsubPoints: () => void;
+  private unsubStep: () => void;
 
   constructor(
-    private readonly mediator: AppMediator,
-    private readonly animation: AnimationEngine,
-    K: number = 3,
-    randomCandidates: number = 3,
-    frameBudgetMs: number = 6,
+    private mediator: AppMediator,
+    private K: number = 3,
+    private maxCandidates: number = 50,
   ) {
-    this.K = Math.max(1, Math.floor(K));
-    this.randomCandidates = Math.max(0, Math.floor(randomCandidates));
-    this.frameBudgetMs = Math.max(1, frameBudgetMs);
+    this.pointGraphManager = new PointGraphManager();
 
-    const edgeModelFactory: IEdgeModelFactory = {
-      create: (edgeRef) => this.edgeRefToEdgeModel(edgeRef),
-    };
-
-    this.pointGraphManager = new PointGraphManager(this.mediator, edgeModelFactory);
+    this.unsubPoints = this.mediator.onPointsModelReady((payload) => {
+      this.updatePoints(payload);
+    });
 
     this.unsubStep = this.mediator.onModelManagerStep(() => {
-      this.toggleOptimization();
+      this.step();
     });
   }
 
-  public getPointGraphManager(): PointGraphManager {
-    return this.pointGraphManager;
-  }
-
-  /**
-   * Переключить состояние оптимизации.
-   *
-   * Повторный вызов во время работы останавливает оптимизацию.
-   * Следующий вызов снова запускает её.
-   */
-  public toggleOptimization(): void {
-    if (this.optimizationCallback !== null) {
-      this.stopOptimization();
-      return;
-    }
-
-    this.startOptimization();
-  }
-
-  /**
-   * Возвращает модели, отсортированные по количеству точек,
-   * содержащих embedding этой модели.
-   *
-   * Одна точка учитывается не более одного раза для каждой модели.
-   */
-  public getModelsByPointCount(): ModelPointCount[] {
-    const modelPointCounts = new Map<string, number>();
-
-    for (const point of this.pointGraphManager.getPoints()) {
-      for (const modelName of point.embeddings.keys()) {
-        modelPointCounts.set(modelName, (modelPointCounts.get(modelName) ?? 0) + 1);
-      }
-    }
-
-    return Array.from(modelPointCounts.entries())
-      .map(([modelName, pointCount]) => ({ modelName, pointCount }))
-      .sort((a, b) => b.pointCount - a.pointCount);
-  }
-
   public destroy(): void {
-    if (this.destroyed) return;
-
-    this.destroyed = true;
-    this.stopOptimization();
+    this.unsubPoints();
     this.unsubStep();
   }
 
+  private updatePoints(payload: PointsModelReadyPayload): void {
+    const { points, edges } = payload;
+    this.pointGraphManager.updatePoints(points);
+    if (this.pointGraphManager.getPoints().length === 0) return;
+
+    if (edges.length > 0) {
+      // Восстанавливаем сохранённые связи вместо случайной инициализации
+      this.pointGraphManager.initFromRefs(edges);
+    } else {
+      this.pointGraphManager.initRandom(this.K);
+    }
+    this.rebuildEdges();
+  }
+
+  private step(): void {
+    if (this.pointGraphManager.getPoints().length === 0) return;
+    this.improve();
+    this.rebuildEdges();
+  }
+
   /**
-   * Запустить оптимизацию.
-   *
-   * Выбирается модель, которая присутствует у наибольшего количества точек.
-   * Старые рёбра других моделей удаляются, после чего граф постепенно
-   * перестраивается по выбранной модели.
+   * Вычисляет СРЕДНЕЕ косинусное расстояние по всем общим моделям двух точек.
+   * Возвращает null, если общих моделей нет (точки в разных пространствах).
    */
-  private startOptimization(): void {
-    if (this.destroyed) return;
+  private calculateAverageCosineDistance(p1: PointModel, p2: PointModel): number | null {
+    let totalDistance = 0;
+    let commonCount = 0;
 
-    const points = this.pointGraphManager.getPoints();
-    if (points.length < 2) {
-      this.stopOptimization();
-      return;
-    }
-
-    const model = this.getModelsByPointCount()[0]?.modelName;
-    if (!model) {
-      this.stopOptimization();
-      return;
-    }
-
-    const modelChanged = this.activeModelName !== model;
-    this.activeModelName = model;
-
-    if (modelChanged) {
-      this.pointIndex = 0;
-      this.iterationChanged = false;
-
-      const edgesToRemove = this.pointGraphManager
-        .getEdgesArray()
-        .filter((edge) => edge.modelName !== model);
-
-      if (edgesToRemove.length > 0) {
-        this.pointGraphManager.removeEdges(edgesToRemove);
-        this.mediator.pointsGraphUpdated();
+    for (const [modelName, emb1] of p1.embeddings.entries()) {
+      const emb2 = p2.embeddings.get(modelName);
+      if (emb2) {
+        totalDistance += this.cosineDistance(emb1.value, emb2.value);
+        commonCount++;
       }
     }
 
-    if (this.optimizationCallback === null) {
-      this.optimizationCallback = this.animation.addCallback(() => this.runStep());
-    }
+    return commonCount > 0 ? totalDistance / commonCount : null;
   }
 
-  /**
-   * Остановить оптимизацию и сбросить состояние текущего прохода.
-   */
-  private stopOptimization(): void {
-    if (this.optimizationCallback !== null) {
-      this.optimizationCallback();
-      this.optimizationCallback = null;
-    }
-
-    this.pointIndex = 0;
-    this.iterationChanged = false;
-  }
-
-  /**
-   * Выполнить один временной квант оптимизации.
-   *
-   * За один callback обрабатываются точки, пока не исчерпан frameBudgetMs.
-   * После полного прохода без изменений граф считается сошедшимся.
-   */
-  private runStep(): void {
-    if (this.destroyed) return;
-
+  @Log
+  private improve(): void {
     const points = this.pointGraphManager.getPoints();
-    if (points.length < 2 || this.activeModelName === null) {
-      this.stopOptimization();
-      return;
-    }
-
-    const frameStart = performance.now();
-    let graphChanged = false;
-
-    while (
-      this.pointIndex < points.length &&
-      performance.now() - frameStart < this.frameBudgetMs
-    ) {
-      graphChanged = this.improvePoint(points[this.pointIndex]) || graphChanged;
-      this.pointIndex++;
-    }
-
-    if (graphChanged) {
-      this.iterationChanged = true;
-      this.mediator.pointsGraphUpdated();
-    }
-
-    if (this.pointIndex < points.length) return;
-
-    this.pointIndex = 0;
-
-    if (!this.iterationChanged) {
-      this.stopOptimization();
-      return;
-    }
-
-    this.iterationChanged = false;
-  }
-
-  /**
-   * Создать EdgeModel из EdgeRef в контексте ModelManager.
-   */
-  private edgeRefToEdgeModel(edgeRef: EdgeRef): EdgeModel | null {
     const pointCollection = this.pointGraphManager.getPointCollection();
 
-    let sourceId = edgeRef.sourceId;
-    let targetId = edgeRef.targetId;
+    for (const source of points) {
+      const currentEdges = this.pointGraphManager.getEdgesForPoint(source.id);
 
-    const sourceIndex = pointCollection.indexMap.get(sourceId);
-    const targetIndex = pointCollection.indexMap.get(targetId);
+      type ScoredCandidate = {
+        targetId: string;
+        distance: number;
+        model?: EdgeModel;
+        isNew: boolean;
+      };
 
-    if (sourceIndex == null || targetIndex == null) {
-      console.warn(
-        `[ModelManager] Point not found for edge: ${sourceId} -> ${targetId}`,
-      );
-      return null;
-    }
+      const scored: ScoredCandidate[] = [];
+      const existingTargets = new Set<string>();
 
-    // Нормализуем порядок концов для консистентности id ребра.
-    if (sourceIndex > targetIndex) {
-      [sourceId, targetId] = [targetId, sourceId];
-    }
+      // 1. Оцениваем текущих соседей
+      for (const edge of currentEdges) {
+        const otherId = edge.sourceId === source.id ? edge.targetId : edge.sourceId;
+        existingTargets.add(otherId);
 
-    const source = pointCollection.getById(sourceId);
-    const target = pointCollection.getById(targetId);
+        const otherPoint = pointCollection.getById(otherId);
+        if (otherPoint) {
+          const distance = this.calculateAverageCosineDistance(source, otherPoint);
+          if (distance !== null) {
+            scored.push({ targetId: otherId, distance, model: edge, isNew: false });
+          }
+        }
+      }
 
-    if (!source || !target) {
-      console.warn(
-        `[ModelManager] Point not found for edge: ${edgeRef.sourceId} -> ${edgeRef.targetId}`,
-      );
-      return null;
-    }
+      // 2. Оцениваем новых кандидатов
+      const newCandidates: ScoredCandidate[] = [];
+      for (const target of points) {
+        if (target.id === source.id || existingTargets.has(target.id)) continue;
 
-    const modelName = edgeRef.modelName || this.activeModelName;
-    if (!modelName) {
-      console.warn(
-        `[ModelManager] No embedding model for edge: ${source.id} -> ${target.id}`,
-      );
-      return null;
-    }
+        const distance = this.calculateAverageCosineDistance(source, target);
+        if (distance !== null) {
+          newCandidates.push({ targetId: target.id, distance, isNew: true });
+        }
+      }
 
-    if (!source.embeddings.has(modelName) || !target.embeddings.has(modelName)) {
-      console.warn(
-        `[ModelManager] Missing embedding "${modelName}" for ${source.id} or ${target.id}`,
-      );
-      return null;
-    }
+      // Берём только maxCandidates лучших новых (с наименьшим расстоянием)
+      newCandidates.sort((a, b) => a.distance - b.distance);
+      for (const c of newCandidates.slice(0, this.maxCandidates)) {
+        scored.push(c);
+      }
 
-    return new EdgeModel(source, target, modelName);
-  }
+      // 3. Сортируем всех (старые + новые) по возрастанию расстояния
+      scored.sort((a, b) => a.distance - b.distance);
 
-  /**
-   * Улучшить соседей одной точки.
-   *
-   * Кандидаты:
-   * 1. текущие соседи — чтобы плохие связи можно было удалить;
-   * 2. соседи K ближайших соседей точки — exploitation;
-   * 3. случайные точки — exploration.
-   */
-  private improvePoint(source: PointModel): boolean {
-    const modelName = this.activeModelName;
-    if (!modelName) return false;
+      // 4. Оставляем строго топ-K
+      const topK = scored.slice(0, this.K);
+      const topKTargets = new Set(topK.map((c) => c.targetId));
 
-    const currentEdges = this.pointGraphManager.getEdgesForPoint(source.id);
-    const scored: ScoredCandidate[] = currentEdges.map((edge) => ({
-      targetId: this.getOtherPointId(edge, source.id),
-      distance: edge.cosineDistance,
-      model: edge,
-      isNew: false,
-    }));
+      // 5. Синхронизируем граф: удаляем "плохие", добавляем новые
+      for (const candidate of scored) {
+        if (!candidate.isNew && !topKTargets.has(candidate.targetId) && candidate.model) {
+          this.pointGraphManager.removeEdge(candidate.model);
+        }
+      }
 
-    const existingTargets = new Set(scored.map((candidate) => candidate.targetId));
-    const seedNeighbors = scored
-      .slice()
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, this.K)
-      .map((candidate) => candidate.targetId);
-
-    const candidateIds = new Set<string>();
-
-    for (const neighborId of seedNeighbors) {
-      const neighborEdges = this.pointGraphManager.getEdgesForPoint(neighborId);
-
-      for (const edge of neighborEdges) {
-        if (candidateIds.size >= this.K * this.K) break;
-
-        const candidateId = this.getOtherPointId(edge, neighborId);
-        if (candidateId !== source.id) {
-          candidateIds.add(candidateId);
+      for (const candidate of topK) {
+        if (candidate.isNew) {
+          this.pointGraphManager.addEdge({
+            sourceId: source.id,
+            targetId: candidate.targetId,
+            modelName: "", // PointGraphManager сам выберет лучшую модель
+          });
         }
       }
     }
-
-    for (const candidateId of this.getRandomCandidates(source)) {
-      candidateIds.add(candidateId);
-    }
-
-    for (const candidateId of candidateIds) {
-      if (existingTargets.has(candidateId)) continue;
-
-      const target = this.pointGraphManager.getPointById(candidateId);
-      if (!target) continue;
-
-      const distance = this.calculateCosineDistance(source, target, modelName);
-      if (distance !== null) {
-        scored.push({
-          targetId: candidateId,
-          distance,
-          isNew: true,
-        });
-      }
-    }
-
-    scored.sort((a, b) => a.distance - b.distance);
-
-    const topK = scored.slice(0, this.K);
-    const topKTargets = new Set(topK.map((candidate) => candidate.targetId));
-
-    let changed = false;
-
-    for (const candidate of scored) {
-      if (
-        !candidate.isNew &&
-        !topKTargets.has(candidate.targetId) &&
-        candidate.model
-      ) {
-        this.pointGraphManager.removeEdge(candidate.model);
-        changed = true;
-      }
-    }
-
-    for (const candidate of topK) {
-      if (!candidate.isNew) continue;
-
-      const edge = this.pointGraphManager.addEdge({
-        sourceId: source.id,
-        targetId: candidate.targetId,
-        modelName,
-      });
-
-      changed = edge !== null || changed;
-    }
-
-    return changed;
   }
 
-  /**
-   * Вернуть id второго конца ребра.
-   */
-  private getOtherPointId(edge: EdgeModel, pointId: string): string {
-    return edge.sourceId === pointId ? edge.targetId : edge.sourceId;
-  }
-
-  /**
-   * Получить случайные id точек, имеющих активную модель.
-   *
-   * Выбираем без повторений и без создания копии всего массива точек.
-   */
-  private getRandomCandidates(source: PointModel): string[] {
-    const modelName = this.activeModelName;
-    if (!modelName || this.randomCandidates === 0) return [];
-
-    const points = this.pointGraphManager.getPoints();
-    if (points.length < 2) return [];
-
-    const result = new Set<string>();
-    const maxAttempts = Math.max(points.length * 2, this.randomCandidates * 10);
-
-    for (let attempt = 0; attempt < maxAttempts && result.size < this.randomCandidates; attempt++) {
-      const index = Math.floor(Math.random() * points.length);
-      const candidate = points[index];
-
-      if (
-        candidate.id !== source.id &&
-        candidate.embeddings.has(modelName)
-      ) {
-        result.add(candidate.id);
-      }
+  private cosineDistance(v1: number[], v2: number[]): number {
+    if (!v1 || !v2 || v1.length === 0 || v2.length === 0 || v1.length !== v2.length) return 1;
+    let dot = 0,
+      norm1 = 0,
+      norm2 = 0;
+    for (let i = 0; i < v1.length; i++) {
+      dot += v1[i] * v2[i];
+      norm1 += v1[i] * v1[i];
+      norm2 += v2[i] * v2[i];
     }
-
-    return [...result];
+    if (norm1 === 0 || norm2 === 0) return 1;
+    return 1 - dot / (Math.sqrt(norm1) * Math.sqrt(norm2));
   }
 
-  /**
-   * Вычисляет косинусное расстояние двух точек по активной модели.
-   * Возвращает null, если у одной из точек нет нужного embedding.
-   */
-  private calculateCosineDistance(
-    p1: PointModel,
-    p2: PointModel,
-    modelName: string,
-  ): number | null {
-    const emb1 = p1.embeddings.get(modelName);
-    const emb2 = p2.embeddings.get(modelName);
+  private rebuildEdges(): void {
+    const edgeRefs = this.pointGraphManager.getAllEdgeRefs();
 
-    if (!emb1 || !emb2) return null;
+    this.edges = this.pointGraphManager.edgeIndexesToEdgeModels(edgeRefs, {
+      distance: this.edgeWeight,
+    });
 
-    return cosineDistance(emb1.value, emb2.value);
+    this.mediator.edges = this.edges;
+  }
+
+  public getPairs(): { source: PointModel; target: PointModel }[] {
+    return this.edges.map((edge) => ({
+      source: edge.source,
+      target: edge.target,
+    }));
   }
 }
