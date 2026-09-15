@@ -3,6 +3,7 @@ import { AppMediator } from "../AppMediator";
 import { PointTable } from "./tables/PointTable";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
 import { EdgeTable } from "./tables/EdgeTable";
+import { PointsTransformer } from "../PointsTransformer";
 import { LogSafe, Safe } from "@utils/logger";
 import { toDate } from "@utils/date-utils";
 import { SingleExecution } from "@utils/single-runner";
@@ -13,6 +14,7 @@ export class DataManager {
   private documentsApi: fetch.DocumentsApi;
   private embeddingsApi: fetch.EmbeddingsApi;
   private unsubReload: () => void;
+  private pointsTransformer: PointsTransformer | null = null;
 
   lowDate = new Date(2000, 1, 1, 1, 1, 1, 1);
 
@@ -25,6 +27,10 @@ export class DataManager {
     this.unsubReload = this.mediator.onReloadTables(() => this.reloadTables());
   }
 
+  public setPointsTransformer(transformer: PointsTransformer): void {
+    this.pointsTransformer = transformer;
+  }
+
   public destroy(): void {
     this.unsubReload();
   }
@@ -35,10 +41,10 @@ export class DataManager {
     const points = await this.db.points.getAll();
     const embeddings: EmbeddingTable[] = await this.db.embeddings.getAll();
 
-    // Сначала связи: POINTS_MODEL_READY должен уже нести сохранённые связи
-    this.mediator.edgesTable = edges;
-    this.mediator.pointsTable = points;
-    this.mediator.embeddingsTable = embeddings;
+    // Передаем таблицы напрямую в PointsTransformer
+    if (this.pointsTransformer) {
+      this.pointsTransformer.setTables(points, embeddings, edges);
+    }
   }
 
   reloadTables() {

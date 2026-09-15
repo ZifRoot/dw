@@ -10,53 +10,49 @@ import { EdgeRefs } from "./models/EdgeRefs";
 import { PointGraphManager } from "./PointGraphManager";
 
 export class PointsTransformer {
-  private unsubPointsTable: () => void;
-  private unsubEmbeddingsTable: () => void;
   private unsubPointsUpdated: () => void;
   private unsubPointUpdated: () => void;
   private unsubSavePositions: () => void;
   private cachedPoints: PointModel[] = [];
+  private cachedEdges: EdgeTable[] = [];
 
   constructor(
     private mediator: AppMediator,
     private dataManager: DataManager,
     private pointGraphManager: PointGraphManager,
   ) {
-    // 1. Подписка на табличные точки
-    this.unsubPointsTable = this.mediator.onPointsTable((pointsTable: PointTable[]) => {
-      const modelPoints = this.convertPointsTableToModel(pointsTable);
-      this.cachedPoints = modelPoints;
-      this.updatePointGraphManager();
-    });
+    // Регистрируем себя в DataManager для получения таблиц
+    this.dataManager.setPointsTransformer(this);
 
-    // 2. Подписка на табличные эмбеддинги
-    this.unsubEmbeddingsTable = this.mediator.onEmbeddingsTable((embeddingsTable: EmbeddingTable[]) => {
-      this.mergeEmbeddingsIntoPoints(this.cachedPoints, embeddingsTable);
-      this.updatePointGraphManager();
-    });
-
-    // 3. Подписка на редкое массовое обновление точек
+    // Подписка на редкое массовое обновление точек
     this.unsubPointsUpdated = this.mediator.onPointsUpdated(async (points: PointModel[]) => {
       await this.savePoints(points);
     });
 
-    // 4. Подписка на точечное обновление
+    // Подписка на точечное обновление
     this.unsubPointUpdated = this.mediator.onPointUpdated(async (point: PointModel) => {
       await this.savePoints([point]);
     });
 
-    // 5. Подписка на команду сохранения позиций точек и связей (кнопка в UI)
+    // Подписка на команду сохранения позиций точек и связей (кнопка в UI)
     this.unsubSavePositions = this.mediator.onSavePositions(async () => {
       await this.saveScene();
     });
   }
 
   public destroy(): void {
-    this.unsubPointsTable();
-    this.unsubEmbeddingsTable();
     this.unsubPointsUpdated();
     this.unsubPointUpdated();
     this.unsubSavePositions();
+  }
+
+  /** Получение таблиц из DataManager напрямую */
+  public setTables(points: PointTable[], embeddings: EmbeddingTable[], edges: EdgeTable[]): void {
+    this.cachedEdges = edges;
+    const modelPoints = this.convertPointsTableToModel(points);
+    this.cachedPoints = modelPoints;
+    this.mergeEmbeddingsIntoPoints(this.cachedPoints, embeddings);
+    this.updatePointGraphManager();
   }
 
   /** Обновить PointGraphManager и уведомить подписчиков через медиатор */
@@ -81,7 +77,7 @@ export class PointsTransformer {
 
   /** Сохранённые связи из локальной БД в виде EdgeRefs */
   private savedEdges(): EdgeRefs {
-    return this.mediator.edgesTable.map((e) => ({
+    return this.cachedEdges.map((e) => ({
       sourceId: e.source_id,
       targetId: e.target_id,
       modelName: e.model_name,
