@@ -4,16 +4,14 @@ import { UIPoint } from "../ui-models";
 import { AppMediator } from "../AppMediator";
 import { PointModel } from "../models/PointModel";
 import { PointGraphManager } from "../PointGraphManager";
-import { EdgeModel } from "../models/EdgeModel";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
   private points: PointModel[] = [];
-  private edges: EdgeModel[] = [];
-
   private unregisterDrag: (() => void) | null = null;
   private d3Points: d3.Selection<SVGGElement, PointModel, SVGGElement, unknown> | null = null;
   private groupMap: Map<string, SVGGElement> = new Map();
+  private unsubPointsGraphUpdated: () => void;
 
   constructor(
     private svgEngine: SvgEngine,
@@ -27,17 +25,19 @@ export class PointsScene {
 
     this.registerDragDetector();
     this.setupClickHandler();
+
+    // Подписка на обновление графа точек (без передачи данных)
+    this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
+      this.syncRefs();
+      this.syncDomWithPoints();
+    });
+
     this.subscribeToMediatorEvents();
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
   }
 
   // ========== Публичные методы ==========
   public init(): void {
-    this.setPoints([]);
-  }
-
-  public setPoints(points: PointModel[]): void {
-    this.pointGraphManager.updatePoints(points);
     this.syncRefs();
     this.syncDomWithPoints();
   }
@@ -109,11 +109,11 @@ export class PointsScene {
 
   public destroy(): void {
     if (this.unregisterDrag) this.unregisterDrag();
+    if (this.unsubPointsGraphUpdated) this.unsubPointsGraphUpdated();
   }
 
   private syncRefs(): void {
     this.points = this.pointGraphManager.getPointsArray();
-    this.edges = this.pointGraphManager.getEdgesArray();
   }
 
   // ========== Приватные методы синхронизации DOM ==========

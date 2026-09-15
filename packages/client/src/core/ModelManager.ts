@@ -51,6 +51,9 @@ export class ModelManager {
       this.pointGraphManager.initRandom(this.K);
     }
     this.rebuildEdges();
+    
+    // Уведомляем сцену о готовности данных через медиатор
+    this.mediator.pointsUpdating(points);
   }
 
   private step(): void {

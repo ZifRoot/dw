@@ -16,6 +16,7 @@ export class EdgesScene {
 
   unregisterSelectedPoint: () => void;
   private unsubEdges: () => void;
+  private unsubPointsGraphUpdated: () => void;
   private unsubPointsMoved: (() => void) | null = null;
   private unsubPointsUpdated: (() => void) | null = null;
 
@@ -31,6 +32,12 @@ export class EdgesScene {
     this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
     this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point?.id ?? null));
+
+    // Подписка на обновление графа точек (без передачи данных)
+    this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
+      this.syncRefs();
+      this.renderLines();
+    });
 
     this.mediator.onPointsUpdating(() => this.updateLines());
     this.rootGroup.on("click", (event) => {
@@ -86,6 +93,7 @@ export class EdgesScene {
     if (this.unregisterSelectedPoint) this.unregisterSelectedPoint();
 
     this.unsubEdges();
+    if (this.unsubPointsGraphUpdated) this.unsubPointsGraphUpdated();
     if (this.unsubPointsMoved) this.unsubPointsMoved();
     if (this.unsubPointsUpdated) this.unsubPointsUpdated();
     this.clear();
