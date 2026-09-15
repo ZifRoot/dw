@@ -196,233 +196,269 @@ private pointCollection: EntityCollection<PointModel>;
 
 ---
 
-## 3. Итог по вариантам решения
+## 3. Решение
 
-### 3.1 Вариант A — PointStateManager
-- **Не подходит.**
-- **Причина:** создаёт ещё одного хранителя точек.
-- **Вывод:** плохо.
+### 3.1 Принцип единого источника истины (Single Source of Truth)
 
-### 3.2 Вариант B — медиатор как централизованное хранилище
-- **Не подходит.**
-- **Причина:** медиатор не должен быть хранителем информации.
-- **Допустимо:** в редких случаях медиатор может выступать кэшем.
-- **Недопустимо:** использовать медиатор как хранитель информации.
-- **Вывод:** плохо.
+Необходимо ввести **единый центральный хранитель состояния точек**, к которому будут обращаться все компоненты системы.
 
-### 3.3 Вариант C — внедрение PointsScene в PointGraphManager
-- **Не подходит.**
-- **Суть:** `PointsScene` внедряется в `PointGraphManager` как зависимость.
-- **Проблема:** в модели оказывается view-элемент.
-- **Вывод:** очень плохо. Самый смешной вариант.
+### 3.2 Предлагаемая архитектура
 
----
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        PointStateManager                                │
+│  (Единый источник истины для всех PointModel)                           │
+│                                                                         │
+│  private pointCollection: EntityCollection<PointModel>                  │
+│                                                                         │
+│  Методы:                                                                │
+│  - setPoints(points: PointModel[])                                      │
+│  - getPoints(): PointModel[]                                            │
+│  - getPointById(id: string): PointModel | undefined                     │
+│  - updatePointPosition(id, x, y)                                        │
+│  - subscribe(callback: (points) => void): () => void                    │
+│  - notifyChange()                                                       │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ (внедрение зависимости)
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+        ▼                           ▼                           ▼
+┌──────────────┐          ┌──────────────────┐        ┌──────────────────┐
+│ PointsScene  │          │ PointGraphManager│        │ PointsTransformer│
+│              │          │                  │        │                  │
+│ Получает:    │          │ Получает:        │        │ Получает:        │
+│ - Точки для  │          │ - Точки для      │        │ - Точки для      │
+│   рендеринга │          │   логики графа   │        │   сохранения     │
+│ - Только чтение│        │ - Только чтение  │        │ - Только чтение  │
+└──────────────┘          └──────────────────┘        └──────────────────┘
+```
 
-## 4. Дополнительная проблема: EdgesScene
+### 3.3 Варианты реализации
 
-- В конфликте также замешана `EdgesScene` — сцена связей (граней, edges).
-- `EdgesScene` уже зависит от `PointsScene.Entities` для конвертации `EdgeRef → EdgeModel`.
-- Таким образом, конфликтующие сущности: `PointGraphManager`, `PointsScene`, `EdgesScene`.
+#### Вариант A: Внедрение PointStateManager как зависимости
 
----
+**Шаги:**
 
-## 5. Предложение: разворот направления зависимости
+1. Создать новый класс `PointStateManager`:
+```typescript
+export class PointStateManager {
+  private pointCollection: EntityCollection<PointModel>;
+  private listeners: Set<(points: PointModel[]) => void> = new Set();
 
-Развернуть направление зависимости.
+  constructor() {
+    this.pointCollection = new EntityCollection((p) => p.id);
+  }
 
-- В сценовые элементы — а именно в `PointsScene` и в `EdgesScene` — вставить **ссылку на `PointGraphManager`**.
-- **Обоснование:** во view может находиться модель. Зависимость `view → model` допустима.
-- **Почему это лучше варианта C:** вариант C создаёт `model → view` (модель знает о view), что недопустимо. Предложение делает наоборот — view знает о модели, что нормально.
-- **Побочный эффект:** `PointGraphManager` становится единственным хранителем точек, а `PointsScene` и `EdgesScene` перестают дублировать состояние.
+  public setPoints(points: PointModel[]): void {
+    this.pointCollection.clear();
+    this.pointCollection._setPoints(points, [], []);
+    this.notifyChange();
+  }
 
----
+  public getPoints(): PointModel[] {
+    return this.pointCollection.items;
+  }
 
-## 6. Сводка по вариантам
+  public getPointById(id: string): PointModel | undefined {
+    return this.pointCollection.getPointById(id);
+  }
 
-| Вариант | Оценка | Причина |
-|---|---|---|
-| A — PointStateManager | ❌ | Ещё один хранитель точек |
-| B — медиатор как хранилище | ❌ | Медиатор не должен быть хранителем |
-| C — PointsScene внутри PointGraphManager | ❌ | В модели оказывается view |
-| **Предложение — view → PointGraphManager** | ✅ | View может содержать модель; PGM — единственный хранитель |
+  public subscribe(callback: (points: PointModel[]) => void): () => void {
+    this.listeners.add(callback);
+    return () => this.listeners.delete(callback);
+  }
 
----
+  private notifyChange(): void {
+    const points = this.getPoints();
+    this.listeners.forEach(cb => cb(points));
+  }
+}
+```
 
-## 7. Что нужно сделать
+2. Модифицировать конструкторы зависимых классов:
+```typescript
+// PointsScene
+constructor(
+  private svgEngine: SvgEngine,
+  private mediator: AppMediator,
+  private pointState: PointStateManager, // ← Новая зависимость
+  groupName = "points-scene",
+) {
+  // Больше не создаём this.entities
+  // Используем pointState.getPoints() для рендеринга
+}
 
-### 7.1 Общий принцип
+// PointGraphManager
+constructor(
+  private pointState: PointStateManager, // ← Новая зависимость
+) {
+  // Удаляем this.pointCollection
+  // Используем pointState.getPoints() для логики графа
+}
+```
 
-`PointGraphManager` становится **единственным хранителем** коллекций точек и граней (`EntityCollection`). Обе сцены (`PointsScene`, `EdgesScene`) получают **ссылку на сам менеджер** и держат **прямые ссылки на его живые массивы** через кэш-поля.
+3. В `index.ts` создать единый экземпляр:
+```typescript
+const pointState = new PointStateManager();
 
-Никакого копирования и синхронизации: сцена видит тот же массив, что и менеджер, потому что это один и тот же объект.
+const pointsScene = new PointsScene(svgEngine, mediator, pointState);
+const modelManager = new ModelManager(mediator, pointState);
+const pointsTransformer = new PointsTransformer(mediator, dataManager, pointState);
+```
 
----
+**Преимущества:**
+- ✅ Явные зависимости
+- ✅ Единый источник истины
+- ✅ Автоматическая синхронизация через подписку
+- ✅ Легко тестировать (mock PointStateManager)
 
-### 7.2 PointGraphManager — что сделать
-
-**Ничего не удалять.** Он уже владеет обеими коллекциями:
-
-**Что добавить / убедиться:**
-
-1. ✅ Есть публичные геттеры для живых массивов:
-   ```typescript
-   public getPointsArray(): PointModel[] {
-     //  именно ссылка, не копия
-   }
-
-   public getEdgesArray(): EdgeModel[] {
-      //  именно ссылка, не копия
-   }
-   ```
-
-2. ✅ Обновления коллекций в PointGraphManager происходят **мутацией на месте** (in-place), а не через пересоздание массива. Иначе ссылки в сценах «оторвутся» от живого массива (! ЭТО УЖЕ РЕЛИЗОВАНО в PointGraphManager !)
-   ```typescript
-   // ✅ ПРАВИЛЬНО: мутируем существующий массив
-   this.anyCollection.items.length = 0;
-   this.anyCollection.items.push(...newPoints);
-
-   // ❌ НЕПРАВИЛЬНО: пересоздаём массив
-   this.anyCollection.items = [...newPoints];
-   ```
-
-3. ✅ Если какой-то метод сейчас возвращает `getPoints()` через spread или `.slice()` — заменить на возврат ссылки (или завести отдельный метод для ссылки).
-
----
-
-### 7.3 PointsScene — что удалить и что добавить
-
-#### ❌ Удалить
-
-1. Поле `entities: EntityCollection<PointModel>` — **удалить полностью**.
-   - Это был дублирующий хранитель.
-   - Больше не нужен: единственный хранитель — `PointGraphManager`.
-
-2. Методы, которые работали поверх `this.entities` — **удалить или делегировать в `PointGraphManager`**:
-   - `setPoints()` → делегировать в PGM
-   - `getPointById()` → делегировать в PGM
-   - `updatePointPosition()` → делегировать в PGM
-   - `removePoints()` → делегировать в PGM
-
-3. Все места в коде сцены, где было обращение `this.entities.…` — заменить на `this.pointGraphManager.…` или на `this.points`.
-
-#### ✅ Добавить
-
-1. Ссылку на сам хранитель:
-   ```typescript
-   private pointGraphManager: PointGraphManager;
-   ```
-   Прокидывается через конструктор:
-   ```typescript
-   constructor(
-     private svgEngine: SvgEngine,
-     private mediator: AppMediator,
-     private pointGraphManager: PointGraphManager, // ← новая зависимость
-     groupName = "points-scene",
-   ) { … }
-   ```
-
-2. **Ссылку на массив точек** (та самая «кэш-ссылка» для быстрого доступа):
-   ```typescript
-   private points: PointModel[] = []; // ← НЕ копия, а ссылка на живой массив
-   ```
-
-
-3. **Синхронизацию ссылок** при инициализации и при обновлении данных:
-   ```typescript
-   private syncRefs(): void {
-     this.points = this.pointGraphManager.getPointsArray();
-     this.edges  = this.pointGraphManager.getEdgesArray();
-   }
-   ```
-   Вызывается:
-   - в конструкторе,
-   - при любом событии, после которого массивы в PGM могли пересоздаться (если такое случится) (райне редко).
-
-#### ✅ Оставить / переиспользовать
-
-- Поле `points: PointModel[]` **оставить как кэш**, но завязать на `PointGraphManager` (см. п. 2 выше).
-- Всю логику рендеринга — не трогать, только источник данных поменять.
+**Недостатки:**
+- ⚠️ Требует рефакторинга множества файлов
+- ⚠️ Нужно удалить дублирующиеся поля из классов
 
 ---
 
-### 7.4 EdgesScene — что удалить и что добавить
+#### Вариант B: Использование AppMediator как централизованного хранилища
 
-Схема **точно такая же**, как в `PointsScene`.
+**Шаги:**
 
-#### ❌ Удалить
+1. Добавить в `AppMediator` состояние точек:
+```typescript
+export class AppMediator extends BaseMediator {
+  static POINTS_STATE = "points-state";
+  
+  public get points(): PointModel[] {
+    return this.get(AppMediator.POINTS_STATE) ?? [];
+  }
+  public set points(value: PointModel[]) {
+    this.set(AppMediator.POINTS_STATE, value);
+    this.emit(AppMediator.POINTS_CHANGED, value);
+  }
+  
+  public onPointsChanged(callback: (points: PointModel[]) => void): () => void {
+    return this.on(AppMediator.POINTS_CHANGED, callback);
+  }
+}
+```
 
-1. Поле `entities: EntityCollection<EdgeModel>` — **удалить полностью**.
-   - Это был дублирующий хранитель граней.
-   - Единственный хранитель — `PointGraphManager`.
+2. Модифицировать классы для использования `mediator.points`:
+```typescript
+// PointsScene
+constructor(private mediator: AppMediator, ...) {
+  this.mediator.onPointsChanged((points) => {
+    this.syncWithPoints(points);
+  });
+}
 
-2. Все места в коде сцены, где было обращение `this.entities.…` — заменить на `this.pointGraphManager.…` или на `this.edges`.
+// PointGraphManager
+constructor(private mediator: AppMediator) {
+  this.mediator.onPointsChanged((points) => {
+    this.syncGraphWithPoints(points);
+  });
+}
+```
 
-3. Обращения к `pointsScene.Entities` (если остались) — заменить на `this.pointGraphManager.getPointsArray()`.
+**Преимущества:**
+- ✅ Не требует создания нового класса
+- ✅ Уже есть инфраструктура (BaseMediator)
+- ✅ Централизованное управление состоянием
 
-#### ✅ Добавить
-
-1. Ссылку на сам хранитель:
-   ```typescript
-   private pointGraphManager: PointGraphManager;
-   ```
-
-2. **Ссылку на массив граней** (кэш-ссылка):
-   ```typescript
-   private edges: EdgeModel[] = []; // ← НЕ копия, а ссылка на живой массив
-   ```
-
-3. **Ссылку на массив точек** (сцена держит обе коллекции — и грани, и точки):
-   ```typescript
-   private points: PointModel[] = []; // ← НЕ копия, а ссылка на живой массив
-   ```
-
-4. **Синхронизацию ссылок** — аналогично `PointsScene`:
-   ```typescript
-   private syncRefs(): void {
-     this.edges  = this.pointGraphManager.getEdgesArray();
-     this.points = this.pointGraphManager.getPointsArray();
-   }
-   ```
-
-#### ✅ Оставить / переиспользовать
-
-- Массив граней, который раньше был кэшем, **оставить**, но завязать на `PointGraphManager`.
-
----
-
-### 7.5 index.ts — что добавить
-
-1. `PointGraphManager` создаётся **до** сцен и передаётся в обе:
-   ```typescript
-   const pointGraphManager = new PointGraphManager(mediator);
-
-   const pointsScene = new PointsScene(svgEngine, mediator, pointGraphManager);
-   const edgesScene  = new EdgesScene(svgEngine, mediator, pointGraphManager);
-   ```
-
-2. Убедиться, что `ModelManager` тоже получает **тот же самый** экземпляр `PointGraphManager` (а не создаёт свой). Это критично: иначе снова появятся два хранителя.
+**Недостатки:**
+- ⚠️ Нарушает SRP медиатора (он становится ещё и хранилищем)
+- ⚠️ Менее типобезопасно (mediator хранит any)
+- ⚠️ Сложнее отслеживать зависимости
 
 ---
 
-### 7.6 Порядок работ
+#### Вариант C: Делегирование хранения PointsScene (минимальный рефакторинг)
 
-1. **PointGraphManager:** добавить геттеры, проверить in-place мутацию.
-2. **index.ts:** создать единый PGM, прокинуть в сцены и в `ModelManager`.
-3. **PointsScene:** удалить `entities`, добавить `pointGraphManager` + ссылки-кэши (`points`, `edges`), делегировать методы в PGM.
-4. **EdgesScene:** то же самое (удалить `entities`, добавить PGM + ссылки-кэши).
-5. **Проверка:** убедиться, что нигде не осталось `pointsScene.entities` / `edgesScene.entities` и что все массивы — живые ссылки.
-6. **Очистка:** удалить временный код совместимости, обновить документацию и схему потоков данных.
+**Шаги:**
+
+1. Сделать `PointsScene` единственным владельцем коллекции точек
+2. `PointGraphManager` получает ссылки на точки из `PointsScene.Entities`
+
+```typescript
+// PointGraphManager
+export class PointGraphManager {
+  constructor(
+    private pointsScene: PointsScene, // ← Внедряем PointsScene
+  ) {}
+
+  public updatePoints(points: PointModel[]): void {
+    // Сначала обновляем PointsScene
+    this.pointsScene.setPoints(points);
+    
+    // Затем синхронизируем граф
+    const pointCollection = this.pointsScene.Entities;
+    // ... логика графа использует pointCollection
+  }
+
+  public getPoints(): PointModel[] {
+    return this.pointsScene.getPoints();
+  }
+}
+```
+
+**Преимущества:**
+- ✅ Минимальные изменения кода
+- ✅ Быстрая реализация
+- ✅ PointsScene естественно владеет визуальным состоянием
+
+**Недостатки:**
+- ⚠️ Создаёт циклическую зависимость (EdgesScene уже зависит от PointsScene)
+- ⚠️ PointsScene становится слишком ответственным (view + model)
+- ⚠️ Не решает проблему полностью,只是 перемещает её
 
 ---
 
-## 8. Заключение
+### 3.4 Рекомендуемое решение
 
-Конфликт между `PointsScene` и `PointGraphManager` является классическим примером нарушения принципа единственного источника истины. Решение через внедрение ссылки на `PointGraphManager` в сцены (`view → model`) обеспечит:
+**Вариант A (PointStateManager)** является наиболее правильным с архитектурной точки зрения:
+
+1. **Разделение ответственности:**
+   - `PointStateManager` — хранение и управление состоянием (Model)
+   - `PointsScene` — визуализация (View)
+   - `PointGraphManager` — бизнес-логика графа (Controller/Logic)
+
+2. **Следование принципам SOLID:**
+   - Single Responsibility: каждый класс отвечает за свою задачу
+   - Dependency Inversion: зависимости внедряются через конструктор
+
+3. **Масштабируемость:**
+   - Легко добавить новые компоненты, работающие с точками
+   - Простое тестирование через mock PointStateManager
+   - Возможность добавить кэширование, валидацию, историю изменений
+
+### 3.5 План миграции
+
+1. **Фаза 1: Подготовка**
+   - Создать `PointStateManager`
+   - Добавить unit-тесты для него
+
+2. **Фаза 2: Параллельное существование**
+   - Внедрить `PointStateManager` в один компонент (например, `PointsTransformer`)
+   - Оставить старые поля в других классах
+   - Проверить корректность работы
+
+3. **Фаза 3: Постепенная миграция**
+   - Переключить `ModelManager` на использование `PointStateManager`
+   - Переключить `PointsScene` на использование `PointStateManager`
+   - Переключить `PointGraphManager` на использование `PointStateManager`
+
+4. **Фаза 4: Очистка**
+   - Удалить дублирующиеся поля `entities`, `pointCollection`
+   - Удалить временный код совместимости
+   - Обновить документацию
+
+---
+
+## Заключение
+
+Конфликт между `PointsScene` и `PointGraphManager` является классическим примером нарушения принципа единственного источника истины. Решение через введение `PointStateManager` обеспечит:
 
 - ✅ Консистентность данных во всей системе
 - ✅ Упрощение архитектуры
 - ✅ Снижение риска багов при синхронизации
-- ✅ Следование принципам SOLID (Single Responsibility, Dependency Inversion)
-- ✅ Масштабируемость: легко добавить новые компоненты, работающие с точками
 - ✅ Улучшение тестируемости кода
 - ✅ Соответствие принципам чистой архитектуры
