@@ -28,7 +28,7 @@ src/
 | `BaseMediator` | Базовый класс для медиаторов. Реализует паттерн Observer через `EventTarget`, предоставляет методы `set/get/has` для состояния и `emit` для событий. |
 | `ModelManager` | Строит и улучшает граф ближайших соседей. Вычисляет среднее косинусное расстояние по всем общим моделям эмбеддингов. Работает напрямую с `PointModel.embeddings` без кэширования векторов. |
 | `PointGraphManager` | Инкапсулирует управление коллекцией точек (`EntityCollection<PointModel>`) и графом связей (`NeighborGraph`). Гарантирует консистентность: при изменении точек автоматически очищает "висячие" рёбра. |
-| `PointsTransformer` | Преобразует данные из таблиц базы данных (`PointTable`, `EmbeddingTable`, `EdgeTable`) в модели (`PointModel`, `EmbeddingModel`, `EdgeRefs`). Синхронизирует состояние между `DataManager` и `PointsScene`. |
+| `PointsTransformer` | Преобразует данные из таблиц базы данных (`PointTable`, `EmbeddingTable`, `EdgeTable`) в модели (`PointModel`, `EmbeddingModel`, `EdgeRefs`). Синхронизирует состояние между `DataManager` и `PointGraphManager`. Не хранит кэши точек и рёбер — работает напрямую с `PointGraphManager` как единственным источником истины. |
 | `DataManager` | Управляет IndexedDB базой данных (`CanvasPositionsDB`) и API клиентами (`DocumentsApi`, `EmbeddingsApi`). Загружает и сохраняет точки, эмбеддинги и рёбра. Подписывается на команду перезагрузки таблиц. |
 
 ---

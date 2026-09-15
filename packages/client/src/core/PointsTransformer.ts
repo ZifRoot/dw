@@ -13,8 +13,6 @@ export class PointsTransformer {
   private unsubPointsUpdated: () => void;
   private unsubPointUpdated: () => void;
   private unsubSavePositions: () => void;
-  private cachedPoints: PointModel[] = [];
-  private cachedEdges: EdgeTable[] = [];
 
   constructor(
     private mediator: AppMediator,
@@ -48,21 +46,19 @@ export class PointsTransformer {
 
   /** Получение таблиц из DataManager напрямую */
   public setTables(points: PointTable[], embeddings: EmbeddingTable[], edges: EdgeTable[]): void {
-    this.cachedEdges = edges;
     const modelPoints = this.convertPointsTableToModel(points);
-    this.cachedPoints = modelPoints;
-    this.mergeEmbeddingsIntoPoints(this.cachedPoints, embeddings);
-    this.updatePointGraphManager();
+    this.mergeEmbeddingsIntoPoints(modelPoints, embeddings);
+    this.updatePointGraphManager(modelPoints, edges);
   }
 
   /** Обновить PointGraphManager и уведомить подписчиков через медиатор */
-  private updatePointGraphManager(): void {
+  private updatePointGraphManager(points: PointModel[], edges: EdgeTable[]): void {
     // Передаём точки напрямую в PointGraphManager
-    this.pointGraphManager.updatePoints(this.cachedPoints);
+    this.pointGraphManager.updatePoints(points);
     
     // Инициализируем граф из сохранённых связей
-    const edges = this.savedEdges();
-    this.pointGraphManager.initFromRefs(edges);
+    const edgeRefs = this.convertEdgesToRefs(edges);
+    this.pointGraphManager.initFromRefs(edgeRefs);
     
     // Уведомляем через медиатор (без передачи массивов!) - только сигнал об обновлении
     this.mediator.pointsGraphUpdated();
@@ -75,9 +71,9 @@ export class PointsTransformer {
     });
   }
 
-  /** Сохранённые связи из локальной БД в виде EdgeRefs */
-  private savedEdges(): EdgeRefs {
-    return this.cachedEdges.map((e) => ({
+  /** Преобразовать EdgeTable в EdgeRefs */
+  private convertEdgesToRefs(edges: EdgeTable[]): EdgeRefs {
+    return edges.map((e) => ({
       sourceId: e.source_id,
       targetId: e.target_id,
       modelName: e.model_name,
@@ -133,7 +129,9 @@ export class PointsTransformer {
   /** Сохранить текущую сцену: позиции точек + связи (из mediator.edges) */
   private async saveScene(): Promise<void> {
     try {
-      await this.savePoints(this.cachedPoints);
+      // Получаем актуальные точки из PointGraphManager
+      const points = this.pointGraphManager.getPoints();
+      await this.savePoints(points);
       await this.saveEdges(this.mediator.edges);
       // Событие успеха – индикатор «Сохранено» в UI
       this.mediator.positionsSaved();
