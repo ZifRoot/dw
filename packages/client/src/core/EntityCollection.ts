@@ -8,7 +8,7 @@ export class EntityCollection<T> {
 
   public getById(sourceId?: string | null) {
     const index = sourceId != null ? this.indexMap.get(sourceId) : null;
-    return index != null ? this.items[index] : index;
+    return index != null ? this.items[index] : null;
   }
   public add(model: T) {
     this._setPoints([model], [], []);

@@ -3,7 +3,6 @@ import { AppMediator, PointsModelReadyPayload } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
 import { EdgeModel } from "./models/EdgeModel";
 import { PointGraphManager } from "./PointGraphManager";
-import { EdgeRef } from "./models/EdgeRef";
 import { Log } from "@utils/logger";
 
 /**

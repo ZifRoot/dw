@@ -1,7 +1,7 @@
 // core/NeighborGraph.ts
 import { EdgeRef } from "./models/EdgeRef";
 import { EdgeModel } from "./models/EdgeModel";
-import { EntityCollection } from "./Scene/indexer";
+import { EntityCollection } from "./EntityCollection";
 import { IEdgeModelFactory } from "./IEdgeModelFactory";
 
 /**
@@ -115,7 +115,7 @@ export class NeighborGraph {
   }
 
   /** Получить модель ребра по id */
-  public getEdgeById(id: string): EdgeModel | undefined {
+  public getEdgeById(id: string): EdgeModel | null {
     return this.edgeCollection.getById(id);
   }
 

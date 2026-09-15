@@ -1,7 +1,6 @@
 import "./styles/canvas/main.scss";
 import { AppMediator } from "./core/AppMediator";
 import { PointsScene } from "./core/Scene/PointsScene";
-import { PointsSceneTester } from "./core/PointsSceneTester";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
 import { PointGraphManager } from "./core/PointGraphManager";
@@ -36,8 +35,6 @@ mainArea.appendChild(canvasDiv);
 const infoPanelDiv = document.createElement("div");
 infoPanelDiv.id = "info-panel";
 mainArea.appendChild(infoPanelDiv);
-
-import { PointGraphManager } from "./core/PointGraphManager";
 
 const mediator = new AppMediator();
 mediator.temperature = 100;

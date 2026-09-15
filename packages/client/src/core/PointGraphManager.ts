@@ -1,7 +1,7 @@
 // core/PointGraphManager.ts
 import { PointModel } from "./models/PointModel";
 import { EdgeModel } from "./models/EdgeModel";
-import { EntityCollection } from "./Scene/indexer";
+import { EntityCollection } from "./EntityCollection";
 import { NeighborGraph } from "./NeighborGraph";
 import { EdgeRef } from "./models/EdgeRef";
 import { EdgeRefs } from "./models/EdgeRefs";

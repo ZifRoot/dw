@@ -4,3 +4,4 @@ export interface EdgeRef {
   modelName?: string;
   distance?: number;
 }
+

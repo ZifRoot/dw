@@ -1,14 +1,13 @@
 import { SvgEngine } from "../Engines/SvgEngine";
 import * as d3 from "d3";
-import { EntityCollection } from "./indexer";
 import { UIPoint } from "../ui-models";
 import { AppMediator } from "../AppMediator";
 import { PointModel } from "../models/PointModel";
 import { PointGraphManager } from "../PointGraphManager";
+import { EdgeModel } from "../models/EdgeModel";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private pointGraphManager: PointGraphManager;
   private points: PointModel[] = [];
   private edges: EdgeModel[] = [];
 
@@ -43,7 +42,7 @@ export class PointsScene {
     this.syncDomWithPoints();
   }
 
-  public getPointById(id: string): PointModel | undefined {
+  public getPointById(id: string): PointModel | null {
     return this.pointGraphManager.getPointCollection().getById(id);
   }
 

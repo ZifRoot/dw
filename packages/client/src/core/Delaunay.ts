@@ -1,19 +1,11 @@
-// types.ts
-export interface Point {
-  x: number;
-  y: number;
-}
-
-export interface EdgeIndex {
-  sourceIndex: number;
-  targetIndex: number;
-}
+import { PointMath2d } from "./models/PointMath";
+import { EdgeIndex } from "./models/EdgeIndex";
 
 export class Delaunay {
   /**
    * Главный метод: принимает массив точек, возвращает уникальные рёбра.
    */
-  public static triangulate(points: Point[]): EdgeIndex[] {
+  public static triangulate(points: PointMath2d[]): EdgeIndex[] {
     if (points.length < 3) return [];
 
     // 1. Подготовка копии и супер-треугольника
@@ -44,7 +36,7 @@ export class Delaunay {
   // Приватные статические методы (каждый ≤ 10 строк)
   // -------------------------------------------------------------------
 
-  private static addSuperTriangle(pts: Point[]): [number, number, number] {
+  private static addSuperTriangle(pts: PointMath2d[]): [number, number, number] {
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
@@ -68,7 +60,7 @@ export class Delaunay {
     return [N, N + 1, N + 2];
   }
 
-  private static circumcircleData(pts: Point[], i0: number, i1: number, i2: number) {
+  private static circumcircleData(pts: PointMath2d[], i0: number, i1: number, i2: number) {
     const a = pts[i0],
       b = pts[i1],
       c = pts[i2];
@@ -80,7 +72,7 @@ export class Delaunay {
     return { cx: ux, cy: uy, r2 };
   }
 
-  private static pointInsideCircumcircle(pts: Point[], tri: [number, number, number], p: Point): boolean {
+  private static pointInsideCircumcircle(pts: PointMath2d[], tri: [number, number, number], p: PointMath2d): boolean {
     const circ = this.circumcircleData(pts, tri[0], tri[1], tri[2]);
     if (!circ) return false;
     const dx = p.x - circ.cx,
@@ -88,7 +80,7 @@ export class Delaunay {
     return dx * dx + dy * dy <= circ.r2 + 1e-9;
   }
 
-  private static findBadTriangles(pts: Point[], triangles: [number, number, number][], point: Point) {
+  private static findBadTriangles(pts: PointMath2d[], triangles: [number, number, number][], point: PointMath2d) {
     return triangles.filter((t) => this.pointInsideCircumcircle(pts, t, point));
   }
 

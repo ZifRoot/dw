@@ -28,6 +28,7 @@
     "release:client": "cd packages/client && npm run release",
     "build:server:release": "cd packages/server && npm run build:release",
     "build:client:release": "cd packages/client && npm run build:release",
+    "build:release": "npm run build:client:release && npm run build:server :release",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -35,7 +36,6 @@
     "docker:up": "ts-node src/db/db-manager.ts up",
     "docker:down": "ts-node src/db/db-manager.ts down",
     "generate-api": "cd ./generators/embedder && openapi-generator-cli batch ./configs/fetch.json ./configs/node.json ./configs/axios.json",
-    "ddd": "cd ddd && mdforge split http://localhost:8081/api/document/dd363e2e-0f1a-479d-8b74-ffc33dbcfd1d/fragment/msg_36_frag_3/text .",
     "clean": "rm -rf packages/client/src/api packages/server/src/api packages/client/dist packages/server/dist"
   },
   "devDependencies": {

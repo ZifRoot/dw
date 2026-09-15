@@ -1,19 +1,15 @@
 import { SvgEngine } from "../Engines/SvgEngine.ts";
-import { EntityCollection } from "./indexer.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
 import { UIEdge } from "../ui-models.ts";
-import { Edge } from "../models/Edge.ts";
 import { EdgeRefs } from "../models/EdgeRefs.ts";
 import { EdgeRef } from "../models/EdgeRef.ts";
 import { EdgeModel } from "../models/EdgeModel.ts";
 import { PointModel } from "../models/PointModel.ts";
-import { PatternMatcher } from "../PatternMatcher.ts";
 import { PointGraphManager } from "../PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private pointGraphManager: PointGraphManager;
   private edges: EdgeModel[] = [];
   private points: PointModel[] = [];
   private d3Edges: d3.Selection<SVGLineElement, EdgeModel, SVGGElement, unknown> | null = null;
@@ -177,7 +173,7 @@ export class EdgesScene {
     return this.edges;
   }
 
-  public getEdgeById(id: string): EdgeModel | undefined {
+  public getEdgeById(id: string): EdgeModel | null {
     const collection = this.pointGraphManager.getEdgeCollection();
     return collection.getById(id);
   }
