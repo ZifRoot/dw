@@ -4,11 +4,13 @@ import { EntityCollection } from "./indexer";
 import { UIPoint } from "../ui-models";
 import { AppMediator } from "../AppMediator";
 import { PointModel } from "../models/PointModel";
+import { PointGraphManager } from "../PointGraphManager";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private entities: EntityCollection<PointModel>; // исправлено имя
+  private pointGraphManager: PointGraphManager;
   private points: PointModel[] = [];
+  private edges: EdgeModel[] = [];
 
   private unregisterDrag: (() => void) | null = null;
   private d3Points: d3.Selection<SVGGElement, PointModel, SVGGElement, unknown> | null = null;
@@ -17,10 +19,11 @@ export class PointsScene {
   constructor(
     private svgEngine: SvgEngine,
     private mediator: AppMediator,
+    private pointGraphManager: PointGraphManager,
     groupName = "points-scene",
   ) {
-    this.entities = new EntityCollection<PointModel>((p) => p.id);
-    this.points = this.entities.items;
+    this.pointGraphManager = pointGraphManager;
+    this.syncRefs();
     this.rootGroup = svgEngine.createGroup(groupName);
 
     this.registerDragDetector();
@@ -35,18 +38,17 @@ export class PointsScene {
   }
 
   public setPoints(points: PointModel[]): void {
-    const toInsert: PointModel[] = [];
-    const toUpdate: PointModel[] = [];
-    this.entities._setPoints(points, toInsert, toUpdate);
+    this.pointGraphManager.updatePoints(points);
+    this.syncRefs();
     this.syncDomWithPoints();
   }
 
   public getPointById(id: string): PointModel | undefined {
-    return this.entities.getPointById(id);
+    return this.pointGraphManager.getPointCollection().getById(id);
   }
 
   public get Entities() {
-    return this.entities;
+    return this.pointGraphManager.getPointCollection();
   }
 
   public removePoints(ids: string[]): void {
@@ -56,7 +58,7 @@ export class PointsScene {
       if (group) d3.select(group).remove();
       this.groupMap.delete(id);
     }
-    this.entities.removes(ids);
+    this.pointGraphManager.getPointCollection().removes(ids);
     this.syncGroupSelectionAndStyles();
   }
 
@@ -108,6 +110,11 @@ export class PointsScene {
 
   public destroy(): void {
     if (this.unregisterDrag) this.unregisterDrag();
+  }
+
+  private syncRefs(): void {
+    this.points = this.pointGraphManager.getPointsArray();
+    this.edges = this.pointGraphManager.getEdgesArray();
   }
 
   // ========== Приватные методы синхронизации DOM ==========
@@ -240,7 +247,7 @@ export class PointsScene {
 
       // Получаем предыдущую выбранную точку из медиатора
       const previousSelectedId = this.mediator.selectedPoint?.id;
-      const previousPoint = previousSelectedId ? (this.entities.getById(previousSelectedId) ?? null) : null;
+      const previousPoint = previousSelectedId ? (this.pointGraphManager.getPointCollection().getById(previousSelectedId) ?? null) : null;
 
       if (previousPoint) {
         previousPoint.selected = false;

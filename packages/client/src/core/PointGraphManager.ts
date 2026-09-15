@@ -128,6 +128,29 @@ export class PointGraphManager {
     return this.pointCollection.items;
   }
 
+  /**
+   * Получить ссылку на живой массив точек (не копию).
+   * Используется сценами для прямого доступа без синхронизации.
+   */
+  public getPointsArray(): PointModel[] {
+    return this.pointCollection.items;
+  }
+
+  /**
+   * Получить ссылку на живой массив рёбер (не копию).
+   * Используется сценами для прямого доступа без синхронизации.
+   */
+  public getEdgesArray(): EdgeModel[] {
+    return this.graph.getEdgesArrayDirect();
+  }
+
+  /**
+   * Получить EntityCollection для рёбер.
+   */
+  public getEdgeCollection(): EntityCollection<EdgeModel> {
+    return this.graph.getEdgeCollection();
+  }
+
   public getPointIds(): string[] {
     return Array.from(this.pointCollection.indexMap.keys());
   }

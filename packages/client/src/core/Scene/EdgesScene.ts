@@ -7,14 +7,16 @@ import { Edge } from "../models/Edge.ts";
 import { EdgeRefs } from "../models/EdgeRefs.ts";
 import { EdgeRef } from "../models/EdgeRef.ts";
 import { EdgeModel } from "../models/EdgeModel.ts";
+import { PointModel } from "../models/PointModel.ts";
 import { edgeIndexToEdgeModel } from "../edge-utils.ts";
 import { PatternMatcher } from "../PatternMatcher.ts";
-import { PointsScene } from "./PointsScene.ts";
+import { PointGraphManager } from "../PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+  private pointGraphManager: PointGraphManager;
   private edges: EdgeModel[] = [];
-  private entities: EntityCollection<EdgeModel>;
+  private points: PointModel[] = [];
   private d3Edges: d3.Selection<SVGLineElement, EdgeModel, SVGGElement, unknown> | null = null;
 
   unregisterSelectedPoint: () => void;
@@ -25,12 +27,12 @@ export class EdgesScene {
   constructor(
     private svgEngine: SvgEngine,
     private mediator: AppMediator,
-    private pointsScene: PointsScene,
+    private pointGraphManager: PointGraphManager,
     groupName = "edges-scene",
   ) {
+    this.pointGraphManager = pointGraphManager;
+    this.syncRefs();
     this.unsubEdges = this.mediator.onEdges((e) => this.onEdgeRefsUpd(e));
-    this.entities = new EntityCollection<EdgeModel>((p) => p.id);
-    this.edges = this.entities.items;
     this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
     this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point?.id ?? null));
@@ -62,7 +64,7 @@ export class EdgesScene {
   }
 
   private conv(edge: EdgeRef): EdgeModel | null {
-    return edgeIndexToEdgeModel(edge, this.pointsScene.Entities, new PatternMatcher());
+    return edgeIndexToEdgeModel(edge, this.pointGraphManager.getPointCollection(), new PatternMatcher());
   }
 
   // Подсветка рёбер, инцидентных данной точке (или снятие подсветки)
@@ -98,25 +100,25 @@ export class EdgesScene {
 
   /** Обновить существующие рёбра и добавить новые (upsert) – мутирует массив */
   public setEdges(edges: EdgeModel[]): void {
-    const toInsert: EdgeModel[] = [];
-    const toUpdate: EdgeModel[] = [];
-    this.entities.clear();
-
-    this.entities._setPoints(edges, toInsert, toUpdate);
-
-    // Синхронизируем DOM
+    // EdgesScene не хранит свои копии - используем коллекции PointGraphManager напрямую
+    // Этот метод теперь просто триггерит перерисовку
     this.renderLines();
   }
 
   /** Удалить рёбра по списку id */
   public removeEdges(ids: string[]): void {
-    this.entities.removes(ids);
-    // После мутации перерисовываем DOM
+    // Удаление рёбер должно происходить через PointGraphManager
+    for (const id of ids) {
+      const edge = this.pointGraphManager.getEdgeCollection().getById(id);
+      if (edge) {
+        this.pointGraphManager.removeEdge(edge);
+      }
+    }
     this.renderLines();
   }
 
   /** Удалить рёбра по предикату */
-  public removeEdgesBy(predicate: (edge: Edge) => boolean): void {
+  public removeEdgesBy(predicate: (edge: EdgeModel) => boolean): void {
     const toDeleteIds = this.edges.filter(predicate).map((e) => e.id);
     this.removeEdges(toDeleteIds);
   }
@@ -124,7 +126,6 @@ export class EdgesScene {
   /** Очистить все рёбра */
   public clear(): void {
     this.rootGroup.selectAll("*").remove();
-    this.entities.clear();
     this.d3Edges = null;
   }
 
@@ -177,8 +178,13 @@ export class EdgesScene {
     return this.edges;
   }
 
-  public getEdgeById(id: string): Edge | undefined {
-    const idx = this.entities.indexMap.get(id);
-    return idx !== undefined ? this.edges[idx] : undefined;
+  public getEdgeById(id: string): EdgeModel | undefined {
+    const collection = this.pointGraphManager.getEdgeCollection();
+    return collection.getById(id);
+  }
+
+  private syncRefs(): void {
+    this.edges = this.pointGraphManager.getEdgesArray();
+    this.points = this.pointGraphManager.getPointsArray();
   }
 }

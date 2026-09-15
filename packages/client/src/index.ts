@@ -4,6 +4,7 @@ import { PointsScene } from "./core/Scene/PointsScene";
 import { PointsSceneTester } from "./core/PointsSceneTester";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
+import { PointGraphManager } from "./core/PointGraphManager";
 import { createControlPanel, createInfoPanel } from "./ui";
 import { RepulsionEngine, RepulsionEngineConfig } from "./core/physics/RepulsionEngine";
 import { AnimationEngine } from "./core/Engines/AnimationEngine";
@@ -36,6 +37,8 @@ const infoPanelDiv = document.createElement("div");
 infoPanelDiv.id = "info-panel";
 mainArea.appendChild(infoPanelDiv);
 
+import { PointGraphManager } from "./core/PointGraphManager";
+
 const mediator = new AppMediator();
 mediator.temperature = 100;
 mediator.targetSize = 500;
@@ -47,9 +50,11 @@ setTimeout(() => (mediator.autoZoom = false), 0);
 let svgEngine = new SvgEngine(canvasDiv);
 // Инициализируем движок (он сам создаст SVG внутри canvasDiv)
 
-const pointsScene = new PointsScene(svgEngine, mediator);
+const pointGraphManager = new PointGraphManager();
 
-const edgesScene = new EdgesScene(svgEngine, mediator, pointsScene);
+const pointsScene = new PointsScene(svgEngine, mediator, pointGraphManager);
+
+const edgesScene = new EdgesScene(svgEngine, mediator, pointGraphManager);
 
 pointsScene.init();
 

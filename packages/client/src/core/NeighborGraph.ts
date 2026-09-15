@@ -124,6 +124,16 @@ export class NeighborGraph {
     return this.edgeCollection.items;
   }
 
+  /** Получить прямую ссылку на живой массив рёбер (не копию) */
+  public getEdgesArrayDirect(): EdgeModel[] {
+    return this.edgeCollection.items;
+  }
+
+  /** Получить EntityCollection для рёбер */
+  public getEdgeCollection(): EntityCollection<EdgeModel> {
+    return this.edgeCollection;
+  }
+
   /** Получить все рёбра в виде EdgeRef */
   public getAllEdgeRefs(): EdgeRef[] {
     return this.edgeCollection.items.map((model) => ({
