@@ -1,67 +1,89 @@
 import "./styles/canvas/main.scss";
 import { AppMediator } from "./core/AppMediator";
 import { PointsScene } from "./core/Scene/PointsScene";
+import { PointsSceneTester } from "./core/PointsSceneTester";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
+import { PointGraphManager } from "./core/PointGraphManager";
 import { createControlPanel, createInfoPanel } from "./ui";
-import { RepulsionAlgorithm, RepulsionEngineConfig } from "./core/physics/RepulsionAlgorithm";
+import { RepulsionEngine, RepulsionEngineConfig } from "./core/physics/RepulsionEngine";
 import { AnimationEngine } from "./core/Engines/AnimationEngine";
-import { EnginePipeline } from "./core/Engines/EnginePipeline";
-import { GraphAlgorithm, GraphEngineConfig } from "./core/physics/GraphAlgorithm";
-import { ZDampingConfig, ZDapperAlgorithm } from "./core/physics/ZDapperAlgorithm";
+import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
+import { ZDampingConfig, ZDampingEngine } from "./core/physics/ZDampingEngine";
+
 import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
-import { PointsTransformer } from "./core/data/PointsTransformer";
+import { PointsTransformer } from "./core/PointsTransformer";
 
-function creatediv(id: string, parent: Node) {
-  let div = document.getElementById(id);
-  if (div) return div;
-  div = document.createElement("div");
-  div.id = id;
-  parent.appendChild(div);
-  return div;
-}
+// Создаём контейнеры
+const app = document.getElementById("app")!;
+// Верхняя панель управления
+const controlPanelDiv = document.createElement("div");
+controlPanelDiv.id = "control-panel";
+app.appendChild(controlPanelDiv);
 
-function bootstrap() {
-  const app = creatediv("app", document.body);
-  const controlPanelDiv = creatediv("control-panel", app);
-  const mainArea = creatediv("main-area", app);
-  const canvasDiv = creatediv("canvas-container", mainArea);
-  const infoPanelDiv = creatediv("info-panel", mainArea);
+// Основная область
+const mainArea = document.createElement("div");
+mainArea.className = "main-area";
+app.appendChild(mainArea);
 
-  const mediator = new AppMediator();
-  mediator.temperature = 100;
-  mediator.targetSize = 500;
-  mediator.progress = 0;
-  mediator.sizeText = 16;
-  mediator.selectedPoint = null;
-  mediator.selectedEdge = null;
-  setTimeout(() => (mediator.autoZoom = false), 0);
+// Контейнер канваса
+const canvasDiv = document.createElement("div");
+canvasDiv.id = "canvas-container";
+mainArea.appendChild(canvasDiv);
 
-  const svgEngine = new SvgEngine(canvasDiv);
-  const animationEngine = new AnimationEngine();
+// Контейнер боковой панели
+const infoPanelDiv = document.createElement("div");
+infoPanelDiv.id = "info-panel";
+mainArea.appendChild(infoPanelDiv);
 
-  const modelManager = new ModelManager(mediator, animationEngine, 4);
-  const pointGraphManager = modelManager.getPointGraphManager();
+import { PointGraphManager } from "./core/PointGraphManager";
 
-  const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
-  const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
+const mediator = new AppMediator();
+mediator.temperature = 100;
+mediator.targetSize = 500;
+mediator.progress = 0;
+mediator.sizeText = 16;
+mediator.selectedPoint = null;
+mediator.selectedEdge = null;
+setTimeout(() => (mediator.autoZoom = false), 0);
+let svgEngine = new SvgEngine(canvasDiv);
+// Инициализируем движок (он сам создаст SVG внутри canvasDiv)
 
-  const dataManager = new DataManager(mediator);
-  const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
+const pointGraphManager = new PointGraphManager();
 
-  const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
-  const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
-  const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
+const pointsScene = new PointsScene(svgEngine, mediator, pointGraphManager);
 
-  const enginePipeline = new EnginePipeline(mediator, animationEngine);
+const edgesScene = new EdgesScene(svgEngine, mediator, pointGraphManager);
 
-  enginePipeline.setConfiguration([{ algorithm: repulsionAlgorithm }, { algorithm: graphAlgorithm }, { algorithm: zdampingAlgorithm }]);
+pointsScene.init();
 
-  createControlPanel(controlPanelDiv, mediator);
-  createInfoPanel(infoPanelDiv, mediator);
+const animationEngine = new AnimationEngine();
 
-  dataManager.reloadTables();
-}
+const dataManager = new DataManager(mediator);
+const pointsTransformer = new PointsTransformer(mediator, dataManager, pointsScene);
 
-bootstrap();
+const modelManager = new ModelManager(mediator);
+
+const zdampingEngine = new ZDampingEngine(mediator, animationEngine, new ZDampingConfig());
+const graphEngine = new GraphEngine(mediator, animationEngine, new GraphEngineConfig());
+const repulsionEngine = new RepulsionEngine(mediator, animationEngine, new RepulsionEngineConfig());
+
+animationEngine.AfterStep = () => mediator.pointsUpdating([]);
+
+graphEngine.setEdges(edgesScene.getEdges());
+zdampingEngine.setPoints(pointsScene.getPoints());
+repulsionEngine.setPoints(pointsScene.getPoints());
+
+let documents = await dataManager.reloadTables();
+
+createControlPanel(controlPanelDiv, mediator);
+
+createInfoPanel(infoPanelDiv, mediator);
+
+setTimeout(() => {
+  mediator.modelManagerStep();
+}, 3000);
+// // Монтируем React UI
+// const root = createRoot(uiDiv);
+// root.render(React.createElement(ControlPanel, { mediator }));
