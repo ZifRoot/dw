@@ -36,6 +36,9 @@ export class ModelManager {
   private generation = 0;
   private isRunningFrame = false;
 
+  private readonly unsubGraphUpdated: () => void;
+  private readonly unsubStep: () => void;
+
   constructor(
     private mediator: AppMediator,
     private pointGraphManager: PointGraphManager,
@@ -47,20 +50,22 @@ export class ModelManager {
     this.randomCandidates = Math.max(0, randomCandidates);
     this.frameBudgetMs = Math.max(1, frameBudgetMs);
 
-    this.mediator.onPointsGraphUpdated(() => {
+    this.unsubGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
       if (this.isRunningFrame) return;
       this.pointIndex = 0;
       this.iterationChanged = false;
       this.startOptimization();
     });
 
-    this.mediator.onModelManagerStep(() => {
+    this.unsubStep = this.mediator.onModelManagerStep(() => {
       this.startOptimization();
     });
   }
 
   public destroy(): void {
     this.stopOptimization();
+    this.unsubGraphUpdated();
+    this.unsubStep();
   }
 
   /**
@@ -138,7 +143,7 @@ export class ModelManager {
       this.iterationChanged = true;
     }
 
-  //  this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+    //  this.rafId = requestAnimationFrame(() => this.runFrame(generation));
   }
 
   /**
@@ -158,8 +163,6 @@ export class ModelManager {
     const existingTargets = new Set<string>();
     const candidateIds = new Set<string>();
 
-    // Текущие связи всегда участвуют в оценке, даже если степень вершины
-    // стала больше K из-за неориентированного представления графа.
     for (const edge of currentEdges) {
       const otherId = edge.sourceId === source.id ? edge.targetId : edge.sourceId;
       existingTargets.add(otherId);
@@ -179,10 +182,8 @@ export class ModelManager {
       }
     }
 
-    // Ограничиваем расширение K соседями исходной точки.
     const seedNeighborIds = currentEdges.map((edge) => (edge.sourceId === source.id ? edge.targetId : edge.sourceId)).slice(0, this.K);
 
-    // Для каждого seed рассматриваем K его соседей.
     for (const neighborId of seedNeighborIds) {
       const neighborEdges = this.pointGraphManager.getEdgesForPoint(neighborId);
       for (const edge of neighborEdges.slice(0, this.K)) {
@@ -193,7 +194,6 @@ export class ModelManager {
       }
     }
 
-    // Случайная выборка позволяет выходить из локальных минимумов.
     for (let i = 0; i < this.randomCandidates; i++) {
       const randomIndex = Math.floor(Math.random() * points.length);
       const candidate = points[randomIndex];
@@ -202,7 +202,6 @@ export class ModelManager {
       }
     }
 
-    // Оцениваем новые кандидаты точной исходной метрикой.
     for (const candidateId of candidateIds) {
       if (existingTargets.has(candidateId)) continue;
 
@@ -225,7 +224,6 @@ export class ModelManager {
     const topKTargets = new Set(topK.map((candidate) => candidate.targetId));
     let changed = false;
 
-    // Удаляем существующие связи, которые больше не входят в top-K.
     for (const candidate of scored) {
       if (!candidate.isNew && !topKTargets.has(candidate.targetId) && candidate.model) {
         this.pointGraphManager.removeEdge(candidate.model);
@@ -233,7 +231,6 @@ export class ModelManager {
       }
     }
 
-    // Добавляем новые связи из top-K.
     for (const candidate of topK) {
       if (candidate.isNew) {
         this.pointGraphManager.addEdge({
