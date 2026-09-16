@@ -11,12 +11,11 @@ export interface AppEventMap {
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
   [AppMediator.POINT_UPDATE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
-  [AppMediator.EDGES_TABLE]: undefined;
+  [AppMediator.POINT_UPDATED]: undefined;
   [AppMediator.POINTS_UPDATED]: undefined;
   [AppMediator.POINTS_UPDATING]: undefined;
   [AppMediator.POINTS_GRAPH_UPDATED]: undefined;
   [AppMediator.MODEL_MANAGER_STEP]: undefined;
-  // команды
   [AppMediator.CLEAR_POINTS]: undefined;
   [AppMediator.ADD_POINT]: undefined;
   [AppMediator.START_REPULSION]: undefined;
@@ -32,9 +31,7 @@ export class AppMediator extends BaseMediator {
   static SELECTED_POINT = "selected-point";
   static SELECTED_EDGE = "selected-edge";
   static POINT_UPDATE = "point-update";
-  static POINT_UPDATED = "point-updated";
   static EDGE_UPDATE = "edge-update";
-  static EDGES_TABLE = "edges-table";
 
   // ========== Команды и сигналы ==========
   static CLEAR_POINTS = "clear-points";
@@ -43,9 +40,10 @@ export class AppMediator extends BaseMediator {
   static START_GRAPH = "start-graph";
   static RELOAD_TABLES = "reload-tables";
   static POINTS_UPDATING = "points-updating";
+  static POINTS_UPDATED = "points-updated";
+  static POINT_UPDATED = "point-updated";
   static SAVE_POSITIONS = "save-positions";
   static POSITIONS_SAVED = "positions-saved";
-  static POINTS_UPDATED = "points-updated";
   static POINTS_GRAPH_UPDATED = "points-graph-updated";
   static MODEL_MANAGER_STEP = "model-manager-step";
 
@@ -108,7 +106,7 @@ export class AppMediator extends BaseMediator {
     this.emit(AppMediator.EDGE_UPDATE, { edgeId, changes });
   }
 
-  // ========== Команды ==========
+  // ========== Команды и сигналы ==========
   public clearPoints(): void {
     this.emit(AppMediator.CLEAR_POINTS);
   }
@@ -191,9 +189,6 @@ export class AppMediator extends BaseMediator {
   public onEdgeUpdate(callback: (detail: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> }) => void): () => void {
     return this.on(AppMediator.EDGE_UPDATE, callback);
   }
-  public onEdgesTable(callback: () => void): () => void {
-    return this.on(AppMediator.EDGES_TABLE, callback);
-  }
   public onClearPoints(callback: () => void): () => void {
     return this.on(AppMediator.CLEAR_POINTS, () => callback());
   }
@@ -213,7 +208,7 @@ export class AppMediator extends BaseMediator {
     return this.on(AppMediator.SAVE_POSITIONS, () => callback());
   }
   public onPositionsSaved(callback: () => void): () => void {
-    return this.on(AppMediator.POSITIONS_SAVED, () => callback());
+    return this.on(AppMediator.POSITIONS_SAVED, callback);
   }
   public onPointsUpdating(callback: () => void): () => void {
     return this.on(AppMediator.POINTS_UPDATING, callback);
