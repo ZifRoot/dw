@@ -60,6 +60,8 @@ const animationEngine = new AnimationEngine();
 const dataManager = new DataManager(mediator);
 const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
 
+// ModelManager запускает собственный инкрементальный цикл оптимизации
+// после получения POINTS_MODEL_READY и не блокирует animation loop.
 const modelManager = new ModelManager(mediator);
 
 const zdampingEngine = new ZDampingEngine(mediator, animationEngine, new ZDampingConfig());
@@ -77,10 +79,7 @@ let documents = await dataManager.reloadTables();
 createControlPanel(controlPanelDiv, mediator);
 
 createInfoPanel(infoPanelDiv, mediator);
-
-setTimeout(() => {
-  mediator.modelManagerStep();
-}, 3000);
+// ModelManager начинает оптимизацию автоматически после загрузки точек.
 // // Монтируем React UI
 // const root = createRoot(uiDiv);
 // root.render(React.createElement(ControlPanel, { mediator }));

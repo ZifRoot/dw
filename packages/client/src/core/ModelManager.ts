@@ -3,26 +3,52 @@ import { AppMediator, PointsModelReadyPayload } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
 import { EdgeModel } from "./models/EdgeModel";
 import { PointGraphManager } from "./PointGraphManager";
-import { Log } from "@utils/logger";
+
+interface ScoredCandidate {
+  targetId: string;
+  distance: number;
+  model?: EdgeModel;
+  isNew: boolean;
+}
 
 /**
- * ModelManager – строит и улучшает граф ближайших соседей.
- * Считает среднее косинусное расстояние по ВСЕМ общим моделям эмбеддингов.
- * Не использует кэши векторов, работая напрямую с PointModel.embeddings.
+ * ModelManager – строит и постепенно улучшает граф ближайших соседей.
+ *
+ * Поиск кандидатов использует текущих соседей точки, соседей этих соседей
+ * и небольшую случайную выборку. Поэтому вместо полного перебора всех точек
+ * алгоритм работает с локальной окрестностью графа и постепенно улучшает её.
+ *
+ * Улучшение выполняется инкрементально: за один requestAnimationFrame
+ * обрабатывается только столько точек, сколько помещается в заданный бюджет
+ * времени. Это позволяет не блокировать основной поток браузера.
  */
 export class ModelManager {
   private pointGraphManager: PointGraphManager;
   private edges: EdgeModel[] = [];
   private readonly edgeWeight = 100;
 
+  private readonly K: number;
+  private readonly randomCandidates: number;
+  private readonly frameBudgetMs: number;
+
+  private pointIndex = 0;
+  private iterationChanged = false;
+  private rafId: number | null = null;
+  private generation = 0;
+
   private unsubPoints: () => void;
   private unsubStep: () => void;
 
   constructor(
     private mediator: AppMediator,
-    private K: number = 3,
-    private maxCandidates: number = 50,
+    K: number = 3,
+    randomCandidates: number = 3,
+    frameBudgetMs: number = 6,
   ) {
+    this.K = Math.max(1, K);
+    this.randomCandidates = Math.max(0, randomCandidates);
+    this.frameBudgetMs = Math.max(1, frameBudgetMs);
+
     this.pointGraphManager = new PointGraphManager();
 
     this.unsubPoints = this.mediator.onPointsModelReady((payload) => {
@@ -30,43 +56,233 @@ export class ModelManager {
     });
 
     this.unsubStep = this.mediator.onModelManagerStep(() => {
-      this.step();
+      this.startOptimization();
     });
   }
 
   public destroy(): void {
+    this.stopOptimization();
     this.unsubPoints();
     this.unsubStep();
   }
 
   private updatePoints(payload: PointsModelReadyPayload): void {
+    this.stopOptimization();
+    this.pointIndex = 0;
+    this.iterationChanged = false;
+
     const { points, edges } = payload;
     this.pointGraphManager.updatePoints(points);
     if (this.pointGraphManager.getPoints().length === 0) return;
 
     if (edges.length > 0) {
-      // Восстанавливаем сохранённые связи вместо случайной инициализации
+      // Восстанавливаем сохранённые связи вместо случайной инициализации.
       this.pointGraphManager.initFromRefs(edges);
     } else {
       this.pointGraphManager.initRandom(this.K);
     }
+
     this.rebuildEdges();
-    
-    // Уведомляем сцену о готовности данных через медиатор
+
+    // Уведомляем сцену о готовности данных через медиатор.
     this.mediator.pointsUpdating(points);
+
+    this.startOptimization();
   }
 
-  private step(): void {
-    if (this.pointGraphManager.getPoints().length === 0) return;
-    this.improve();
-    this.rebuildEdges();
+  /**
+   * Запустить непрерывное улучшение графа через requestAnimationFrame.
+   */
+  private startOptimization(): void {
+    if (this.rafId !== null) return;
+    if (this.pointGraphManager.getPoints().length < 2) return;
+
+    this.generation++;
+    const generation = this.generation;
+    this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+  }
+
+  /**
+   * Остановить запланированное улучшение графа.
+   */
+  private stopOptimization(): void {
+    this.generation++;
+
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+  }
+
+  /**
+   * Выполнить один временной квант оптимизации.
+   *
+   * Важно: requestAnimationFrame сам по себе не делает большой расчёт
+   * неблокирующим. Поэтому внутри одного кадра явно ограничиваем объём
+   * работы по performance.now().
+   */
+  private runFrame(generation: number): void {
+    this.rafId = null;
+
+    if (generation !== this.generation) return;
+
+    const points = this.pointGraphManager.getPoints();
+    if (points.length < 2) return;
+
+    const frameStart = performance.now();
+    let graphChanged = false;
+
+    while (
+      this.pointIndex < points.length &&
+      performance.now() - frameStart < this.frameBudgetMs
+    ) {
+      graphChanged = this.improvePoint(points[this.pointIndex]) || graphChanged;
+      this.pointIndex++;
+    }
+
+    if (graphChanged) {
+      this.rebuildEdges();
+    }
+
+    if (this.pointIndex >= points.length) {
+      this.pointIndex = 0;
+
+      const iterationChanged = this.iterationChanged || graphChanged;
+      this.iterationChanged = false;
+
+      // Если полный проход не изменил ни одного ребра, локальная оптимизация
+      // сошлась и можно остановить requestAnimationFrame.
+      if (!iterationChanged) {
+        return;
+      }
+    } else if (graphChanged) {
+      this.iterationChanged = true;
+    }
+
+    this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+  }
+
+  /**
+   * Улучшить соседей одной точки.
+   *
+   * Кандидаты:
+   * 1. все текущие соседи — чтобы плохие существующие связи можно было удалить;
+   * 2. соседи K соседей точки — exploitation;
+   * 3. randomCandidates случайных точек — exploration.
+   */
+  private improvePoint(source: PointModel): boolean {
+    const points = this.pointGraphManager.getPoints();
+    const pointCollection = this.pointGraphManager.getPointCollection();
+    const currentEdges = this.pointGraphManager.getEdgesForPoint(source.id);
+
+    const scored: ScoredCandidate[] = [];
+    const existingTargets = new Set<string>();
+    const candidateIds = new Set<string>();
+
+    // Текущие связи всегда участвуют в оценке, даже если степень вершины
+    // стала больше K из-за неориентированного представления графа.
+    for (const edge of currentEdges) {
+      const otherId = edge.sourceId === source.id ? edge.targetId : edge.sourceId;
+      existingTargets.add(otherId);
+      candidateIds.add(otherId);
+
+      const otherPoint = pointCollection.getById(otherId);
+      if (!otherPoint) continue;
+
+      const distance = this.calculateAverageCosineDistance(source, otherPoint);
+      if (distance !== null) {
+        scored.push({
+          targetId: otherId,
+          distance,
+          model: edge,
+          isNew: false,
+        });
+      }
+    }
+
+    // Ограничиваем расширение K соседями исходной точки.
+    const seedNeighborIds = currentEdges
+      .map((edge) => (edge.sourceId === source.id ? edge.targetId : edge.sourceId))
+      .slice(0, this.K);
+
+    // Для каждого seed рассматриваем K его соседей.
+    for (const neighborId of seedNeighborIds) {
+      const neighborEdges = this.pointGraphManager.getEdgesForPoint(neighborId);
+      for (const edge of neighborEdges.slice(0, this.K)) {
+        const candidateId = edge.sourceId === neighborId ? edge.targetId : edge.sourceId;
+        if (candidateId !== source.id) {
+          candidateIds.add(candidateId);
+        }
+      }
+    }
+
+    // Случайная выборка позволяет выходить из локальных минимумов.
+    for (let i = 0; i < this.randomCandidates; i++) {
+      const randomIndex = Math.floor(Math.random() * points.length);
+      const candidate = points[randomIndex];
+      if (candidate.id !== source.id) {
+        candidateIds.add(candidate.id);
+      }
+    }
+
+    // Оцениваем новые кандидаты точной исходной метрикой.
+    for (const candidateId of candidateIds) {
+      if (existingTargets.has(candidateId)) continue;
+
+      const target = pointCollection.getById(candidateId);
+      if (!target) continue;
+
+      const distance = this.calculateAverageCosineDistance(source, target);
+      if (distance !== null) {
+        scored.push({
+          targetId: candidateId,
+          distance,
+          isNew: true,
+        });
+      }
+    }
+
+    scored.sort((a, b) => a.distance - b.distance);
+
+    const topK = scored.slice(0, this.K);
+    const topKTargets = new Set(topK.map((candidate) => candidate.targetId));
+    let changed = false;
+
+    // Удаляем существующие связи, которые больше не входят в top-K.
+    for (const candidate of scored) {
+      if (
+        !candidate.isNew &&
+        !topKTargets.has(candidate.targetId) &&
+        candidate.model
+      ) {
+        this.pointGraphManager.removeEdge(candidate.model);
+        changed = true;
+      }
+    }
+
+    // Добавляем новые связи из top-K.
+    for (const candidate of topK) {
+      if (candidate.isNew) {
+        this.pointGraphManager.addEdge({
+          sourceId: source.id,
+          targetId: candidate.targetId,
+          modelName: "",
+        });
+        changed = true;
+      }
+    }
+
+    return changed;
   }
 
   /**
    * Вычисляет СРЕДНЕЕ косинусное расстояние по всем общим моделям двух точек.
-   * Возвращает null, если общих моделей нет (точки в разных пространствах).
+   * Возвращает null, если общих моделей нет.
    */
-  private calculateAverageCosineDistance(p1: PointModel, p2: PointModel): number | null {
+  private calculateAverageCosineDistance(
+    p1: PointModel,
+    p2: PointModel,
+  ): number | null {
     let totalDistance = 0;
     let commonCount = 0;
 
@@ -81,91 +297,27 @@ export class ModelManager {
     return commonCount > 0 ? totalDistance / commonCount : null;
   }
 
-  @Log
-  private improve(): void {
-    const points = this.pointGraphManager.getPoints();
-    const pointCollection = this.pointGraphManager.getPointCollection();
-
-    for (const source of points) {
-      const currentEdges = this.pointGraphManager.getEdgesForPoint(source.id);
-
-      type ScoredCandidate = {
-        targetId: string;
-        distance: number;
-        model?: EdgeModel;
-        isNew: boolean;
-      };
-
-      const scored: ScoredCandidate[] = [];
-      const existingTargets = new Set<string>();
-
-      // 1. Оцениваем текущих соседей
-      for (const edge of currentEdges) {
-        const otherId = edge.sourceId === source.id ? edge.targetId : edge.sourceId;
-        existingTargets.add(otherId);
-
-        const otherPoint = pointCollection.getById(otherId);
-        if (otherPoint) {
-          const distance = this.calculateAverageCosineDistance(source, otherPoint);
-          if (distance !== null) {
-            scored.push({ targetId: otherId, distance, model: edge, isNew: false });
-          }
-        }
-      }
-
-      // 2. Оцениваем новых кандидатов
-      const newCandidates: ScoredCandidate[] = [];
-      for (const target of points) {
-        if (target.id === source.id || existingTargets.has(target.id)) continue;
-
-        const distance = this.calculateAverageCosineDistance(source, target);
-        if (distance !== null) {
-          newCandidates.push({ targetId: target.id, distance, isNew: true });
-        }
-      }
-
-      // Берём только maxCandidates лучших новых (с наименьшим расстоянием)
-      newCandidates.sort((a, b) => a.distance - b.distance);
-      for (const c of newCandidates.slice(0, this.maxCandidates)) {
-        scored.push(c);
-      }
-
-      // 3. Сортируем всех (старые + новые) по возрастанию расстояния
-      scored.sort((a, b) => a.distance - b.distance);
-
-      // 4. Оставляем строго топ-K
-      const topK = scored.slice(0, this.K);
-      const topKTargets = new Set(topK.map((c) => c.targetId));
-
-      // 5. Синхронизируем граф: удаляем "плохие", добавляем новые
-      for (const candidate of scored) {
-        if (!candidate.isNew && !topKTargets.has(candidate.targetId) && candidate.model) {
-          this.pointGraphManager.removeEdge(candidate.model);
-        }
-      }
-
-      for (const candidate of topK) {
-        if (candidate.isNew) {
-          this.pointGraphManager.addEdge({
-            sourceId: source.id,
-            targetId: candidate.targetId,
-            modelName: "", // PointGraphManager сам выберет лучшую модель
-          });
-        }
-      }
-    }
-  }
-
   private cosineDistance(v1: number[], v2: number[]): number {
-    if (!v1 || !v2 || v1.length === 0 || v2.length === 0 || v1.length !== v2.length) return 1;
-    let dot = 0,
-      norm1 = 0,
-      norm2 = 0;
+    if (
+      !v1 ||
+      !v2 ||
+      v1.length === 0 ||
+      v2.length === 0 ||
+      v1.length !== v2.length
+    ) {
+      return 1;
+    }
+
+    let dot = 0;
+    let norm1 = 0;
+    let norm2 = 0;
+
     for (let i = 0; i < v1.length; i++) {
       dot += v1[i] * v2[i];
       norm1 += v1[i] * v1[i];
       norm2 += v2[i] * v2[i];
     }
+
     if (norm1 === 0 || norm2 === 0) return 1;
     return 1 - dot / (Math.sqrt(norm1) * Math.sqrt(norm2));
   }
