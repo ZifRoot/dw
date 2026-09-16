@@ -19,7 +19,6 @@ export class PointsTransformer {
     private dataManager: DataManager,
     private pointGraphManager: PointGraphManager,
   ) {
-    // Регистрируем себя в DataManager для получения таблиц.
     this.dataManager.setPointsTransformer(this);
 
     // Сигнал обновления точек не содержит массив: актуальные данные находятся
@@ -28,18 +27,14 @@ export class PointsTransformer {
       await this.savePoints(this.pointGraphManager.getPoints());
     });
 
-    // Сигнал изменения одной точки также не переносит PointModel через mediator.
-    this.unsubPointUpdated = this.mediator.onPointUpdated(async () => {
-      const selectedPoint = this.mediator.selectedPoint;
-      if (!selectedPoint) return;
-
-      const point = this.pointGraphManager.getPointCollection().getById(selectedPoint.id);
+    // Передаём только ID изменённой точки; сам объект берём из графа.
+    this.unsubPointUpdated = this.mediator.onPointUpdated(async ({ pointId }) => {
+      const point = this.pointGraphManager.getPointCollection().getById(pointId);
       if (point) {
         await this.savePoints([point]);
       }
     });
 
-    // Подписка на команду сохранения позиций точек и связей (кнопка в UI).
     this.unsubSavePositions = this.mediator.onSavePositions(async () => {
       await this.saveScene();
     });
@@ -76,7 +71,6 @@ export class PointsTransformer {
     });
   }
 
-  /** Преобразовать EdgeTable в EdgeRefs. */
   private convertEdgesToRefs(edges: EdgeTable[]): EdgeRefs {
     return edges.map((e) => ({
       sourceId: e.source_id,
@@ -92,7 +86,6 @@ export class PointsTransformer {
       const doc = pointMap.get(emb.session_id);
       if (!doc) continue;
       if (!doc.embeddings.has(emb.model_name)) {
-        // Создаём EmbeddingModel с временным порогом 0.5 (будет пересчитан позже).
         const model = new EmbeddingModel(
           emb.session_id,
           emb.model_name,
