@@ -13,6 +13,15 @@ export class EdgeModel implements Edge, EdgeRef {
     return this.intersectionSet.size ?? 0;
   }
 
+  /**
+   * Generate a unique ID for an edge based on source, target, and model name.
+   * Ensures that edges between the same nodes but with different models are distinct.
+   */
+  static getId(sourceId: string, targetId: string, modelName: string): string {
+    const [a, b] = [sourceId, targetId].sort();
+    return `${a}:${b}:${modelName}`;
+  }
+
   constructor(
     public source: PointModel,
     public target: PointModel,
@@ -21,7 +30,7 @@ export class EdgeModel implements Edge, EdgeRef {
 
     public color: string = "#888888",
   ) {
-    this.id = `${source.id}-${target.id}`;
+    this.id = EdgeModel.getId(source.id, target.id, modelName);
     this.sourceId = source.id;
     this.targetId = target.id;
 
