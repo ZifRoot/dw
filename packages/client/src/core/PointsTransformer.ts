@@ -19,20 +19,22 @@ export class PointsTransformer {
     private dataManager: DataManager,
     private pointGraphManager: PointGraphManager,
   ) {
-    // Регистрируем себя в DataManager для получения таблиц
     this.dataManager.setPointsTransformer(this);
 
-    // Подписка на редкое массовое обновление точек
-    this.unsubPointsUpdated = this.mediator.onPointsUpdated(async (points: PointModel[]) => {
-      await this.savePoints(points);
+    // Сигнал обновления точек не содержит массив: актуальные данные находятся
+    // в PointGraphManager.
+    this.unsubPointsUpdated = this.mediator.onPointsUpdated(async () => {
+      await this.savePoints(this.pointGraphManager.getPoints());
     });
 
-    // Подписка на точечное обновление
-    this.unsubPointUpdated = this.mediator.onPointUpdated(async (point: PointModel) => {
-      await this.savePoints([point]);
+    // Передаём только ID изменённой точки; сам объект берём из графа.
+    this.unsubPointUpdated = this.mediator.onPointUpdated(async ({ pointId }) => {
+      const point = this.pointGraphManager.getPointCollection().getById(pointId);
+      if (point) {
+        await this.savePoints([point]);
+      }
     });
 
-    // Подписка на команду сохранения позиций точек и связей (кнопка в UI)
     this.unsubSavePositions = this.mediator.onSavePositions(async () => {
       await this.saveScene();
     });
@@ -44,23 +46,21 @@ export class PointsTransformer {
     this.unsubSavePositions();
   }
 
-  /** Получение таблиц из DataManager напрямую */
+  /** Получение таблиц из DataManager напрямую. */
   public setTables(points: PointTable[], embeddings: EmbeddingTable[], edges: EdgeTable[]): void {
     const modelPoints = this.convertPointsTableToModel(points);
     this.mergeEmbeddingsIntoPoints(modelPoints, embeddings);
     this.updatePointGraphManager(modelPoints, edges);
   }
 
-  /** Обновить PointGraphManager и уведомить подписчиков через медиатор */
+  /** Обновить PointGraphManager и уведомить подписчиков через медиатор. */
   private updatePointGraphManager(points: PointModel[], edges: EdgeTable[]): void {
-    // Передаём точки напрямую в PointGraphManager
     this.pointGraphManager.updatePoints(points);
-    
-    // Инициализируем граф из сохранённых связей
+
     const edgeRefs = this.convertEdgesToRefs(edges);
     this.pointGraphManager.initFromRefs(edgeRefs);
-    
-    // Уведомляем через медиатор (без передачи массивов!) - только сигнал об обновлении
+
+    // Через медиатор передаётся только сигнал, без крупных массивов.
     this.mediator.pointsGraphUpdated();
   }
 
@@ -71,7 +71,6 @@ export class PointsTransformer {
     });
   }
 
-  /** Преобразовать EdgeTable в EdgeRefs */
   private convertEdgesToRefs(edges: EdgeTable[]): EdgeRefs {
     return edges.map((e) => ({
       sourceId: e.source_id,
@@ -87,15 +86,13 @@ export class PointsTransformer {
       const doc = pointMap.get(emb.session_id);
       if (!doc) continue;
       if (!doc.embeddings.has(emb.model_name)) {
-        // Создаём EmbeddingModel с временным порогом 0.5 (будет пересчитан позже)
-        // В реальности порог будет вычислен в ModelManager, но нам нужно сохранить данные
         const model = new EmbeddingModel(
           emb.session_id,
           emb.model_name,
           emb.value,
           emb.created_at,
           emb.processingTimeMs ?? 0,
-          0.5, // временно, будет пересчитано
+          0.5,
         );
         doc.embeddings.set(emb.model_name, model);
       }
@@ -126,14 +123,14 @@ export class PointsTransformer {
     await this.dataManager.saveEdgesTable(edgeTables);
   }
 
-  /** Сохранить текущую сцену: позиции точек + связи (из mediator.edges) */
+  /** Сохранить текущую сцену: позиции точек + связи из PointGraphManager. */
   private async saveScene(): Promise<void> {
     try {
-      // Получаем актуальные точки из PointGraphManager
       const points = this.pointGraphManager.getPoints();
+      const edges = this.pointGraphManager.getAllEdgeRefs();
+
       await this.savePoints(points);
-      await this.saveEdges(this.mediator.edges);
-      // Событие успеха – индикатор «Сохранено» в UI
+      await this.saveEdges(edges);
       this.mediator.positionsSaved();
     } catch (e) {
       console.error("Не удалось сохранить позиции точек и связи:", e);

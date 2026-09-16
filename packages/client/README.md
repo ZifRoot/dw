@@ -24,12 +24,14 @@ src/
 
 | Класс | Описание |
 |-------|----------|
-| `AppMediator` | Центральный посредник (mediator) приложения. Управляет событиями между компонентами: точки, рёбра, выбор элементов, зум, температура симуляции. Определяет карту событий `AppEventMap`. |
+| `AppMediator` | Центральный посредник приложения. Передаёт команды, UI-события и небольшие сигналы между компонентами. Крупные массивы точек, рёбер, таблиц и моделей через mediator не передаются. |
 | `BaseMediator` | Базовый класс для медиаторов. Реализует паттерн Observer через `EventTarget`, предоставляет методы `set/get/has` для состояния и `emit` для событий. |
-| `ModelManager` | Строит и улучшает граф ближайших соседей. Вычисляет среднее косинусное расстояние по всем общим моделям эмбеддингов. Работает напрямую с `PointModel.embeddings` без кэширования векторов. |
-| `PointGraphManager` | Инкапсулирует управление коллекцией точек (`EntityCollection<PointModel>`) и графом связей (`NeighborGraph`). Гарантирует консистентность: при изменении точек автоматически очищает "висячие" рёбра. |
-| `PointsTransformer` | Преобразует данные из таблиц базы данных (`PointTable`, `EmbeddingTable`, `EdgeTable`) в модели (`PointModel`, `EmbeddingModel`, `EdgeRefs`). Синхронизирует состояние между `DataManager` и `PointGraphManager`. Не хранит кэши точек и рёбер — работает напрямую с `PointGraphManager` как единственным источником истины. |
-| `DataManager` | Управляет IndexedDB базой данных (`CanvasPositionsDB`) и API клиентами (`DocumentsApi`, `EmbeddingsApi`). Загружает и сохраняет точки, эмбеддинги и рёбра. Подписывается на команду перезагрузки таблиц. |
+| `ModelManager` | Строит и постепенно улучшает граф ближайших соседей. Использует общий `PointGraphManager` и вычисляет среднее косинусное расстояние по общим моделям эмбеддингов. Работает инкрементально через `requestAnimationFrame`. |
+| `PointGraphManager` | Единственный источник истины для текущих `PointModel` и графа связей. Инкапсулирует `EntityCollection<PointModel>` и `NeighborGraph`. |
+| `PointsTransformer` | Преобразует данные из таблиц базы данных (`PointTable`, `EmbeddingTable`, `EdgeTable`) в модели (`PointModel`, `EmbeddingModel`, `EdgeRefs`). Обновляет `PointGraphManager` напрямую. |
+| `DataManager` | Управляет IndexedDB базой данных (`CanvasPositionsDB`) и API клиентами (`DocumentsApi`, `EmbeddingsApi`). Загружает и сохраняет таблицы и передаёт их напрямую в `PointsTransformer`. |
+
+**Правило передачи данных:** `AppMediator` используется как канал сигналов и команд. Если компоненту нужны актуальные точки или рёбра, он получает их из `PointGraphManager`, а не из mediator.
 
 ---
 
@@ -84,8 +86,8 @@ src/
 |-------|----------|
 | `AnimationEngine` | Управление циклом анимации через `requestAnimationFrame`. Поддерживает очередь колбэков (`Set<AnimationCallback>`), автоматический старт/остановку при добавлении/удалении колбэков. Предоставляет хуки `AfterStep` и `onStop`. |
 | `SvgEngine` | Универсальный движок для работы с SVG-холстом. Управляет SVG, zoom/pan (через d3-zoom), координатами. Поддерживает перетаскивание элементов через единый предикат (определяется сценой). Zoom автоматически отключается на элементах, для которых `dragPredicate` возвращает `true`. |
-| `PointsScene` | Сцена для отрисовки точек. Создаёт SVG-группу, управляет коллекцией `PointModel[]` и `EdgeModel[]`. Регистрирует детектор перетаскивания, обрабатывает клики, подписывается на события медиатора. Синхронизирует UI с состоянием `PointGraphManager`. |
-| `EdgesScene` | Сцена для отрисовки рёбер графа. Отображает линии между точками на основе `EdgeModel[]`. Подписывается на обновления рёбер и позиций точек, перерисовывает линии при перемещении точек. |
+| `PointsScene` | Сцена для отрисовки точек. Получает точки напрямую из `PointGraphManager`, а через mediator получает только сигналы об изменениях. |
+| `EdgesScene` | Сцена для отрисовки рёбер графа. Получает рёбра напрямую из `PointGraphManager` и реагирует на сигнал `POINTS_GRAPH_UPDATED`. |
 
 ---
 
@@ -146,26 +148,41 @@ src/
 
 ## Поток данных
 
+Главный принцип: **крупные данные проходят напрямую между владельцами состояния; mediator передаёт только сигналы и небольшие UI-команды.**
+
 ```mermaid
 graph TD
     A[Backend API] -->|fetch| B[DataManager]
     B -->|load/save| C[CanvasPositionsDB / IndexedDB]
-    B -->|publish tables| D[AppMediator]
-    D -->|POINTS_TABLE| E[PointsTransformer]
-    E -->|convert| F[PointModel / EmbeddingModel]
-    E -->|notify| G[PointsScene]
-    G -->|render| H[SvgEngine]
-    
-    D -->|POINTS_MODEL_READY| I[ModelManager]
-    I -->|build graph| J[PointGraphManager]
-    J -->|update edges| K[NeighborGraph]
-    K -->|notify| L[EdgesScene]
-    
-    M[AnimationEngine] -->|step| N[RepulsionEngine]
-    M -->|step| O[GraphEngine]
-    M -->|step| P[ZDampingEngine]
-    N & O & P -->|update positions| G
+    B -->|PointTable + EmbeddingTable + EdgeTable| D[PointsTransformer]
+    D -->|PointModel + EdgeRefs| E[PointGraphManager]
+
+    E -->|points| F[PointsScene]
+    E -->|edges| G[EdgesScene]
+    E -->|points + graph| H[ModelManager]
+
+    H -->|изменяет граф напрямую| E
+
+    M[AppMediator] -.->|сигналы / команды| D
+    M -.->|сигналы / команды| F
+    M -.->|сигналы / команды| G
+    M -.->|сигналы| H
+
+    I[AnimationEngine] -->|step| J[RepulsionEngine]
+    I -->|step| K[GraphEngine]
+    I -->|step| L[ZDampingEngine]
+    J & K & L -->|изменяют PointModel| E
+    I -.->|POINTS_UPDATING| M
 ```
+
+### Правила потока данных
+
+1. `DataManager` не публикует крупные таблицы через `AppMediator`.
+2. `PointsTransformer` получает таблицы напрямую от `DataManager` и обновляет `PointGraphManager`.
+3. `PointGraphManager` является источником истины для текущих точек и рёбер.
+4. `PointsScene`, `EdgesScene` и `ModelManager` используют один и тот же экземпляр `PointGraphManager`.
+5. `AppMediator` передаёт только сигналы (`POINTS_GRAPH_UPDATED`, `POINTS_UPDATING`, `POINTS_UPDATED`) и небольшие данные UI (`pointId`, `changes`, выбранный элемент и т.п.).
+6. Сохранение сцены (`saveScene`) читает точки и рёбра напрямую из `PointGraphManager`.
 
 ---
 
@@ -179,12 +196,27 @@ graph TD
 | `AUTO_ZOOM` | `boolean` | Режим авто-зума |
 | `SELECTED_POINT` | `UIPoint \| null` | Выбранная точка |
 | `SELECTED_EDGE` | `UIEdge \| null` | Выбранное ребро |
-| `POINT_UPDATED` | `{ pointId, changes }` | Обновление параметров точки |
-| `EDGE_UPDATE` | `{ edgeId, changes }` | Обновление параметров ребра |
-| `EDGES_TABLE` | `EdgeTable[]` | Данные таблицы рёбер |
-| `POINTS_MODEL_READY` | `{ points, edges }` | Модели точек и рёбер готовы |
+| `POINT_UPDATE` | `{ pointId, changes }` | Команда UI на изменение одной точки |
+| `POINT_UPDATED` | `{ pointId }` | Сигнал изменения одной точки; объект передаётся через `PointGraphManager` |
+| `EDGE_UPDATE` | `{ edgeId, changes }` | Команда UI на изменение одного ребра |
+| `POINTS_UPDATING` | — | Частый сигнал обновления координат; массив точек не передаётся |
+| `POINTS_UPDATED` | — | Сигнал завершения массового обновления; массив точек не передаётся |
+| `POINTS_GRAPH_UPDATED` | — | Сигнал изменения состава точек или рёбер |
+| `MODEL_MANAGER_STEP` | — | Команда запуска/продолжения оптимизации графа |
 | `START_REPULSION` | — | Запуск физической симуляции |
 | `RELOAD_TABLES` | — | Команда перезагрузки таблиц из БД |
+| `SAVE_POSITIONS` | — | Команда сохранения текущей сцены |
+| `POSITIONS_SAVED` | — | Сигнал успешного сохранения текущей сцены |
+
+### Что больше не передаётся через mediator
+
+- `EdgeRefs[]` / `EdgeModel[]`;
+- `PointModel[]`;
+- `{ points, edges }` из `POINTS_MODEL_READY`;
+- `PointTable[]`, `EmbeddingTable[]`, `EdgeTable[]` при загрузке данных;
+- массив точек в `POINTS_UPDATING` и `POINTS_UPDATED`.
+
+Это уменьшает количество копирований/ссылок на крупные структуры в событийном слое и делает владение состоянием явным.
 
 ---
 
