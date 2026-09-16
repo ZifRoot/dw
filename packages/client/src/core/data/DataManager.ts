@@ -23,7 +23,6 @@ export class DataManager {
     this.documentsApi = new fetch.DocumentsApi(config);
     this.embeddingsApi = new fetch.EmbeddingsApi(config);
     this.db = new PointDB();
-    // Подписка на команду перезагрузки таблиц
     this.unsubReload = this.mediator.onReloadTables(() => this.reloadTables());
   }
 
@@ -41,14 +40,14 @@ export class DataManager {
     const points = await this.db.points.getAll();
     const embeddings: EmbeddingTable[] = await this.db.embeddings.getAll();
 
-    // Передаем таблицы напрямую в PointsTransformer
+    // Таблицы передаются напрямую в PointsTransformer.
+    // Через mediator крупные массивы больше не проходят.
     if (this.pointsTransformer) {
       this.pointsTransformer.setTables(points, embeddings, edges);
     }
   }
 
   reloadTables() {
-    // Возвращаем промис, чтобы вызывающий код мог ждать завершения загрузки (await reloadTables())
     return this.reloadTablesSingle().catch(() => {});
   }
 
@@ -57,19 +56,13 @@ export class DataManager {
   @LogSafe
   private async reloadTablesSingle(): Promise<void> {
     await this.loadLocalDataAndEmit();
-    // 1. Загружаем документы с сервера
+
     const serverDocs = await this.documentsApi.documentsGet();
     await this.syncPointsWithServer(serverDocs);
 
-    let embeddings = await this.embeddingsApi.embeddingsQueryGet({ updateat: this.lowDate });
+    const embeddings = await this.embeddingsApi.embeddingsQueryGet({ updateat: this.lowDate });
     await this.syncEmbeddingsWithServer(embeddings);
 
-    // 2. Загружаем эмбеддинги для всех документов
-    //const serverEmbeddings = await this.fetchAllEmbeddings(serverDocs);
-
-    // 3. Синхронизируем таблицы
-
-    // 4. Отправляем обновлённые локальные данные
     await this.loadLocalDataAndEmit();
   }
 
@@ -94,7 +87,7 @@ export class DataManager {
       if (!existing || existing.updated_at !== serverUpdatedAt) {
         const pointTable: PointTable = {
           id: doc.id,
-          x: existing?.x, // начальные координаты, если нет локальных
+          x: existing?.x,
           y: existing?.y,
           z: existing?.z,
           title: doc.title,
@@ -103,14 +96,10 @@ export class DataManager {
         await this.db.points.put(pointTable);
       }
     }
-
-    const points = await this.db.points.getAll();
-
-    this.mediator.pointsTable = points;
   }
 
   private async syncEmbeddingsWithServer(serverEmbeddings: fetch.EmbeddingsSessionIdGet200ResponseInner[]): Promise<void> {
-    let sessions = new Set<string>();
+    const sessions = new Set<string>();
     for (const emb of serverEmbeddings) {
       const sessionId = emb.sessionId;
       const modelName = emb.modelName;
@@ -126,7 +115,7 @@ export class DataManager {
     }
 
     for (const session of sessions) {
-      let embs = await this.embeddingsApi.embeddingsSessionIdGet({ id: session });
+      const embs = await this.embeddingsApi.embeddingsSessionIdGet({ id: session });
 
       for (const emb of embs) {
         const sessionId = emb.sessionId;
@@ -138,10 +127,6 @@ export class DataManager {
         const localValue = local?.value ?? [];
         const localCreatedAt = toDate(local?.created_at)?.getTime() ?? 0;
 
-        // Единое условие обновления:
-        // 1. Нет локальной записи -> создаём
-        // 2. Сервер прислал непустой массив -> обновляем, если локальный пустой ИЛИ дата сервера новее
-        // 3. Сервер прислал пустой массив -> обновляем дату только если локальный тоже пустой И дата сервера новее
         const shouldUpdate =
           local === undefined ||
           (serverEmbedding.length > 0 && (localValue.length === 0 || serverCreatedAt > localCreatedAt)) ||
@@ -156,10 +141,8 @@ export class DataManager {
             processingTimeMs: emb.processingTimeMs,
           });
         }
-      }  
+      }
     }
-
-    let embs = await this.db.embeddings.getAll();
   }
 
   // ========== Сохранение изменений (вызывается из PointsTransformer) ==========
