@@ -211,7 +211,6 @@ export class PointsScene {
             const p = d3.select<SVGGElement, PointModel>(el as SVGGElement).datum();
             p.dragged = false;
             this.applyUpdatesToGroups(d3.select(el as SVGGElement));
-            this.mediator.startRepulsion();
           },
         },
       };
@@ -234,7 +233,7 @@ export class PointsScene {
           y: point.y,
           z: point.z,
           text: point.text,
-          fixed: point.pinned ?? false,
+          pinned: point.pinned ?? false,
         }
       : null;
   }
@@ -269,7 +268,7 @@ export class PointsScene {
       const point = this.getPointById(pointId);
       if (!point) return;
       if (changes.text !== undefined) point.text = changes.text;
-      if (changes.fixed !== undefined) point.pinned = changes.fixed;
+      if (changes.pinned !== undefined) point.pinned = changes.pinned;
       if (changes.x !== undefined) point.x = changes.x;
       if (changes.y !== undefined) point.y = changes.y;
       this.applyUpdatesToGroups(this.d3Points);

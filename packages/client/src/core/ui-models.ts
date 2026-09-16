@@ -5,7 +5,7 @@ export interface UIPoint {
   y: number;
   z: number;
   text: string;
-  fixed: boolean;
+  pinned: boolean;
 }
 
 export interface UIEdge {

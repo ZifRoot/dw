@@ -11,12 +11,12 @@ interface PointInfoPanelProps {
 
 export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({ point, mediator }) => {
   const [text, setText] = useState(point.text);
-  const [fixed, setFixed] = useState(point.fixed || false);
+  const [fixed, setFixed] = useState(point.pinned || false);
 
   // Обновляем локальное состояние при смене точки (если вдруг пришёл новый объект)
   useEffect(() => {
     setText(point.text);
-    setFixed(point.fixed || false);
+    setFixed(point.pinned || false);
   }, [point]);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -28,7 +28,7 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({ point, mediator 
   const handleFixedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFixed = e.target.checked;
     setFixed(newFixed);
-    mediator.updatePoint(point.id, { fixed: newFixed });
+    mediator.updatePoint(point.id, { pinned: newFixed });
   };
 
   return (
