@@ -1,4 +1,4 @@
-import { CanvasPositionsDB } from "./CanvasPositionsDB";
+import { PointDB } from "./PointDB";
 import { AppMediator } from "../AppMediator";
 import { PointTable } from "./tables/PointTable";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
@@ -10,7 +10,7 @@ import { SingleExecution } from "@utils/single-runner";
 import * as fetch from "@clients/dew/fetch";
 
 export class DataManager {
-  private db: CanvasPositionsDB;
+  private db: PointDB;
   private documentsApi: fetch.DocumentsApi;
   private embeddingsApi: fetch.EmbeddingsApi;
   private unsubReload: () => void;
@@ -22,7 +22,7 @@ export class DataManager {
     const config = new fetch.Configuration({ basePath: "/api" });
     this.documentsApi = new fetch.DocumentsApi(config);
     this.embeddingsApi = new fetch.EmbeddingsApi(config);
-    this.db = new CanvasPositionsDB();
+    this.db = new PointDB();
     // Подписка на команду перезагрузки таблиц
     this.unsubReload = this.mediator.onReloadTables(() => this.reloadTables());
   }

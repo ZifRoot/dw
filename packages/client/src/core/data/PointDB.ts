@@ -13,7 +13,7 @@ type TModel = string;
 
 type TEmbeddingId = [TSessionId, TModel];
 
-export class CanvasPositionsDB extends Database {
+export class PointDB extends Database {
   public points: ITable<PointTable, TPointID>;
   public embeddings: ITable<EmbeddingTable, TEmbeddingId>;
   public edges: ITable<EdgeTable, string>;
