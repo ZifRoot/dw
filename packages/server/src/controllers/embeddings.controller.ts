@@ -136,9 +136,10 @@ export class EmbeddingsController extends BaseController {
         try {
           const embeddingsDto = c.req.valid("json");
           const embeddingsCreate = embeddingsDto.map((dto) => this.dtoToEmbeddingCreate(dto));
-          const count = [...embeddingsCreate.groupBy((a) => a.sessionId).entries()].reduce(async (r, c) => {
-            return (await r) + (await this.repo.createManyEmbeddings(c[0], c[1]));
-          }, Promise.resolve(0));
+          let count = 0;
+          for (const [sessionId, embeddings] of embeddingsCreate.groupBy((a) => a.sessionId).entries()) {
+            count += await this.repo.createManyEmbeddings(sessionId, embeddings);
+          }
 
           return c.json({ status: "ok", received: count }, 200);
         } catch (err) {

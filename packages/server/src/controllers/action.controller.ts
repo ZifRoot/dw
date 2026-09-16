@@ -22,7 +22,7 @@ export class ActionController extends BaseController {
         },
       }),
       async (c) => {
-        this.program.Update();
+        await this.program.Update();
         return c.json("OK", 200);
       },
     );
@@ -38,7 +38,7 @@ export class ActionController extends BaseController {
         },
       }),
       async (c) => {
-        this.program.UpdateEmbedding();
+        await this.program.UpdateEmbedding();
         return c.json("OK", 200);
       },
     );

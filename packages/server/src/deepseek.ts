@@ -12,8 +12,10 @@ export class Deepseek {
     var chat_sessions_all: ChatSessionBase[] = [];
     while (true) {
       let fetchpage = await this.fetch_page(updated_at);
-      var chat_sessions = fetchpage.chat_sessions;
-      let ud0 = chat_sessions[0].updated_at;
+      let chat_sessions = fetchpage.chat_sessions;
+      
+      if (chat_sessions.length === 0) break;
+      
       let ude = chat_sessions.at(-1)?.updated_at;
       let has_more = fetchpage.has_more;
       chat_sessions_all.push(...chat_sessions);

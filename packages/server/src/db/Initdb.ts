@@ -29,7 +29,7 @@ export function InitdrizzleDb() {
 }
 
 export function InitDb(): IRepository {
-  if (!DbManager.startAndWaitSync()) return null!;
+  if (!DbManager.startAndWaitSync()) throw new Error("Failed to initialize database");
   return InitdrizzleDb();
 }
 
@@ -38,7 +38,7 @@ export function InitDbFast(): IRepository {
 }
 
 export async function InitDbAsync(): Promise<IRepository> {
-  if (!(await DbManager.startAndWaitAsync())) return null!;
+  if (!(await DbManager.startAndWaitAsync())) throw new Error("Failed to initialize database");
   return InitdrizzleDb();
 }
 // runWithPromiseAsync(main()).catch(console.error);

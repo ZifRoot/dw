@@ -47,12 +47,16 @@ export class PointGraphManager {
     }
 
     // Нормализуем порядок source/target по индексу для консистентности id ребра
+    // Используем локальные переменные, не мутируем входной параметр
+    let sourceId = edgeIndex.sourceId;
+    let targetId = edgeIndex.targetId;
+    
     if (sourceIndex > targetIndex) {
-      [edgeIndex.sourceId, edgeIndex.targetId] = [edgeIndex.targetId, edgeIndex.sourceId];
+      [sourceId, targetId] = [targetId, sourceId];
     }
 
-    const source = this.pointCollection.getById(edgeIndex.sourceId);
-    const target = this.pointCollection.getById(edgeIndex.targetId);
+    const source = this.pointCollection.getById(sourceId);
+    const target = this.pointCollection.getById(targetId);
 
     if (!source || !target) {
       console.warn(`edgeIndexToEdgeModel: point not found: ${edgeIndex.sourceId} or ${edgeIndex.targetId}`);
