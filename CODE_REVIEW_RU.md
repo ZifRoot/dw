@@ -47,159 +47,16 @@ Client
 
 ---
 
-# 2. 🔴 Критические проблемы
-
-## CRITICAL-1 — DeepSeek credentials хранятся как обычный JSONB
-
-В `userTable`:
-
-```ts
-credentials: jsonb("credentials")
-```
-
-а `Deepseek` ожидает:
-
-```ts
-type credentials = {
-    authorization: string;
-    cookie: string;
-};
-```
-
-и непосредственно добавляет их в HTTP headers.
-
-Это означает, что в PostgreSQL лежат фактически **секреты авторизации DeepSeek**.
-
-Проблема усугубляется тем, что API вообще не имеет нормальной authentication/authorization boundary.
-
-То есть архитектурно получается:
-
-```text
-HTTP client
-    │
-    │ без auth
-    ▼
-/api
-    │
-    ▼
-PostgreSQL
-    │
-    └── DeepSeek authorization/cookie
-```
-
-### Что делать
-
-Минимум:
-
-```text
-Browser
-   │
-   ▼
-API authentication
-   │
-   ▼
-User context
-   │
-   ▼
-credentials
-```
-
-И credentials должны быть:
-
-* либо зашифрованы application-level encryption;
-* либо вынесены в отдельный secrets storage;
-* никогда не возвращаться через DTO;
-* никогда не попадать в logs.
-
----
-
-# 3. 🔴 API слушает `0.0.0.0`
-
-`Program.start()`:
-
-```ts
-app.listen(PORT, "0.0.0.0", ...)
-```
-
-Для локального приложения это неожиданно опасно.
-
-Если машина находится в сети:
-
-```text
-LAN
- │
- ├── attacker
- │
- ▼
-:8081
- │
- └── /api/actions/update
-```
-
-а `/api/actions/update` запускает синхронизацию с DeepSeek.
-
-То есть HTTP endpoint фактически способен инициировать операции от имени пользователя.
-
-Для локального desktop-like приложения я бы сделал:
-
-```ts
-app.listen(PORT, "127.0.0.1")
-```
-
-А возможность bind на `0.0.0.0` вынес бы в configuration.
-
----
-
-# 4. 🔴 `ActionController` не ждёт выполнение операции
+# 4. 🔴 `ActionController` ждёт выполнение операции
 
 Сейчас:
-
-```ts
-this.program.Update();
-return c.json("OK", 200);
-```
-
-и аналогично:
-
-```ts
-this.program.UpdateEmbedding();
-return c.json("OK", 200);
-```
-
-Это очень важная проблема.
-
-HTTP:
-
-```text
-POST /actions/update
-       │
-       ├── запускает Update()
-       │
-       └── сразу → 200 OK
-```
-
-даже если через секунду:
-
-```text
-Update()
-   ↓
-DeepSeek request
-   ↓
-401
-   ↓
-exception
-```
-
-клиент уже получил `200`.
-
-### Лучше
 
 ```ts
 await this.program.Update();
 return c.json({ status: "ok" }, 200);
 ```
 
-Либо, что ещё лучше для долгих операций:
+лучше для долгих операций:
 
 ```text
 POST /actions/update
@@ -247,13 +104,7 @@ A-B
 
 Это особенно важно, потому что весь проект поддерживает несколько embedding models.
 
-### Должно быть что-то вроде
-
-```ts
-this.id = `${source.id}:${target.id}:${modelName}`;
-```
-
-или ещё лучше — canonical key:
+### Должно быть
 
 ```ts
 static getId(sourceId, targetId, modelName) {
@@ -263,54 +114,6 @@ static getId(sourceId, targetId, modelName) {
 ```
 
 Это одна из самых существенных логических ошибок клиентской модели.
-
----
-
-# 6. 🔴 `PointGraphManager` мутирует входной `EdgeRef`
-
-В:
-
-```ts
-edgeIndexToEdgeModel()
-```
-
-есть:
-
-```ts
-if (sourceIndex > targetIndex) {
-    [edgeIndex.sourceId, edgeIndex.targetId] =
-        [edgeIndex.targetId, edgeIndex.sourceId];
-}
-```
-
-То есть функция с названием:
-
-```text
-edgeIndexToEdgeModel
-```
-
-не просто конвертирует объект, а **изменяет объект, который ей передали**.
-
-Это особенно неприятно потому, что `EdgeRef` может быть:
-
-* объектом из persisted state;
-* объектом из IndexedDB;
-* объектом из mediator;
-* объектом, который потом используется для сохранения.
-
-### Лучше
-
-```ts
-const sourceId = ...
-const targetId = ...
-
-const [canonicalSource, canonicalTarget] =
-    sourceId < targetId
-        ? [sourceId, targetId]
-        : [targetId, sourceId];
-```
-
-Никаких mutation.
 
 ---
 
