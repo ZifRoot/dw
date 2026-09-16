@@ -56,11 +56,7 @@ export class PointsTransformer {
 
   /** Обновить PointGraphManager и уведомить подписчиков через медиатор. */
   private updatePointGraphManager(points: PointModel[], edges: EdgeRefs): void {
-    this.pointGraphManager.update(points,edges);
-    this.pointGraphManager.initFromRefs(edges);
-
-    // Через медиатор передаётся только сигнал, без крупных массивов.
-    
+    this.pointGraphManager.update(points,edges);    
   }
 
   private convertPointsTableToModel(pointsTable: PointTable[]): PointModel[] {

@@ -61,9 +61,9 @@ const repulsionEngine = new RepulsionEngine(mediator, animationEngine, new Repul
 
 animationEngine.AfterStep = () => mediator.pointsUpdating();
 
-graphEngine.setEdges(edgesScene.getEdges());
-zdampingEngine.setPoints(pointsScene.getPoints());
-repulsionEngine.setPoints(pointsScene.getPoints());
+graphEngine.setEdges(pointGraphManager.getEdgesArray());
+zdampingEngine.setPoints(pointGraphManager.getPointsArray());
+repulsionEngine.setPoints(pointGraphManager.getPointsArray());
 
 await dataManager.reloadTables();
 
