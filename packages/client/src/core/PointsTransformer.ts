@@ -95,7 +95,7 @@ export class PointsTransformer {
           emb.value,
           emb.created_at,
           emb.processingTimeMs ?? 0,
-          0.5, // временно, будет пересчитано
+          0.5, // временно, будет пересчитан
         );
         doc.embeddings.set(emb.model_name, model);
       }
@@ -126,13 +126,16 @@ export class PointsTransformer {
     await this.dataManager.saveEdgesTable(edgeTables);
   }
 
-  /** Сохранить текущую сцену: позиции точек + связи (из mediator.edges) */
+  /** Сохранить текущую сцену: позиции точек + связи из PointGraphManager */
   private async saveScene(): Promise<void> {
     try {
-      // Получаем актуальные точки из PointGraphManager
+      // Получаем актуальные точки и связи напрямую из PointGraphManager.
+      // Медиатор больше не используется как хранилище крупного массива рёбер.
       const points = this.pointGraphManager.getPoints();
+      const edges = this.pointGraphManager.getAllEdgeRefs();
+
       await this.savePoints(points);
-      await this.saveEdges(this.mediator.edges);
+      await this.saveEdges(edges);
       // Событие успеха – индикатор «Сохранено» в UI
       this.mediator.positionsSaved();
     } catch (e) {
