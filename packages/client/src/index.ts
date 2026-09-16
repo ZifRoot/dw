@@ -9,29 +9,24 @@ import { RepulsionEngine, RepulsionEngineConfig } from "./core/physics/Repulsion
 import { AnimationEngine } from "./core/Engines/AnimationEngine";
 import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
 import { ZDampingConfig, ZDampingEngine } from "./core/physics/ZDampingEngine";
-
 import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
 import { PointsTransformer } from "./core/PointsTransformer";
 
 // Создаём контейнеры
 const app = document.getElementById("app")!;
-// Верхняя панель управления
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "control-panel";
 app.appendChild(controlPanelDiv);
 
-// Основная область
 const mainArea = document.createElement("div");
 mainArea.className = "main-area";
 app.appendChild(mainArea);
 
-// Контейнер канваса
 const canvasDiv = document.createElement("div");
 canvasDiv.id = "canvas-container";
 mainArea.appendChild(canvasDiv);
 
-// Контейнер боковой панели
 const infoPanelDiv = document.createElement("div");
 infoPanelDiv.id = "info-panel";
 mainArea.appendChild(infoPanelDiv);
@@ -44,42 +39,33 @@ mediator.sizeText = 16;
 mediator.selectedPoint = null;
 mediator.selectedEdge = null;
 setTimeout(() => (mediator.autoZoom = false), 0);
-let svgEngine = new SvgEngine(canvasDiv);
-// Инициализируем движок (он сам создаст SVG внутри canvasDiv)
 
+const svgEngine = new SvgEngine(canvasDiv);
 const pointGraphManager = new PointGraphManager();
 
 const pointsScene = new PointsScene(svgEngine, mediator, pointGraphManager);
-
 const edgesScene = new EdgesScene(svgEngine, mediator, pointGraphManager);
-
 pointsScene.init();
 
 const animationEngine = new AnimationEngine();
-
 const dataManager = new DataManager(mediator);
 const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
 
-// ModelManager запускает собственный инкрементальный цикл оптимизации
-// после получения POINTS_MODEL_READY и не блокирует animation loop.
-const modelManager = new ModelManager(mediator);
+// ModelManager и сцены используют один PointGraphManager.
+// Через mediator передаются только сигналы, а не массивы точек/рёбер.
+const modelManager = new ModelManager(mediator, pointGraphManager);
 
 const zdampingEngine = new ZDampingEngine(mediator, animationEngine, new ZDampingConfig());
 const graphEngine = new GraphEngine(mediator, animationEngine, new GraphEngineConfig());
 const repulsionEngine = new RepulsionEngine(mediator, animationEngine, new RepulsionEngineConfig());
 
-animationEngine.AfterStep = () => mediator.pointsUpdating([]);
+animationEngine.AfterStep = () => mediator.pointsUpdating();
 
 graphEngine.setEdges(edgesScene.getEdges());
 zdampingEngine.setPoints(pointsScene.getPoints());
 repulsionEngine.setPoints(pointsScene.getPoints());
 
-let documents = await dataManager.reloadTables();
+await dataManager.reloadTables();
 
 createControlPanel(controlPanelDiv, mediator);
-
 createInfoPanel(infoPanelDiv, mediator);
-// ModelManager начинает оптимизацию автоматически после загрузки точек.
-// // Монтируем React UI
-// const root = createRoot(uiDiv);
-// root.render(React.createElement(ControlPanel, { mediator }));
