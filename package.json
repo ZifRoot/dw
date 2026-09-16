@@ -53,5 +53,9 @@
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.23",
     "zod": "^4.4.3"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "@openapitools/openapi-generator-cli@2.41.0": true
   }
 }
