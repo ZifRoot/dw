@@ -1,5 +1,5 @@
 // core/ModelManager.ts
-import { AppMediator, PointsModelReadyPayload } from "./AppMediator";
+import { AppMediator } from "./AppMediator";
 import { PointModel } from "./models/PointModel";
 import { EdgeModel } from "./models/EdgeModel";
 import { PointGraphManager } from "./PointGraphManager";
@@ -23,7 +23,6 @@ interface ScoredCandidate {
  * времени. Это позволяет не блокировать основной поток браузера.
  */
 export class ModelManager {
-  private pointGraphManager: PointGraphManager;
   private edges: EdgeModel[] = [];
   private readonly edgeWeight = 100;
 
@@ -35,12 +34,11 @@ export class ModelManager {
   private iterationChanged = false;
   private rafId: number | null = null;
   private generation = 0;
-
-  private unsubPoints: () => void;
-  private unsubStep: () => void;
+  private isRunningFrame = false;
 
   constructor(
     private mediator: AppMediator,
+    private pointGraphManager: PointGraphManager,
     K: number = 3,
     randomCandidates: number = 3,
     frameBudgetMs: number = 6,
@@ -49,45 +47,20 @@ export class ModelManager {
     this.randomCandidates = Math.max(0, randomCandidates);
     this.frameBudgetMs = Math.max(1, frameBudgetMs);
 
-    this.pointGraphManager = new PointGraphManager();
-
-    this.unsubPoints = this.mediator.onPointsModelReady((payload) => {
-      this.updatePoints(payload);
+    this.mediator.onPointsGraphUpdated(() => {
+      if (this.isRunningFrame) return;
+      this.pointIndex = 0;
+      this.iterationChanged = false;
+      this.startOptimization();
     });
 
-    this.unsubStep = this.mediator.onModelManagerStep(() => {
+    this.mediator.onModelManagerStep(() => {
       this.startOptimization();
     });
   }
 
   public destroy(): void {
     this.stopOptimization();
-    this.unsubPoints();
-    this.unsubStep();
-  }
-
-  private updatePoints(payload: PointsModelReadyPayload): void {
-    this.stopOptimization();
-    this.pointIndex = 0;
-    this.iterationChanged = false;
-
-    const { points, edges } = payload;
-    this.pointGraphManager.updatePoints(points);
-    if (this.pointGraphManager.getPoints().length === 0) return;
-
-    if (edges.length > 0) {
-      // Восстанавливаем сохранённые связи вместо случайной инициализации.
-      this.pointGraphManager.initFromRefs(edges);
-    } else {
-      this.pointGraphManager.initRandom(this.K);
-    }
-
-    this.rebuildEdges();
-
-    // Уведомляем сцену о готовности данных через медиатор.
-    this.mediator.pointsUpdating(points);
-
-    this.startOptimization();
   }
 
   /**
@@ -131,17 +104,23 @@ export class ModelManager {
 
     const frameStart = performance.now();
     let graphChanged = false;
+    this.isRunningFrame = true;
 
-    while (
-      this.pointIndex < points.length &&
-      performance.now() - frameStart < this.frameBudgetMs
-    ) {
-      graphChanged = this.improvePoint(points[this.pointIndex]) || graphChanged;
-      this.pointIndex++;
-    }
+    try {
+      while (
+        this.pointIndex < points.length &&
+        performance.now() - frameStart < this.frameBudgetMs
+      ) {
+        graphChanged = this.improvePoint(points[this.pointIndex]) || graphChanged;
+        this.pointIndex++;
+      }
 
-    if (graphChanged) {
-      this.rebuildEdges();
+      if (graphChanged) {
+        this.rebuildEdges();
+        this.mediator.pointsGraphUpdated();
+      }
+    } finally {
+      this.isRunningFrame = false;
     }
 
     if (this.pointIndex >= points.length) {
@@ -328,8 +307,6 @@ export class ModelManager {
     this.edges = this.pointGraphManager.edgeIndexesToEdgeModels(edgeRefs, {
       distance: this.edgeWeight,
     });
-
-    this.mediator.edges = this.edges;
   }
 
   public getPairs(): { source: PointModel; target: PointModel }[] {
