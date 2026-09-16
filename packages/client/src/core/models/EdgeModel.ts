@@ -1,4 +1,5 @@
 // core/models/EdgeModel.ts
+import { hashX1 } from "@utils/data-utils";
 import { Edge } from "./Edge";
 import { EdgeRef } from "./EdgeRef";
 import { PointModel } from "./PointModel";
@@ -19,7 +20,7 @@ export class EdgeModel implements Edge, EdgeRef {
    */
   static getId(sourceId: string, targetId: string, modelName: string): string {
     const [a, b] = [sourceId, targetId].sort();
-    return `${a}:${b}:${modelName}`;
+    return hashX1(`${a}:${b}:${modelName}`);
   }
 
   constructor(

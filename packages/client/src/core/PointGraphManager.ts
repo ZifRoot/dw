@@ -6,6 +6,7 @@ import { NeighborGraph } from "./NeighborGraph";
 import { EdgeRef } from "./models/EdgeRef";
 import { EdgeRefs } from "./models/EdgeRefs";
 import "@utils/array-extensions";
+import { AppMediator } from "./AppMediator";
 
 export interface EdgeModelOptions {
   modelName?: string;
@@ -24,7 +25,7 @@ export class PointGraphManager {
   private pointCollection: EntityCollection<PointModel> = new EntityCollection((p) => p.id);
   private graph: NeighborGraph;
 
-  constructor() {
+  constructor(private mediator: AppMediator) {
     this.graph = new NeighborGraph({
       create: (edgeRef) => this.edgeIndexToEdgeModel(edgeRef),
     });
@@ -34,10 +35,7 @@ export class PointGraphManager {
    * Преобразовать EdgeRef в EdgeModel, используя внутреннюю коллекцию точек.
    * Инкапсулирует логику преобразования ссылок на рёбра в модели рёбер.
    */
-  public edgeIndexToEdgeModel(
-    edgeIndex: EdgeRef,
-    options: EdgeModelOptions = {},
-  ): EdgeModel | null {
+  public edgeIndexToEdgeModel(edgeIndex: EdgeRef, options: EdgeModelOptions = {}): EdgeModel | null {
     const sourceIndex = this.pointCollection.indexMap.get(edgeIndex.sourceId);
     const targetIndex = this.pointCollection.indexMap.get(edgeIndex.targetId);
 
@@ -50,7 +48,7 @@ export class PointGraphManager {
     // Используем локальные переменные, не мутируем входной параметр
     let sourceId = edgeIndex.sourceId;
     let targetId = edgeIndex.targetId;
-    
+
     if (sourceIndex > targetIndex) {
       [sourceId, targetId] = [targetId, sourceId];
     }
@@ -123,6 +121,15 @@ export class PointGraphManager {
   }
 
   /**
+   * Обновить коллекцию точек и синхронизировать граф.
+   */
+  public update(points: PointModel[], edges: EdgeRefs): void {
+    this.updatePoints(points);
+    this.initFromRefs(edges);
+    this.mediator.pointsGraphUpdated();
+  }
+
+  /**
    * Найти общую модель эмбеддинга между двумя точками.
    */
   public getCommonModel(id1: string, id2: string): string | null {
@@ -180,10 +187,8 @@ export class PointGraphManager {
   public initFromRefs(refs: EdgeRefs): void {
     this.graph.clear();
     for (const ref of refs) {
-      if (!ref.sourceId || !ref.targetId || ref.sourceId === ref.targetId) continue;
-      if (!this.pointCollection.indexMap.has(ref.sourceId)) continue;
-      if (!this.pointCollection.indexMap.has(ref.targetId)) continue;
-      this.graph.addEdge({ sourceId: ref.sourceId, targetId: ref.targetId, modelName: ref.modelName ?? "" });
+      if (ref.modelName == null) continue;
+      this.graph.addEdge(ref);
     }
   }
 
@@ -248,10 +253,7 @@ export class PointGraphManager {
    * Преобразовать массив EdgeRef в массив EdgeModel, используя внутреннюю коллекцию точек.
    * Инкапсулирует логику преобразования ссылок на рёбра в модели рёбер.
    */
-  public edgeIndexesToEdgeModels(
-    edgeIndexes: EdgeRef[],
-    options: EdgeModelOptions = {},
-  ): EdgeModel[] {
+  public edgeIndexesToEdgeModels(edgeIndexes: EdgeRef[], options: EdgeModelOptions = {}): EdgeModel[] {
     const result: EdgeModel[] = [];
     for (const idx of edgeIndexes) {
       const model = this.edgeIndexToEdgeModel(idx, options);

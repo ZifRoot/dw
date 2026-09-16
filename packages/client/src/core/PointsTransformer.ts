@@ -50,18 +50,17 @@ export class PointsTransformer {
   public setTables(points: PointTable[], embeddings: EmbeddingTable[], edges: EdgeTable[]): void {
     const modelPoints = this.convertPointsTableToModel(points);
     this.mergeEmbeddingsIntoPoints(modelPoints, embeddings);
-    this.updatePointGraphManager(modelPoints, edges);
+    const edgeRefs = this.convertEdgesToRefs(edges);
+    this.updatePointGraphManager(modelPoints, edgeRefs);
   }
 
   /** Обновить PointGraphManager и уведомить подписчиков через медиатор. */
-  private updatePointGraphManager(points: PointModel[], edges: EdgeTable[]): void {
-    this.pointGraphManager.updatePoints(points);
-
-    const edgeRefs = this.convertEdgesToRefs(edges);
-    this.pointGraphManager.initFromRefs(edgeRefs);
+  private updatePointGraphManager(points: PointModel[], edges: EdgeRefs): void {
+    this.pointGraphManager.update(points,edges);
+    this.pointGraphManager.initFromRefs(edges);
 
     // Через медиатор передаётся только сигнал, без крупных массивов.
-    this.mediator.pointsGraphUpdated();
+    
   }
 
   private convertPointsTableToModel(pointsTable: PointTable[]): PointModel[] {
@@ -86,14 +85,7 @@ export class PointsTransformer {
       const doc = pointMap.get(emb.session_id);
       if (!doc) continue;
       if (!doc.embeddings.has(emb.model_name)) {
-        const model = new EmbeddingModel(
-          emb.session_id,
-          emb.model_name,
-          emb.value,
-          emb.created_at,
-          emb.processingTimeMs ?? 0,
-          0.5,
-        );
+        const model = new EmbeddingModel(emb.session_id, emb.model_name, emb.value, emb.created_at, emb.processingTimeMs ?? 0, 0.5);
         doc.embeddings.set(emb.model_name, model);
       }
     }

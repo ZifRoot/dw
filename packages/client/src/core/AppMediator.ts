@@ -148,25 +148,67 @@ export class AppMediator extends BaseMediator {
     this.emit(AppMediator.MODEL_MANAGER_STEP);
   }
 
-  public onProgress(callback: (value: number) => void): () => void { return this.on(AppMediator.PROGRESS, callback); }
-  public onTargetSize(callback: (value: number) => void): () => void { return this.on(AppMediator.TARGET_SIZE, callback); }
-  public onTemperature(callback: (value: number) => void): () => void { return this.on(AppMediator.TEMPERATURE, callback); }
-  public onAutoZoom(callback: (value: boolean) => void): () => void { return this.on(AppMediator.AUTO_ZOOM, callback); }
-  public onSelectedPoint(callback: (point: UIPoint | null) => void): () => void { return this.on(AppMediator.SELECTED_POINT, callback); }
-  public onSelectedEdge(callback: (edge: UIEdge | null) => void): () => void { return this.on(AppMediator.SELECTED_EDGE, callback); }
-  public onPointUpdate(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void { return this.on(AppMediator.POINT_UPDATE, callback); }
-  public onSizeText(callback: (value: number) => void): () => void { return this.on(AppMediator.SIZE_TEXT, callback); }
-  public onEdgeUpdate(callback: (detail: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> }) => void): () => void { return this.on(AppMediator.EDGE_UPDATE, callback); }
-  public onClearPoints(callback: () => void): () => void { return this.on(AppMediator.CLEAR_POINTS, () => callback()); }
-  public onAddPoint(callback: () => void): () => void { return this.on(AppMediator.ADD_POINT, () => callback()); }
-  public onStartRepulsion(callback: () => void): () => void { return this.on(AppMediator.START_REPULSION, () => callback()); }
-  public onStartGraph(callback: () => void): () => void { return this.on(AppMediator.START_GRAPH, () => callback()); }
-  public onReloadTables(callback: () => void): () => void { return this.on(AppMediator.RELOAD_TABLES, () => callback()); }
-  public onSavePositions(callback: () => void): () => void { return this.on(AppMediator.SAVE_POSITIONS, () => callback()); }
-  public onPositionsSaved(callback: () => void): () => void { return this.on(AppMediator.POSITIONS_SAVED, callback); }
-  public onPointsUpdating(callback: () => void): () => void { return this.on(AppMediator.POINTS_UPDATING, callback); }
-  public onPointsUpdated(callback: () => void): () => void { return this.on(AppMediator.POINTS_UPDATED, callback); }
-  public onPointUpdated(callback: (detail: { pointId: string }) => void): () => void { return this.on(AppMediator.POINT_UPDATED, callback); }
-  public onPointsGraphUpdated(callback: () => void): () => void { return this.on(AppMediator.POINTS_GRAPH_UPDATED, callback); }
-  public onModelManagerStep(callback: () => void): () => void { return this.on(AppMediator.MODEL_MANAGER_STEP, callback); }
+  public onProgress(callback: (value: number) => void): () => void {
+    return this.on(AppMediator.PROGRESS, callback);
+  }
+  public onTargetSize(callback: (value: number) => void): () => void {
+    return this.on(AppMediator.TARGET_SIZE, callback);
+  }
+  public onTemperature(callback: (value: number) => void): () => void {
+    return this.on(AppMediator.TEMPERATURE, callback);
+  }
+  public onAutoZoom(callback: (value: boolean) => void): () => void {
+    return this.on(AppMediator.AUTO_ZOOM, callback);
+  }
+  public onSelectedPoint(callback: (point: UIPoint | null) => void): () => void {
+    return this.on(AppMediator.SELECTED_POINT, callback);
+  }
+  public onSelectedEdge(callback: (edge: UIEdge | null) => void): () => void {
+    return this.on(AppMediator.SELECTED_EDGE, callback);
+  }
+  public onPointUpdate(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void {
+    return this.on(AppMediator.POINT_UPDATE, callback);
+  }
+  public onSizeText(callback: (value: number) => void): () => void {
+    return this.on(AppMediator.SIZE_TEXT, callback);
+  }
+  public onEdgeUpdate(callback: (detail: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> }) => void): () => void {
+    return this.on(AppMediator.EDGE_UPDATE, callback);
+  }
+  public onClearPoints(callback: () => void): () => void {
+    return this.on(AppMediator.CLEAR_POINTS, () => callback());
+  }
+  public onAddPoint(callback: () => void): () => void {
+    return this.on(AppMediator.ADD_POINT, () => callback());
+  }
+  public onStartRepulsion(callback: () => void): () => void {
+    return this.on(AppMediator.START_REPULSION, () => callback());
+  }
+  public onStartGraph(callback: () => void): () => void {
+    return this.on(AppMediator.START_GRAPH, () => callback());
+  }
+  public onReloadTables(callback: () => void): () => void {
+    return this.on(AppMediator.RELOAD_TABLES, () => callback());
+  }
+  public onSavePositions(callback: () => void): () => void {
+    return this.on(AppMediator.SAVE_POSITIONS, () => callback());
+  }
+  public onPositionsSaved(callback: () => void): () => void {
+    return this.on(AppMediator.POSITIONS_SAVED, callback);
+  }
+  public onPointsUpdating(callback: () => void): () => void {
+    return this.on(AppMediator.POINTS_UPDATING, callback);
+  }
+  public onPointsUpdated(callback: () => void): () => void {
+    return this.on(AppMediator.POINTS_UPDATED, callback);
+  }
+  public onPointUpdated(callback: (detail: { pointId: string }) => void): () => void {
+    return this.on(AppMediator.POINT_UPDATED, callback);
+  }
+  public onPointsGraphUpdated(callback: () => void): () => void {
+    return this.on(AppMediator.POINTS_GRAPH_UPDATED, callback);
+  }
+  public onModelManagerStep(callback: () => void): () => void {
+    return this.on(AppMediator.MODEL_MANAGER_STEP, callback);
+  }
 }

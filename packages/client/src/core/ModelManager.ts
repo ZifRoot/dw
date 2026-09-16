@@ -72,7 +72,10 @@ export class ModelManager {
 
     this.generation++;
     const generation = this.generation;
-    this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+    setTimeout(() => {
+      this.runFrame(generation);
+    }, 1000);
+    //  this.rafId = requestAnimationFrame(() => this.runFrame(generation));
   }
 
   /**
@@ -107,10 +110,7 @@ export class ModelManager {
     this.isRunningFrame = true;
 
     try {
-      while (
-        this.pointIndex < points.length &&
-        performance.now() - frameStart < this.frameBudgetMs
-      ) {
+      while (this.pointIndex < points.length && performance.now() - frameStart < this.frameBudgetMs) {
         graphChanged = this.improvePoint(points[this.pointIndex]) || graphChanged;
         this.pointIndex++;
       }
@@ -138,7 +138,7 @@ export class ModelManager {
       this.iterationChanged = true;
     }
 
-    this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+  //  this.rafId = requestAnimationFrame(() => this.runFrame(generation));
   }
 
   /**
@@ -180,9 +180,7 @@ export class ModelManager {
     }
 
     // Ограничиваем расширение K соседями исходной точки.
-    const seedNeighborIds = currentEdges
-      .map((edge) => (edge.sourceId === source.id ? edge.targetId : edge.sourceId))
-      .slice(0, this.K);
+    const seedNeighborIds = currentEdges.map((edge) => (edge.sourceId === source.id ? edge.targetId : edge.sourceId)).slice(0, this.K);
 
     // Для каждого seed рассматриваем K его соседей.
     for (const neighborId of seedNeighborIds) {
@@ -229,11 +227,7 @@ export class ModelManager {
 
     // Удаляем существующие связи, которые больше не входят в top-K.
     for (const candidate of scored) {
-      if (
-        !candidate.isNew &&
-        !topKTargets.has(candidate.targetId) &&
-        candidate.model
-      ) {
+      if (!candidate.isNew && !topKTargets.has(candidate.targetId) && candidate.model) {
         this.pointGraphManager.removeEdge(candidate.model);
         changed = true;
       }
@@ -258,10 +252,7 @@ export class ModelManager {
    * Вычисляет СРЕДНЕЕ косинусное расстояние по всем общим моделям двух точек.
    * Возвращает null, если общих моделей нет.
    */
-  private calculateAverageCosineDistance(
-    p1: PointModel,
-    p2: PointModel,
-  ): number | null {
+  private calculateAverageCosineDistance(p1: PointModel, p2: PointModel): number | null {
     let totalDistance = 0;
     let commonCount = 0;
 
@@ -277,13 +268,7 @@ export class ModelManager {
   }
 
   private cosineDistance(v1: number[], v2: number[]): number {
-    if (
-      !v1 ||
-      !v2 ||
-      v1.length === 0 ||
-      v2.length === 0 ||
-      v1.length !== v2.length
-    ) {
+    if (!v1 || !v2 || v1.length === 0 || v2.length === 0 || v1.length !== v2.length) {
       return 1;
     }
 

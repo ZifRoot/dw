@@ -1,20 +1,19 @@
 import { SvgEngine } from "../Engines/SvgEngine.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
-import { UIEdge } from "../ui-models.ts";
+import { UIEdge, UIPoint } from "../ui-models.ts";
 import { EdgeModel } from "../models/EdgeModel.ts";
-import { PointModel } from "../models/PointModel.ts";
 import { PointGraphManager } from "../PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
   private edges: EdgeModel[] = [];
-  private points: PointModel[] = [];
   private d3Edges: d3.Selection<SVGLineElement, EdgeModel, SVGGElement, unknown> | null = null;
 
-  unregisterSelectedPoint: () => void;
+  private unregisterSelectedPoint: () => void;
   private unsubPointsGraphUpdated: () => void;
-  private unsubPointsMoved: (() => void) | null = null;
+  private unsubPointsUpdating: () => void;
+  private unsubPointUpdated: (() => void) | null = null;
   private unsubPointsUpdated: (() => void) | null = null;
 
   constructor(
@@ -26,15 +25,7 @@ export class EdgesScene {
     this.syncRefs();
     this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
-    this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point?.id ?? null));
 
-    // Граф хранится в PointGraphManager. Через mediator приходит только сигнал.
-    this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
-      this.syncRefs();
-      this.renderLines();
-    });
-
-    this.mediator.onPointsUpdating(() => this.updateLines());
     this.rootGroup.on("click", (event) => {
       const target = event.target as Element;
       const line = target.closest?.(".highlighted");
@@ -51,12 +42,16 @@ export class EdgesScene {
       this.mediator.selectedEdge = uiEdge;
     });
 
+    this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point));
+    this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => this.renderLines());
+    this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateLines());
     this.unsubPointsUpdated = this.mediator.onPointsUpdated(() => this.updateLines());
-    this.unsubPointsMoved = this.mediator.onPointUpdated(() => this.updateLines());
+    this.unsubPointUpdated = this.mediator.onPointUpdated((point) => this.updateLines());
   }
 
   // Подсветка рёбер, инцидентных данной точке (или снятие подсветки).
-  private highlightEdgesForPoint(pointId: string | null): void {
+  private highlightEdgesForPoint(point: UIPoint | null): void {
+    const pointId = point?.id ?? null;
     if (!this.d3Edges) return;
     if (!pointId) {
       this.d3Edges.classed("highlighted", false);
@@ -74,30 +69,10 @@ export class EdgesScene {
   public destroy(): void {
     if (this.unregisterSelectedPoint) this.unregisterSelectedPoint();
     if (this.unsubPointsGraphUpdated) this.unsubPointsGraphUpdated();
-    if (this.unsubPointsMoved) this.unsubPointsMoved();
+    if (this.unsubPointUpdated) this.unsubPointUpdated();
     if (this.unsubPointsUpdated) this.unsubPointsUpdated();
+    if (this.unsubPointsUpdating) this.unsubPointsUpdating();
     this.clear();
-  }
-
-  /** Обновить отображение после изменения графа в PointGraphManager. */
-  public setEdges(_edges: EdgeModel[]): void {
-    this.syncRefs();
-    this.renderLines();
-  }
-
-  public removeEdges(ids: string[]): void {
-    for (const id of ids) {
-      const edge = this.pointGraphManager.getEdgeCollection().getById(id);
-      if (edge) {
-        this.pointGraphManager.removeEdge(edge);
-      }
-    }
-    this.renderLines();
-  }
-
-  public removeEdgesBy(predicate: (edge: EdgeModel) => boolean): void {
-    const toDeleteIds = this.edges.filter(predicate).map((e) => e.id);
-    this.removeEdges(toDeleteIds);
   }
 
   public clear(): void {
@@ -130,16 +105,11 @@ export class EdgesScene {
     this.d3Edges.style("stroke-width", 2 * invScale);
   }
 
-  public getEdges(): EdgeModel[] {
-    return this.edges;
-  }
-
   public getEdgeById(id: string): EdgeModel | null {
     return this.pointGraphManager.getEdgeCollection().getById(id);
   }
 
   private syncRefs(): void {
     this.edges = this.pointGraphManager.getEdgesArray();
-    this.points = this.pointGraphManager.getPointsArray();
   }
 }

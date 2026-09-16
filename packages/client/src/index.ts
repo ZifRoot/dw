@@ -41,7 +41,7 @@ mediator.selectedEdge = null;
 setTimeout(() => (mediator.autoZoom = false), 0);
 
 const svgEngine = new SvgEngine(canvasDiv);
-const pointGraphManager = new PointGraphManager();
+const pointGraphManager = new PointGraphManager(mediator);
 
 const pointsScene = new PointsScene(svgEngine, mediator, pointGraphManager);
 const edgesScene = new EdgesScene(svgEngine, mediator, pointGraphManager);
@@ -53,7 +53,7 @@ const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGrap
 
 // ModelManager и сцены используют один PointGraphManager.
 // Через mediator передаются только сигналы, а не массивы точек/рёбер.
-const modelManager = new ModelManager(mediator, pointGraphManager);
+const modelManager = new ModelManager(mediator, pointGraphManager, 16);
 
 const zdampingEngine = new ZDampingEngine(mediator, animationEngine, new ZDampingConfig());
 const graphEngine = new GraphEngine(mediator, animationEngine, new GraphEngineConfig());
