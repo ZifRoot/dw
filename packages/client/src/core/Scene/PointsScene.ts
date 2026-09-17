@@ -260,6 +260,7 @@ export class PointsScene {
       pinned: point.pinned,
       selected: point.selected,
       neighbors,
+      embeddingModelNames: Array.from(point.embeddings.values()).map((embedding) => embedding.modelName),
     };
   }
 
