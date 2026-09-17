@@ -14,6 +14,11 @@ interface ScoredCandidate {
   isNew: boolean;
 }
 
+export interface ModelPointCount {
+  modelName: string;
+  pointCount: number;
+}
+
 /**
  * ModelManager – строит и постепенно улучшает граф ближайших соседей.
  *
@@ -74,6 +79,30 @@ export class ModelManager {
 
   public getPointGraphManager(): PointGraphManager {
     return this.pointGraphManager;
+  }
+
+  /**
+   * Возвращает модели, отсортированные по количеству точек,
+   * содержащих embedding этой модели.
+   *
+   * Сначала идут модели, присутствующие у большего количества точек.
+   * Одна точка учитывается не более одного раза для каждой модели.
+   */
+  public getModelsByPointCount(): ModelPointCount[] {
+    const modelPointCounts = new Map<string, number>();
+
+    for (const point of this.pointGraphManager.getPoints()) {
+      for (const modelName of point.embeddings.keys()) {
+        modelPointCounts.set(
+          modelName,
+          (modelPointCounts.get(modelName) ?? 0) + 1,
+        );
+      }
+    }
+
+    return Array.from(modelPointCounts.entries())
+      .map(([modelName, pointCount]) => ({ modelName, pointCount }))
+      .sort((a, b) => b.pointCount - a.pointCount);
   }
 
   public destroy(): void {
