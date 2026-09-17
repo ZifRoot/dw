@@ -51,21 +51,17 @@ AppMediator
 
 ### 3.1 View Graph получает Model напрямую
 
-`PointsScene` получает `PointGraphManager` и сохраняет ссылку на живой массив через `getPointsArray()`. `EdgesScene` аналогично получает живой массив рёбер через `getEdgesArray()`. Это соответствует правилу:
+`PointsScene` получает `PointGraphManager` и сохраняет ссылку на живой массив через `getPointsArray()`. `EdgesScene` аналогично получает живой массив рёбер через `getEdgesArray()`.
+
+Это соответствует правилу:
 
 ```text
 Model → View Graph напрямую
 ```
 
-`PointsScene` действительно работает с `PointModel`, а `EdgesScene` — с `EdgeModel`, а не с массивами моделей, переданными через Mediator.
-
-Факты в `dev`: `PointsScene.syncRefs()` использует `pointGraphManager.getPointsArray()`, `EdgesScene.syncRefs()` — `pointGraphManager.getEdgesArray()`. fileciteturn166file0L2-L2 fileciteturn167file0L2-L2
-
 ### 3.2 Mediator не используется как хранилище графа
 
-`AppMediator` содержит сигналы и небольшой UI-state. Для `POINT_UPDATED` передаётся только `pointId`, а не `PointModel`. Это соответствует текущему положению.
-
-`PointsTransformer` получает актуальную точку из `PointGraphManager` по ID. fileciteturn157file0L2-L2 fileciteturn156file0L2-L2
+`AppMediator` содержит сигналы и небольшой UI-state. Для `POINT_UPDATED` передаётся только `pointId`, а не `PointModel`. `PointsTransformer` получает актуальную точку из `PointGraphManager` по ID.
 
 ### 3.3 Table ↔ Model находится в PointsTransformer
 
@@ -77,60 +73,48 @@ EmbeddingTable → PointModel.embeddings
 EdgeTable → EdgeRef
 ```
 
-и при сохранении преобразует Model обратно в Table. Это соответствует архитектуре. fileciteturn156file0L2-L2
+и при сохранении преобразует Model обратно в Table.
 
 ### 3.4 PointGraphManager является общей точкой доступа
 
-`index.ts` создаёт один `PointGraphManager` и передаёт тот же экземпляр в `PointsScene`, `EdgesScene`, `PointsTransformer` и `ModelManager`. Это соответствует требованию единого экземпляра.
-
-fileciteturn168file0L2-L2
+`index.ts` создаёт один `PointGraphManager` и передаёт тот же экземпляр в `PointsScene`, `EdgesScene`, `PointsTransformer` и `ModelManager`.
 
 ### 3.5 NeighborGraph хранит собственную коллекцию рёбер
 
-В `dev` `NeighborGraph` содержит собственный `edgeCollection` и `adjacency`. `edgeCollection` документирован как источник истины. Это соответствует явно зафиксированному решению не выносить хранилище рёбер наружу.
-
-fileciteturn154file0L2-L2
+В `dev` `NeighborGraph` содержит собственный `edgeCollection` и `adjacency`. `edgeCollection` является источником истины.
 
 ### 3.6 Physics уже использует AnimationEngine
 
-`RepulsionEngine`, `GraphEngine` и `ZDampingEngine` регистрируют свои callbacks в `AnimationEngine`, а сам `AnimationEngine` вызывает `requestAnimationFrame`. Это соответствует общей модели animation callback.
-
-fileciteturn161file0L2-L2 fileciteturn169file0L2-L2 fileciteturn170file0L2-L2 fileciteturn171file0L2-L2
+`RepulsionEngine`, `GraphEngine` и `ZDampingEngine` регистрируют callbacks в `AnimationEngine`, а `AnimationEngine` непосредственно вызывает `requestAnimationFrame`.
 
 ---
 
 ## 4. Расхождения
 
-## 4.1 `ModelManager` напрямую вызывает `requestAnimationFrame`
+### 4.1 `ModelManager` напрямую вызывает `requestAnimationFrame`
 
 **Эталон:** только `AnimationEngine` непосредственно вызывает `requestAnimationFrame`.
 
 **Фактический код:** `ModelManager` содержит собственные `rafId`, `generation`, `startOptimization()`, `stopOptimization()` и вызывает `requestAnimationFrame()` непосредственно.
 
-fileciteturn153file0L2-L2
-
-### Следствие
-
-В системе фактически существует второй независимый animation loop:
+Следовательно, фактически существуют два независимых animation loop:
 
 ```text
 AnimationEngine → requestAnimationFrame
 ModelManager    → requestAnimationFrame
 ```
 
-Это противоречит зафиксированному правилу единого владельца RAF.
+Это противоречит правилу единого владельца RAF.
 
-### Отдельный вопрос
-
-`ModelManager` — не physics engine, поэтому после устранения прямого RAF нужно отдельно определить, как именно его инкрементальная оптимизация будет использовать `AnimationEngine`. Архитектурное правило уже определено, конкретный API для этого ещё нет.
+`ModelManager` — не physics engine, поэтому конкретный API его работы через `AnimationEngine` требует отдельного проектирования.
 
 ---
 
-## 4.2 `PointGraphManager` сам реализует `EdgeRef → EdgeModel`
+### 4.2 `PointGraphManager` сам реализует `EdgeRef → EdgeModel`
 
 **Эталон:** создание `EdgeModel` должно быть вынесено в фабрику в контексте `ModelManager`, затем фабрика передаётся через `PointGraphManager` в `NeighborGraph`.
 
-**Фактический код:** `PointGraphManager` содержит `edgeIndexToEdgeModel()` и передаёт в `NeighborGraph` фабрику:
+**Фактический код:** `PointGraphManager` содержит `edgeIndexToEdgeModel()` и передаёт в `NeighborGraph` фабрику.
 
 ```text
 PointGraphManager
@@ -139,17 +123,13 @@ PointGraphManager
        NeighborGraph
 ```
 
-Кроме того, конструктор `PointGraphManager` принимает `AppMediator`, хотя его задача по архитектуре — управление Model/Graph. fileciteturn151file0L2-L2
+`IEdgeModelFactory` уже существует и используется `NeighborGraph`, но создаётся фактически внутри `PointGraphManager`.
 
-`IEdgeModelFactory` при этом существует, а `NeighborGraph` действительно принимает её через конструктор. fileciteturn155file0L2-L2 fileciteturn154file0L2-L2
-
-### Статус
-
-Это не нарушение инварианта графа. Это расхождение ответственности, которое уже было отдельно отмечено в текущем положении. Перепроектировать его вместе с `EdgeRef` без анализа всех путей использования не следует.
+Это расхождение ответственности. Его не следует перепроектировать одновременно с `EdgeRef` без отдельного анализа всех путей использования `EdgeRef`.
 
 ---
 
-## 4.3 `PointsScene` напрямую меняет количество PointModel
+### 4.3 `PointsScene` напрямую меняет количество PointModel
 
 **Эталон:** количество Model-сущностей изменяется через `PointGraphManager`.
 
@@ -159,47 +139,43 @@ PointGraphManager
 this.pointGraphManager.getPointCollection().removes(ids)
 ```
 
-fileciteturn166file0L2-L2
+Это обход API `PointGraphManager`.
 
-### Почему это важно
-
-Это обход API `PointGraphManager`. В результате `PointGraphManager` перестаёт быть единственной точкой управления жизненным циклом `PointModel`.
-
-### Дополнительная проблема
-
-`removePoints()` удаляет DOM-элементы и точки, но не вызывает `PointGraphManager.remove...` для связанных рёбер. Следовательно, код этого метода не использует механизм удаления dangling edges, описанный для `PointGraphManager`.
-
-Это уже не только архитектурное расхождение, но и потенциальный источник рассинхронизации Model/Graph.
+Кроме того, `removePoints()` удаляет точки, но не вызывает удаление связанных рёбер через `PointGraphManager`. Это потенциально нарушает инвариант отсутствия dangling edges.
 
 ---
 
-## 4.4 Уведомление об изменениях Model при drag не унифицировано
+### 4.4 Уведомление об изменениях Model при drag не унифицировано
 
-`PointsScene` непосредственно меняет `PointModel.x` и `PointModel.y` в `onDrag` и `updatePointPosition()`. При завершении drag устанавливается `dragged = false`, но соответствующий сигнал `pointUpdated()` в этом пути не вызывается.
+`PointsScene` непосредственно меняет `PointModel.x` и `PointModel.y` при drag. При завершении drag `pointUpdated()` не вызывается.
 
-fileciteturn166file0L2-L2
+При этом уже существует механизм:
 
-При этом `AppMediator` и `PointsTransformer` уже имеют отдельный механизм `POINT_UPDATED → pointId → сохранение точки`. fileciteturn157file0L2-L2 fileciteturn156file0L2-L2
+```text
+POINT_UPDATED
+    ↓
+pointId
+    ↓
+PointsTransformer
+    ↓
+savePoints()
+```
 
-### Статус
-
-Прямое изменение полей Model разрешено текущей архитектурой. Не определено только единое правило, **когда именно такое изменение должно порождать системное событие**.
-
----
-
-## 4.5 Дублирование состояния выбора PointModel / UI
-
-`PointModel` содержит `selected`. fileciteturn173file0L2-L2
-
-Одновременно `AppMediator` хранит `selectedPoint` типа `UIPoint | null`, а `PointsScene` при выборе точки изменяет оба представления. fileciteturn157file0L2-L2 fileciteturn166file0L2-L2
-
-### Статус
-
-Это соответствует ранее отмеченной проблеме дублирования UI-state и Model-state. Пока не принято отдельное решение, какое состояние является источником истины для selection.
+Прямое изменение полей Model разрешено. Не определено только единое правило, когда такое изменение должно порождать системное событие.
 
 ---
 
-## 4.6 Physics engines не полностью оформлены как Pipeline
+### 4.5 Дублирование состояния выбора PointModel / UI
+
+`PointModel` содержит `selected`.
+
+Одновременно `AppMediator` хранит `selectedPoint: UIPoint | null`, а `PointsScene` при выборе точки изменяет оба представления.
+
+Пока не принято отдельное решение, какое состояние является источником истины для selection.
+
+---
+
+### 4.6 Physics engines не полностью оформлены как Pipeline
 
 Фактически сейчас:
 
@@ -210,53 +186,45 @@ AnimationEngine
     └── ZDampingEngine
 ```
 
-Каждый engine сам регистрирует callback в `AnimationEngine`. `EnginePipeline` отсутствует. Это соответствует текущему фактическому состоянию, но не будущему архитектурному направлению.
+Каждый engine сам регистрирует callback в `AnimationEngine`. `EnginePipeline` отсутствует.
 
-Кроме того, в `index.ts` engines создаются независимо, а порядок вызова определяется порядком callback'ов `Set`, а не отдельным объектом `EnginePipeline`. fileciteturn168file0L2-L2 fileciteturn161file0L2-L2
+Порядок выполнения фактически определяется порядком callbacks в `Set`, а не отдельным объектом `EnginePipeline`.
 
-### Статус
-
-Расхождение с архитектурной целью, а не с текущим обязательным API.
+Это расхождение с архитектурной целью, но не с уже существующим обязательным API.
 
 ---
 
-## 4.7 Подписки physics engines на Mediator не имеют lifecycle unsubscribe
+### 4.7 Physics engines не имеют полного lifecycle unsubscribe
 
-`RepulsionEngine`, `GraphEngine` и `ZDampingEngine` подписываются на `onStartRepulsion()` в конструкторах, но в самих классах нет `destroy()` и нет сохранённой функции отписки.
+`RepulsionEngine`, `GraphEngine` и `ZDampingEngine` подписываются на `AppMediator` в конструкторах, но не сохраняют unsubscribe-функции и не предоставляют `destroy()`.
 
-fileciteturn169file0L2-L2 fileciteturn170file0L2-L2 fileciteturn171file0L2-L2
-
-Это не противоречит непосредственно data flow, но противоречит требованию управляемого lifecycle компонентов и становится важным при повторной инициализации/уничтожении подсистем.
+Это lifecycle-проблема, которая проявится при повторной инициализации/уничтожении подсистем.
 
 ---
 
-## 4.8 `PointsScene` не отписывает все созданные Mediator subscriptions
+### 4.8 `PointsScene` не отписывает все созданные Mediator subscriptions
 
-`PointsScene.destroy()` отписывает `unsubPointsGraphUpdated` и drag detector. Однако в `subscribeToMediatorEvents()` вызываются `onPointUpdate`, `onPointsUpdating`, `onSizeText`, а возвращаемые unsubscribe-функции не сохраняются.
+`PointsScene.destroy()` отписывает `POINTS_GRAPH_UPDATED` и drag detector. Но subscriptions, созданные в `subscribeToMediatorEvents()` (`onPointUpdate`, `onPointsUpdating`, `onSizeText`), не сохраняются для последующей отписки.
 
-fileciteturn166file0L2-L2
-
-Это lifecycle-расхождение. Особенно важно для сценария повторного создания/уничтожения Scene.
+Это lifecycle-расхождение.
 
 ---
 
-## 4.9 `EdgesScene` использует live array, но обновление ссылки формально не требуется
+### 4.9 `EdgesScene` и live array
 
-`EdgesScene` вызывает `syncRefs()` только в конструкторе, при этом `PointGraphManager.getEdgesArray()` возвращает живой массив. Поэтому изменение состава массива через `NeighborGraph` будет видно сцене без повторного `syncRefs()`.
+`EdgesScene` вызывает `syncRefs()` только при создании, но `getEdgesArray()` возвращает живой массив. Поэтому изменение состава массива через `NeighborGraph` будет видно сцене без повторного получения массива.
 
-Это **не расхождение** с архитектурой. Наоборот, это подтверждает смысл решения о live references.
-
-При этом `EdgesScene` реагирует на `POINTS_GRAPH_UPDATED` через `renderLines()`, что обеспечивает синхронизацию DOM после изменения состава графа. fileciteturn167file0L2-L2
+Это **не расхождение**. Это соответствует выбранной архитектуре live references.
 
 ---
 
-## 4.10 Потенциальное несоответствие команды запуска Graph
+### 4.10 Потенциальное несоответствие команды запуска Graph
 
-В `AppMediator` существует отдельная команда `START_GRAPH`, но `GraphEngine` в конструкторе подписывается на `onStartRepulsion()`, а не на `onStartGraph()`.
+В `AppMediator` существует отдельная команда `START_GRAPH`, но `GraphEngine` подписывается на `onStartRepulsion()`, а не на `onStartGraph()`.
 
-`index.ts` также создаёт `GraphEngine`, но не показывает отдельной связи `START_GRAPH → GraphEngine.start()`. fileciteturn157file0L2-L2 fileciteturn169file0L2-L2 fileciteturn168file0L2-L2
+`index.ts` также не показывает отдельной связи `START_GRAPH → GraphEngine.start()`.
 
-Это функциональное расхождение, связанное с event flow, а не с Model → View границей. Его стоит проверить отдельно до изменения архитектуры.
+Это функциональное расхождение event flow, которое стоит проверить отдельно до архитектурного рефакторинга.
 
 ---
 
