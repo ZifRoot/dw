@@ -89,7 +89,7 @@ export class ModelManager {
     if (this.optimizationCallback !== null) return;
     if (this.pointGraphManager.getPoints().length < 2) return;
 
-    this.optimizationCallback = this.animation.addCallback(() => this.runStep());
+    // this.optimizationCallback = this.animation.addCallback(() => this.runStep());
   }
 
   /**

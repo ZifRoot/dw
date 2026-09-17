@@ -62,7 +62,6 @@ export class PointsScene {
     const selectedPoint = this.points.find((item) => item.selected);
     if (selectedPoint) {
       selectedPoint.selected = false;
-      // this.domMap.get()
       this.updateAllProperties(this.d3Points);
     }
   }
@@ -192,18 +191,22 @@ export class PointsScene {
       element,
       callbacks: {
         onDrag: (el, deltaWorld) => {
-          const g = d3.select<SVGGElement, PointModel>(el as SVGGElement);
-          g.each((p) => {
+          const d3Dom = d3.select<SVGGElement, PointModel>(el as SVGGElement);
+          const p = d3Dom.datum();
+          if (!p) return;
+          d3Dom.each((p) => {
             p.x += deltaWorld[0];
             p.y += deltaWorld[1];
           });
-          this.updateAllProperties(g);
+          this.updateAllProperties(d3Dom);
+          this.mediator.pointUpdating(p.id);
         },
         onDragEnd: (el) => {
-          const p = d3.select<SVGGElement, PointModel>(el as SVGGElement).datum();
+          let d3Dom = d3.select<SVGGElement, PointModel>(el as SVGGElement);
+          const p = d3Dom.datum();
           if (!p) return;
           p.dragged = false;
-          this.updateAllProperties(d3.select(el as SVGGElement));
+          this.updateAllProperties(d3Dom);
 
           // Сигнализируем о завершённом изменении Model-позиции.
           this.mediator.pointUpdated(p.id);

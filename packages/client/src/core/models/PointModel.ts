@@ -15,6 +15,9 @@ export class PointModel extends Point {
     public pinned: boolean = false,
   ) {
     super(point.x, point.y, point.z);
+    dragged??=false;
+    selected??=false;
+    pinned??=false;
   }
 
   get fixed(): boolean {

@@ -14,6 +14,7 @@ export class EdgesScene {
   private unsubPointsGraphUpdated: () => void;
   private unsubPointsUpdating: () => void;
   private unsubPointUpdated: (() => void) | null = null;
+  private unsubPointUpdating: (() => void) | null = null;
   private unsubPointsUpdated: (() => void) | null = null;
 
   constructor(
@@ -33,6 +34,7 @@ export class EdgesScene {
     this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateLines());
     this.unsubPointsUpdated = this.mediator.onPointsUpdated(() => this.updateLines());
     this.unsubPointUpdated = this.mediator.onPointUpdated((point) => this.updateLines());
+    this.unsubPointUpdating = this.mediator.onPointUpdating((point) => this.updateLines());
   }
 
   groupClick(event: any) {
@@ -72,8 +74,9 @@ export class EdgesScene {
     if (this.unregisterSelectedPoint) this.unregisterSelectedPoint();
     if (this.unsubPointsGraphUpdated) this.unsubPointsGraphUpdated();
     if (this.unsubPointUpdated) this.unsubPointUpdated();
+    if (this.unsubPointUpdating) this.unsubPointUpdating();
     if (this.unsubPointsUpdated) this.unsubPointsUpdated();
-    if (this.unsubPointsUpdating) this.unsubPointsUpdating();
+    if (this.unsubPointsUpdating) this.unsubPointsUpdating();    
     this.clear();
   }
 
