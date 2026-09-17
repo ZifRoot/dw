@@ -1,4 +1,10 @@
 // core/ui-models.ts
+export interface UIPointNeighbor {
+  id: string;
+  name: string;
+  cosineDistance: number;
+}
+
 export interface UIPoint {
   id: string;
   x: number;
@@ -7,6 +13,7 @@ export interface UIPoint {
   text: string;
   pinned: boolean;
   selected: boolean;
+  neighbors: UIPointNeighbor[];
 }
 
 export interface UIEdge {
