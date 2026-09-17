@@ -238,18 +238,18 @@ export class PointsScene {
 
       // PointModel.selected — единственный источник состояния выбора.
       const previousPoint = this.points.find((point) => point.selected) ?? null;
+      const point = this.dom2Model(domEle);
+
       if (previousPoint) {
         previousPoint.selected = false;
       }
 
-      // Если кликнули по пустому месту - снимаем выделение.
-      const point = this.dom2Model(domEle);
-
-      if (point) {
-        point.selected = point.id !== previousPoint?.id;
+      // Повторный клик по выбранной точке снимает выбор.
+      if (point && point !== previousPoint) {
+        point.selected = true;
       }
 
-      this.mediator.selectPoint(this.model2UI(point));
+      this.mediator.selectPoint(point && point !== previousPoint ? this.model2UI(point) : null);
       this.applyUpdatesToGroups(this.d3Points);
     });
   }
