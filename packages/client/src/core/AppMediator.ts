@@ -73,13 +73,6 @@ export class AppMediator extends BaseMediator {
     this.set(AppMediator.AUTO_ZOOM, value);
   }
 
-  public get selectedPoint(): UIPoint | null {
-    return this.get(AppMediator.SELECTED_POINT) ?? null;
-  }
-  public set selectedPoint(value: UIPoint | null) {
-    this.set(AppMediator.SELECTED_POINT, value);
-  }
-
   public get selectedEdge(): UIEdge | null {
     return this.get(AppMediator.SELECTED_EDGE) ?? null;
   }
@@ -92,6 +85,14 @@ export class AppMediator extends BaseMediator {
   }
   public set sizeText(value: number) {
     this.set(AppMediator.SIZE_TEXT, value);
+  }
+
+  /**
+   * Уведомить UI о текущем выборе.
+   * Само состояние выбора хранится в PointModel и не дублируется в медиаторе.
+   */
+  public selectPoint(value: UIPoint | null): void {
+    this.emit(AppMediator.SELECTED_POINT, value);
   }
 
   public updatePoint(pointId: string, changes: Partial<Omit<UIPoint, "id">>): void {
