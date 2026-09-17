@@ -82,7 +82,7 @@ export class PointsTransformer {
       const doc = pointMap.get(emb.session_id);
       if (!doc) continue;
       if (!doc.embeddings.has(emb.model_name)) {
-        const model = new EmbeddingModel(emb.session_id, emb.model_name, emb.value, emb.created_at, emb.processingTimeMs ?? 0, 0.5);
+        const model = new EmbeddingModel(emb.session_id, emb.model_name, emb.value, emb.created_at, emb.processingTimeMs ?? 0);
         doc.embeddings.set(emb.model_name, model);
       }
     }
