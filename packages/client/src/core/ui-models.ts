@@ -13,7 +13,7 @@ export interface UIPoint {
   text: string;
   pinned: boolean;
   selected: boolean;
-  neighbors: UIPointNeighbor[];
+  neighbors?: UIPointNeighbor[];
 }
 
 export interface UIEdge {
