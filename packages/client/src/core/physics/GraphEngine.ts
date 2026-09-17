@@ -11,14 +11,20 @@ export class GraphEngineConfig {
 export class GraphEngine {
   private temperature = 0;
   edges!: EdgeModel[];
-  unsubCallback: AnimationCallback | null = null;
+  private unsubCallback: AnimationCallback | null = null;
+  private readonly unsubStartRepulsion: () => void;
 
   constructor(
     public mediator: AppMediator,
     public animation: AnimationEngine,
     public config: GraphEngineConfig,
   ) {
-    this.mediator.onStartRepulsion(() => this.start());
+    this.unsubStartRepulsion = this.mediator.onStartRepulsion(() => this.start());
+  }
+
+  public destroy(): void {
+    this.stop();
+    this.unsubStartRepulsion();
   }
 
   start() {
@@ -47,9 +53,9 @@ export class GraphEngine {
   public applyStep(): number {
     let maxShift = -1;
     for (let i = 0; i < this.edges.length; i++) {
-      let edge = this.edges[i];
+      const edge = this.edges[i];
 
-      let temp = this.applyPair(edge);
+      const temp = this.applyPair(edge);
       maxShift = Math.max(maxShift, temp);
     }
     return maxShift;
