@@ -9,7 +9,6 @@
  * - intersection – пересечение множеств
  * - mapAsync – асинхронный маппинг с контролем параллелизма
  * - randomElement – генератор случайных элементов
- * - asGenerator – преобразование массива в генератор
  *
  * Все методы добавляются в прототип Array безопасно (с проверкой на существование)
  * и также доступны как статические функции.
@@ -27,11 +26,6 @@ declare global {
      * @param keySelector - имя поля (строковый ключ) или функция, возвращающая ключ для сравнения (строка/число/символ)
      * @param strategy - стратегия отбора: 'first' (первое вхождение) или 'last' (последнее)
      * @returns Новый массив с уникальными элементами, порядок сохранён по первому массиву
-     *
-     * @example
-     * const arr = [{ id: 1, name: 'a' }, { id: 2, name: 'b' }, { id: 1, name: 'c' }];
-     * arr.uniqueBy('id', 'first'); // [{ id: 1, name: 'a' }, { id: 2, name: 'b' }]
-     * arr.uniqueBy(item => item.id, 'last'); // [{ id: 2, name: 'b' }, { id: 1, name: 'c' }]
      */
     uniqueBy<K extends keyof T | ((item: T) => PropertyKey)>(keySelector: K, strategy?: "first" | "last"): T[];
 
@@ -39,10 +33,6 @@ declare global {
      * Группирует элементы массива по ключу.
      * @param keySelector - функция, возвращающая ключ для группировки
      * @returns Map, где ключ — результат keySelector, значение — массив элементов
-     *
-     * @example
-     * const arr = [{ type: 'fruit', name: 'apple' }, { type: 'fruit', name: 'banana' }, { type: 'veg', name: 'carrot' }];
-     * arr.groupBy(item => item.type); // Map { 'fruit' => [{...}, {...}], 'veg' => [{...}] }
      */
     groupBy<K>(keySelector: (item: T) => K): Map<K, T[]>;
 
@@ -51,11 +41,6 @@ declare global {
      * @param keySelector - функция, возвращающая ключ для группировки
      * @param em - функция, преобразующая массив элементов группы в значение Y
      * @returns Map, где ключ — результат keySelector, значение — результат em
-     *
-     * @example
-     * const arr = [1, 2, 3, 4, 5];
-     * arr.groupBy(x => x % 2 === 0 ? 'even' : 'odd', group => group.reduce((a,b)=>a+b,0));
-     * // Map { 'odd' => 9, 'even' => 6 }
      */
     groupBy<K, Y>(keySelector: (item: T) => K, em: (items: T[]) => Y): Map<K, Y>;
 
@@ -66,21 +51,12 @@ declare global {
      * @param del - вызывается для каждого удалённого объекта (перед удалением)
      * @param add - вызывается для объекта, который перезаписывает удалённую позицию (с его новым индексом)
      * @remarks Метод изменяет исходный массив.
-     *
-     * @example
-     * const arr = ['a','b','c','d'];
-     * arr.removeByIndices([1,2], (x) => console.log(`Удалён ${x}`), (x, idx) => console.log(`Перемещён ${x} на ${idx}`));
-     * // Удалён b, Перемещён d на 1, Удалён c (по факту arr = ['a','d'])
      */
     removeByIndices(indices: number[], del: (item: T) => void, add: (item: T, index: number) => void): void;
 
     /**
      * Перемешивает массив случайным образом (алгоритм Фишера–Йетса).
      * @returns Новый массив с перемешанными элементами (исходный массив не меняется)
-     *
-     * @example
-     * const arr = [1,2,3,4,5];
-     * const shuffled = arr.shuffle(); // случайный порядок
      */
     shuffle(): T[];
 
@@ -89,11 +65,6 @@ declare global {
      * присутствующие как в текущем массиве, так и в переданном.
      * @param other - массив для пересечения
      * @returns Массив с элементами пересечения (порядок сохраняется по первому массиву, дубликаты удалены)
-     *
-     * @example
-     * const arr1 = [1,2,2,3,4];
-     * const arr2 = [2,3,5];
-     * arr1.intersection(arr2); // [2,3]
      */
     intersection(other: T[]): T[];
 
@@ -103,14 +74,6 @@ declare global {
      * @param callbackfn - асинхронная функция, применяемая к каждому элементу. Принимает (значение, индекс, массив).
      * @param concurrency - максимальное количество одновременных задач. Если 0 или меньше, выполняется без ограничений.
      * @returns Promise, разрешающийся в массив результатов того же порядка, что и исходный.
-     *
-     * @example
-     * const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-     * const result = await [1, 2, 3, 4, 5].mapAsync(async (x) => {
-     *   await delay(1000);
-     *   return x * 2;
-     * }, 2); // Не более 2 задач одновременно
-     * // result: [2, 4, 6, 8, 10]
      */
     mapAsync<U>(callbackfn: (value: T, index: number, array: T[]) => Promise<U>, concurrency?: number): Promise<U[]>;
 
@@ -132,17 +95,6 @@ declare global {
      * generator.next().value;
      */
     randomElement(): Generator<T>;
-
-    /**
-     * Возвращает генератор, последовательно перебирающий элементы массива.
-     *
-     * @returns Генератор элементов массива
-     *
-     * @example
-     * const generator = [1, 2, 3, 4, 5].asGenerator();
-     * const result = generator.Take(3);
-     */
-    asGenerator(): Generator<T>;
   }
 }
 
@@ -301,16 +253,6 @@ function* randomElement<T>(array: T[]): Generator<T> {
 }
 
 /**
- * Последовательно генерирует все элементы массива.
- *
- * @param array - исходный массив
- * @yields Элементы массива в исходном порядке
- */
-function* asGenerator<T>(array: T[]): Generator<T> {
-  yield* array;
-}
-
-/**
  * Ошибка, содержащая частично выполненные результаты.
  */
 class MapAsyncError extends Error {
@@ -464,18 +406,7 @@ if (!Array.prototype.randomElement) {
   });
 }
 
-if (!Array.prototype.asGenerator) {
-  Object.defineProperty(Array.prototype, "asGenerator", {
-    value: function <T>(this: T[]): Generator<T> {
-      return asGenerator(this);
-    },
-    writable: true,
-    configurable: true,
-    enumerable: false,
-  });
-}
-
 // ============================================================
 // 4. Единый экспорт всех функций
 // ============================================================
-export { uniqueBy, uniqueById, groupToMap, groupToMapEm, removeByIndices, shuffle, intersection, mapAsync, randomElement, asGenerator };
+export { uniqueBy, uniqueById, groupToMap, groupToMapEm, removeByIndices, shuffle, intersection, mapAsync, randomElement };
