@@ -14,6 +14,7 @@ export interface UIPoint {
   pinned: boolean;
   selected: boolean;
   neighbors?: UIPointNeighbor[];
+  embeddingModelNames?: string[];
 }
 
 export interface UIEdge {
