@@ -245,9 +245,6 @@ export class PointGraphManager {
     return this.pointCollection;
   }
 
-  public getAllEdgeRefs(): EdgeRef[] {
-    return this.graph.getAllEdgeRefs();
-  }
 
   /**
    * Преобразовать массив EdgeRef в массив EdgeModel, используя внутреннюю коллекцию точек.

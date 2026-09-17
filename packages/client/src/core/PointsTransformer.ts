@@ -8,6 +8,7 @@ import { PointModel } from "./models/PointModel";
 import { EmbeddingModel } from "./models/EmbeddingModel";
 import { EdgeRefs } from "./models/EdgeRefs";
 import { PointGraphManager } from "./PointGraphManager";
+import { EdgeModel } from "./models/EdgeModel";
 
 export class PointsTransformer {
   private unsubPointsUpdated: () => void;
@@ -56,7 +57,7 @@ export class PointsTransformer {
 
   /** Обновить PointGraphManager и уведомить подписчиков через медиатор. */
   private updatePointGraphManager(points: PointModel[], edges: EdgeRefs): void {
-    this.pointGraphManager.update(points,edges);    
+    this.pointGraphManager.update(points, edges);
   }
 
   private convertPointsTableToModel(pointsTable: PointTable[]): PointModel[] {
@@ -99,9 +100,9 @@ export class PointsTransformer {
     await this.dataManager.savePointsTable(pointTables);
   }
 
-  private async saveEdges(edges: EdgeRefs): Promise<void> {
+  private async saveEdges(edges: EdgeModel[]): Promise<void> {
     const edgeTables: EdgeTable[] = edges.map((e) => ({
-      id: `${e.sourceId}-${e.targetId}`,
+      id: e.id,
       source_id: e.sourceId,
       target_id: e.targetId,
       model_name: e.modelName,
@@ -115,7 +116,7 @@ export class PointsTransformer {
   private async saveScene(): Promise<void> {
     try {
       const points = this.pointGraphManager.getPoints();
-      const edges = this.pointGraphManager.getAllEdgeRefs();
+      const edges = this.pointGraphManager.getEdgesArray();
 
       await this.savePoints(points);
       await this.saveEdges(edges);

@@ -23,9 +23,6 @@ interface ScoredCandidate {
  * времени. Это позволяет не блокировать основной поток браузера.
  */
 export class ModelManager {
-  private edges: EdgeModel[] = [];
-  private readonly edgeWeight = 100;
-
   private readonly K: number;
   private readonly randomCandidates: number;
   private readonly frameBudgetMs: number;
@@ -77,10 +74,7 @@ export class ModelManager {
 
     this.generation++;
     const generation = this.generation;
-    setTimeout(() => {
-      this.runFrame(generation);
-    }, 1000);
-    //  this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+    this.rafId = requestAnimationFrame(() => this.runFrame(generation));
   }
 
   /**
@@ -121,7 +115,6 @@ export class ModelManager {
       }
 
       if (graphChanged) {
-        this.rebuildEdges();
         this.mediator.pointsGraphUpdated();
       }
     } finally {
@@ -143,7 +136,7 @@ export class ModelManager {
       this.iterationChanged = true;
     }
 
-    //  this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+    this.rafId = requestAnimationFrame(() => this.runFrame(generation));
   }
 
   /**
@@ -281,20 +274,5 @@ export class ModelManager {
 
     if (norm1 === 0 || norm2 === 0) return 1;
     return 1 - dot / (Math.sqrt(norm1) * Math.sqrt(norm2));
-  }
-
-  private rebuildEdges(): void {
-    const edgeRefs = this.pointGraphManager.getAllEdgeRefs();
-
-    this.edges = this.pointGraphManager.edgeIndexesToEdgeModels(edgeRefs, {
-      distance: this.edgeWeight,
-    });
-  }
-
-  public getPairs(): { source: PointModel; target: PointModel }[] {
-    return this.edges.map((edge) => ({
-      source: edge.source,
-      target: edge.target,
-    }));
   }
 }
