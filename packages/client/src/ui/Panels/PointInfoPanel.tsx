@@ -67,7 +67,7 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({
       </label>
 
       <h4>Соседние точки</h4>
-      {point.neighbors.length > 0 ? (
+      {(point.neighbors ?? []).length > 0 ? (
         <table>
           <thead>
             <tr>
@@ -76,7 +76,7 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({
             </tr>
           </thead>
           <tbody>
-            {point.neighbors.map((neighbor) => (
+            {(point.neighbors ?? []).map((neighbor) => (
               <tr key={neighbor.id}>
                 <td>{neighbor.name || neighbor.id}</td>
                 <td>{neighbor.cosineDistance.toFixed(4)}</td>
