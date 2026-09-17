@@ -3,16 +3,15 @@ import { hashX1 } from "@utils/data-utils";
 import { Edge } from "./Edge";
 import { EdgeRef } from "./EdgeRef";
 import { PointModel } from "./PointModel";
+import { cosineDistance as CosineDistance } from "@utils/vector";
+import { th } from "zod/v4/locales/index.js";
 
 export class EdgeModel implements Edge, EdgeRef {
   public sourceId: string;
   public targetId: string;
   public id: string;
-
-  public intersectionSet: Set<number> = new Set();
-  public get intersectionCount() {
-    return this.intersectionSet.size ?? 0;
-  }
+  public cosineDistance: number;
+  public distance: number;
 
   /**
    * Generate a unique ID for an edge based on source, target, and model name.
@@ -26,10 +25,10 @@ export class EdgeModel implements Edge, EdgeRef {
   constructor(
     public source: PointModel,
     public target: PointModel,
-    public distance: number = 100,
     public modelName: string,
-
-    public color: string = "#888888",
+    cosineDistance?: number,
+    distance: number = 100,
+    public color: string = "#231fe6",
   ) {
     this.id = EdgeModel.getId(source.id, target.id, modelName);
     this.sourceId = source.id;
@@ -37,8 +36,14 @@ export class EdgeModel implements Edge, EdgeRef {
 
     const s_e = source.embeddings.get(modelName);
     const t_e = target.embeddings.get(modelName);
-    if (s_e != null && t_e != null) {
-      this.intersectionSet = s_e.getIntersectionIndices(t_e);
+
+    if (!s_e || !t_e) {
+      color = "#ff0000";
+      this.cosineDistance = 1;
+      this.distance = 1000;
+      return;
     }
+    this.cosineDistance = cosineDistance ?? CosineDistance(s_e.value, t_e.value);
+    this.distance = distance;
   }
 }

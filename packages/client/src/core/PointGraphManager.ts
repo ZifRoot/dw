@@ -125,8 +125,8 @@ export class PointGraphManager {
     }
   }
 
-  public addEdge(edgeRef: EdgeRef): void {
-    this.graph.addEdge(edgeRef);
+  public addEdge(edgeRef: EdgeRef) {
+    return this.graph.addEdge(edgeRef);
   }
 
   /**
@@ -134,6 +134,13 @@ export class PointGraphManager {
    */
   public removeEdge(model: EdgeModel): void {
     this.graph.removeEdge(model);
+  }
+
+  /**
+   * Удалить ребро по модели.
+   */
+  public removeEdges(model: EdgeModel[]): void {
+    this.graph.removeEdges(model);
   }
 
   /**

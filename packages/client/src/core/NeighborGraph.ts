@@ -163,24 +163,26 @@ export class NeighborGraph {
    * Фабрика создаёт модель; регистрируем её в edgeCollection (источник правды)
    * и в adjacency под обоими концами.
    */
-  public addEdge(edgeRef: EdgeRef): void {
+  public addEdge(edgeRef: EdgeRef): EdgeModel | null {
     const { sourceId, targetId } = edgeRef;
-    if (sourceId === targetId) return;
+    if (sourceId === targetId) return null;
 
     // Без варна: если ребра нет — это норма для addEdge.
     const { forward, backward } = this.checkBothDirections(edgeRef);
     if (forward || backward) {
+      //this.rebuildAdjacency()
       // Односторонний случай здесь тоже глушим добавление, но состояние
       // остаётся «грязным» — починить можно через rebuildAdjacency().
-      return;
+      return null;
     }
 
     const model = this.factory.create(edgeRef);
-    if (!model) return;
+    if (!model) return null;
 
     this.edgeCollection.add(model);
     this.addToAdjacency(model.sourceId, model.id);
     this.addToAdjacency(model.targetId, model.id);
+    return model;
   }
 
   /**
@@ -338,7 +340,7 @@ export class NeighborGraph {
   /** Все точки, у которых есть хотя бы одно ребро. */
   public getPointsWithEdges(): string[] {
     return [...this.adjacency.keys()];
-  }  
+  }
 
   // ───────────────────── maintenance ─────────────────────
 

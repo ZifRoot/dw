@@ -6,6 +6,9 @@ import { EdgeModel } from "./models/EdgeModel";
 import { EdgeRef } from "./models/EdgeRef";
 import { PointGraphManager } from "./PointGraphManager";
 import { IEdgeModelFactory } from "./IEdgeModelFactory";
+import "@utils/array-extensions";
+import "@utils/generator-extensions";
+import { cosineDistance } from "@utils/vector";
 
 interface ScoredCandidate {
   targetId: string;
@@ -39,6 +42,7 @@ export class ModelManager {
   private readonly randomCandidates: number;
   private readonly frameBudgetMs: number;
   private readonly pointGraphManager: PointGraphManager;
+  private mmm!: string;
 
   private pointIndex = 0;
   private iterationChanged = false;
@@ -93,10 +97,7 @@ export class ModelManager {
 
     for (const point of this.pointGraphManager.getPoints()) {
       for (const modelName of point.embeddings.keys()) {
-        modelPointCounts.set(
-          modelName,
-          (modelPointCounts.get(modelName) ?? 0) + 1,
-        );
+        modelPointCounts.set(modelName, (modelPointCounts.get(modelName) ?? 0) + 1);
       }
     }
 
@@ -117,8 +118,22 @@ export class ModelManager {
   private startOptimization(): void {
     if (this.optimizationCallback !== null) return;
     if (this.pointGraphManager.getPoints().length < 2) return;
+    const points = this.pointGraphManager.getPoints();
 
-    this.optimizationCallback = this.animation.addCallback(() => this.runStep());
+    //  this.optimizationCallback = this.animation.addCallback(() => this.runStep());
+
+    let ms = this.getModelsByPointCount();
+    let mxpointCount = ms.map((m) => m.pointCount).sort((a, b) => b - a)[0];
+
+    this.mmm = ms[0].modelName;
+    const cou1 = this.pointGraphManager.getEdgesArray().length;
+    this.pointGraphManager.removeEdges(this.pointGraphManager.getEdgesArray().filter((e) => e.modelName != this.mmm));
+    const cou2 = this.pointGraphManager.getEdgesArray().length;
+    for (let index = 0; index < points.length; index++) {
+      const point = points[index];
+      this.improvePoint(point);
+    }
+    this.mediator.pointsGraphUpdated();
   }
 
   /**
@@ -144,6 +159,14 @@ export class ModelManager {
       this.stopOptimization();
       return;
     }
+
+    let ms = this.getModelsByPointCount();
+    let mxpointCount = ms.map((m) => m.pointCount).sort((a, b) => b - a)[0];
+
+    let mmm = ms[0].modelName;
+    const cou1 = this.pointGraphManager.getEdgesArray().length;
+    this.pointGraphManager.removeEdges(this.pointGraphManager.getEdgesArray().filter((e) => e.modelName != mmm));
+    const cou2 = this.pointGraphManager.getEdgesArray().length;
 
     ///TODO здесь вызвать функцию которая Делает сортированный список моделей по количеству точек
     ///    points.map(p=>p.embeddings)
@@ -214,27 +237,6 @@ export class ModelManager {
     let modelName = edgeRef.modelName;
 
     if (!modelName) {
-      let bestModel: string | null = null;
-      let maxIntersection = -1;
-
-      const sourceModels = new Set(source.embeddings.keys());
-
-      // Ищем общую модель с максимальным пересечением активных размерностей.
-      for (const [targetModelName, targetEmb] of target.embeddings.entries()) {
-        if (sourceModels.has(targetModelName)) {
-          const sourceEmb = source.embeddings.get(targetModelName)!;
-          const intersection = sourceEmb.intersectionCount(targetEmb);
-
-          if (intersection > maxIntersection) {
-            maxIntersection = intersection;
-            bestModel = targetModelName;
-          }
-        }
-      }
-      modelName = bestModel ?? undefined;
-    }
-
-    if (!modelName) {
       console.warn(`edgeRefToEdgeModel: no common embedding model for ${source.id} and ${target.id}`);
       return null;
     }
@@ -247,7 +249,7 @@ export class ModelManager {
       return null;
     }
 
-    return new EdgeModel(source, target, 100, modelName);
+    return new EdgeModel(source, target, modelName);
   }
 
   /**
@@ -297,14 +299,7 @@ export class ModelManager {
         }
       }
     }
-
-    for (let i = 0; i < this.randomCandidates; i++) {
-      const randomIndex = Math.floor(Math.random() * points.length);
-      const candidate = points[randomIndex];
-      if (candidate.id !== source.id) {
-        candidateIds.add(candidate.id);
-      }
-    }
+    candidateIds.union(new Set(this.getRandomCandidates(source)));
 
     for (const candidateId of candidateIds) {
       if (existingTargets.has(candidateId)) continue;
@@ -349,6 +344,18 @@ export class ModelManager {
     return changed;
   }
 
+  getRandomCandidates(source: PointModel) {
+    const points = this.pointGraphManager.getPoints();
+    return [
+      ...points
+        .randomElement()
+        .take(this.randomCandidates * 10)
+        .filter((c) => c.id != source.id && c.embeddings.has(this.mmm))
+        .take(this.randomCandidates)
+        .map((c) => c.id),
+    ];
+  }
+
   /**
    * Вычисляет СРЕДНЕЕ косинусное расстояние по всем общим моделям двух точек.
    * Возвращает null, если общих моделей нет.
@@ -357,33 +364,14 @@ export class ModelManager {
     let totalDistance = 0;
     let commonCount = 0;
 
-    for (const [modelName, emb1] of p1.embeddings.entries()) {
+    for (const [modelName, emb1] of p1.embeddings.entries().filter((em) => em[0] == this.mmm)) {
       const emb2 = p2.embeddings.get(modelName);
       if (emb2) {
-        totalDistance += this.cosineDistance(emb1.value, emb2.value);
+        totalDistance += cosineDistance(emb1.value, emb2.value);
         commonCount++;
       }
     }
 
     return commonCount > 0 ? totalDistance / commonCount : null;
-  }
-
-  private cosineDistance(v1: number[], v2: number[]): number {
-    if (!v1 || !v2 || v1.length === 0 || v2.length === 0 || v1.length !== v2.length) {
-      return 1;
-    }
-
-    let dot = 0;
-    let norm1 = 0;
-    let norm2 = 0;
-
-    for (let i = 0; i < v1.length; i++) {
-      dot += v1[i] * v2[i];
-      norm1 += v1[i] * v1[i];
-      norm2 += v2[i] * v2[i];
-    }
-
-    if (norm1 === 0 || norm2 === 0) return 1;
-    return 1 - dot / (Math.sqrt(norm1) * Math.sqrt(norm2));
   }
 }

@@ -8,6 +8,8 @@
  * - shuffle – перемешивание
  * - intersection – пересечение множеств
  * - mapAsync – асинхронный маппинг с контролем параллелизма
+ * - randomElement – генератор случайных элементов
+ * - asGenerator – преобразование массива в генератор
  *
  * Все методы добавляются в прототип Array безопасно (с проверкой на существование)
  * и также доступны как статические функции.
@@ -111,6 +113,36 @@ declare global {
      * // result: [2, 4, 6, 8, 10]
      */
     mapAsync<U>(callbackfn: (value: T, index: number, array: T[]) => Promise<U>, concurrency?: number): Promise<U[]>;
+
+    /**
+     * Возвращает генератор, который при каждом вызове next() возвращает
+     * случайный элемент текущего массива.
+     *
+     * Элементы могут повторяться, поскольку каждый следующий элемент
+     * выбирается независимо и случайно.
+     *
+     * @returns Генератор случайных элементов массива
+     *
+     * @example
+     * const array = [1, 2, 3, 4, 5];
+     * const generator = array.randomElement();
+     *
+     * generator.next().value;
+     * generator.next().value;
+     * generator.next().value;
+     */
+    randomElement(): Generator<T>;
+
+    /**
+     * Возвращает генератор, последовательно перебирающий элементы массива.
+     *
+     * @returns Генератор элементов массива
+     *
+     * @example
+     * const generator = [1, 2, 3, 4, 5].asGenerator();
+     * const result = generator.Take(3);
+     */
+    asGenerator(): Generator<T>;
   }
 }
 
@@ -257,6 +289,28 @@ function intersection<T>(first: T[], second: T[]): T[] {
 }
 
 /**
+ * Генерирует бесконечную последовательность случайных элементов массива.
+ * @param array - исходный массив
+ * @yields Случайный элемент массива
+ */
+function* randomElement<T>(array: T[]): Generator<T> {
+  while (array.length > 0) {
+    const index = Math.floor(Math.random() * array.length);
+    yield array[index];
+  }
+}
+
+/**
+ * Последовательно генерирует все элементы массива.
+ *
+ * @param array - исходный массив
+ * @yields Элементы массива в исходном порядке
+ */
+function* asGenerator<T>(array: T[]): Generator<T> {
+  yield* array;
+}
+
+/**
  * Ошибка, содержащая частично выполненные результаты.
  */
 class MapAsyncError extends Error {
@@ -399,7 +453,29 @@ if (!Array.prototype.mapAsync) {
   });
 }
 
+if (!Array.prototype.randomElement) {
+  Object.defineProperty(Array.prototype, "randomElement", {
+    value: function <T>(this: T[]): Generator<T> {
+      return randomElement(this);
+    },
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
+if (!Array.prototype.asGenerator) {
+  Object.defineProperty(Array.prototype, "asGenerator", {
+    value: function <T>(this: T[]): Generator<T> {
+      return asGenerator(this);
+    },
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
 // ============================================================
 // 4. Единый экспорт всех функций
 // ============================================================
-export { uniqueBy, uniqueById, groupToMap, groupToMapEm, removeByIndices, shuffle, intersection, mapAsync };
+export { uniqueBy, uniqueById, groupToMap, groupToMapEm, removeByIndices, shuffle, intersection, mapAsync, randomElement, asGenerator };
