@@ -40,7 +40,7 @@ function bootstrap() {
   const svgEngine = new SvgEngine(canvasDiv);
   const animationEngine = new AnimationEngine();
 
-  const modelManager = new ModelManager(mediator, animationEngine, 16);
+  const modelManager = new ModelManager(mediator, animationEngine, 4);
   const pointGraphManager = modelManager.getPointGraphManager();
 
   const pointsScene = new PointsScene(svgEngine, mediator, pointGraphManager);

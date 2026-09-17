@@ -43,6 +43,7 @@ export class ModelManager {
   private readonly frameBudgetMs: number;
   private readonly pointGraphManager: PointGraphManager;
   private mmm!: string;
+  private isWork: boolean;
 
   private pointIndex = 0;
   private iterationChanged = false;
@@ -62,6 +63,7 @@ export class ModelManager {
     this.K = Math.max(1, K);
     this.randomCandidates = Math.max(0, randomCandidates);
     this.frameBudgetMs = Math.max(1, frameBudgetMs);
+    this.isWork = false;
 
     const edgeModelFactory: IEdgeModelFactory = {
       create: (edgeRef) => this.edgeRefToEdgeModel(edgeRef),
@@ -116,9 +118,9 @@ export class ModelManager {
    * Запустить непрерывное улучшение графа через AnimationEngine.
    */
   private startOptimization(): void {
-    if (this.optimizationCallback !== null) return;
+    this.isWork = !this.isWork;
+    //if (this.optimizationCallback !== null) return;
     if (this.pointGraphManager.getPoints().length < 2) return;
-    const points = this.pointGraphManager.getPoints();
 
     //  this.optimizationCallback = this.animation.addCallback(() => this.runStep());
 
@@ -129,13 +131,18 @@ export class ModelManager {
     const cou1 = this.pointGraphManager.getEdgesArray().length;
     this.pointGraphManager.removeEdges(this.pointGraphManager.getEdgesArray().filter((e) => e.modelName != this.mmm));
     const cou2 = this.pointGraphManager.getEdgesArray().length;
+    this.mediator.pointsGraphUpdated();
+    requestAnimationFrame(() => this.step());
+  }
+  step() {
+    const points = this.pointGraphManager.getPoints();
     for (let index = 0; index < points.length; index++) {
       const point = points[index];
       this.improvePoint(point);
     }
     this.mediator.pointsGraphUpdated();
+    if (this.isWork) requestAnimationFrame(() => this.step());
   }
-
   /**
    * Остановить улучшение графа.
    * requestAnimationFrame здесь не используется: им управляет AnimationEngine.
@@ -265,31 +272,23 @@ export class ModelManager {
     const pointCollection = this.pointGraphManager.getPointCollection();
     const currentEdges = this.pointGraphManager.getEdgesForPoint(source.id);
 
-    const scored: ScoredCandidate[] = [];
-    const existingTargets = new Set<string>();
-    const candidateIds = new Set<string>();
+    const exi = currentEdges
+      .asGenerator()
+      .map(
+        (edge) =>
+          ({
+            targetId: edge.sourceId === source.id ? edge.targetId : edge.sourceId,
+            distance: edge.cosineDistance,
+            model: edge,
+            isNew: false,
+          }) as ScoredCandidate,
+      )
+      .toArray();
+    const scored = [...exi];
+    const existingTargets = new Set<string>(exi.map((e) => e.targetId));
+    const seedNeighborIds = exi.map((e) => e.targetId).slice(0, this.K);
 
-    for (const edge of currentEdges) {
-      const otherId = edge.sourceId === source.id ? edge.targetId : edge.sourceId;
-      existingTargets.add(otherId);
-      candidateIds.add(otherId);
-
-      const otherPoint = pointCollection.getById(otherId);
-      if (!otherPoint) continue;
-
-      const distance = this.calculateAverageCosineDistance(source, otherPoint);
-      if (distance !== null) {
-        scored.push({
-          targetId: otherId,
-          distance,
-          model: edge,
-          isNew: false,
-        });
-      }
-    }
-
-    const seedNeighborIds = currentEdges.map((edge) => (edge.sourceId === source.id ? edge.targetId : edge.sourceId)).slice(0, this.K);
-
+    let candidateIds = new Set<string>();
     for (const neighborId of seedNeighborIds) {
       const neighborEdges = this.pointGraphManager.getEdgesForPoint(neighborId);
       for (const edge of neighborEdges.slice(0, this.K)) {
@@ -299,7 +298,7 @@ export class ModelManager {
         }
       }
     }
-    candidateIds.union(new Set(this.getRandomCandidates(source)));
+    candidateIds = candidateIds.union(new Set(this.getRandomCandidates(source)));
 
     for (const candidateId of candidateIds) {
       if (existingTargets.has(candidateId)) continue;
@@ -335,7 +334,7 @@ export class ModelManager {
         this.pointGraphManager.addEdge({
           sourceId: source.id,
           targetId: candidate.targetId,
-          modelName: "",
+          modelName: this.mmm,
         });
         changed = true;
       }
@@ -346,10 +345,11 @@ export class ModelManager {
 
   getRandomCandidates(source: PointModel) {
     const points = this.pointGraphManager.getPoints();
+
+    const dd = [...points.randomElement().take(this.randomCandidates * 10)];
     return [
-      ...points
-        .randomElement()
-        .take(this.randomCandidates * 10)
+      ...dd
+        .asGenerator()
         .filter((c) => c.id != source.id && c.embeddings.has(this.mmm))
         .take(this.randomCandidates)
         .map((c) => c.id),
