@@ -9,7 +9,7 @@ export interface AppEventMap {
   [AppMediator.AUTO_ZOOM]: boolean;
   [AppMediator.SELECTED_POINT]: UIPoint | null;
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
-  [AppMediator.POINT_UPDATE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
+  [AppMediator.POINT_CHANGE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
   [AppMediator.POINT_UPDATED]: { pointId: string };
   [AppMediator.POINTS_UPDATED]: undefined;
@@ -29,7 +29,7 @@ export class AppMediator extends BaseMediator {
   static AUTO_ZOOM = "auto-zoom";
   static SELECTED_POINT = "selected-point";
   static SELECTED_EDGE = "selected-edge";
-  static POINT_UPDATE = "point-update";
+  static POINT_CHANGE = "point-update";
   static POINT_UPDATED = "point-updated";
   static EDGE_UPDATE = "edge-update";
 
@@ -74,6 +74,13 @@ export class AppMediator extends BaseMediator {
     this.set(AppMediator.AUTO_ZOOM, value);
   }
 
+  public get selectedPoint(): UIPoint | null {
+    return this.get(AppMediator.SELECTED_POINT) ?? null;
+  }
+  public set selectedPoint(value: UIPoint | null) {
+    this.set(AppMediator.SELECTED_POINT, value);
+  }
+
   public get selectedEdge(): UIEdge | null {
     return this.get(AppMediator.SELECTED_EDGE) ?? null;
   }
@@ -96,8 +103,8 @@ export class AppMediator extends BaseMediator {
     this.emit(AppMediator.SELECTED_POINT, value);
   }
 
-  public updatePoint(pointId: string, changes: Partial<Omit<UIPoint, "id">>): void {
-    this.emit(AppMediator.POINT_UPDATE, { pointId, changes });
+  public pointChange(pointId: string, changes: Partial<Omit<UIPoint, "id">>): void {
+    this.emit(AppMediator.POINT_CHANGE, { pointId, changes });
   }
 
   public updateEdge(edgeId: string, changes: Partial<Omit<UIEdge, "id">>): void {
@@ -211,8 +218,8 @@ export class AppMediator extends BaseMediator {
   public onPointsUpdated(callback: () => void): () => void {
     return this.on(AppMediator.POINTS_UPDATED, callback);
   }
-  public onPointUpdate(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void {
-    return this.on(AppMediator.POINT_UPDATE, callback);
+  public onPointChange(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void {
+    return this.on(AppMediator.POINT_CHANGE, callback);
   }
   public onPointUpdated(callback: (detail: { pointId: string }) => void): () => void {
     return this.on(AppMediator.POINT_UPDATED, callback);

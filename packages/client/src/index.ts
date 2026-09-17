@@ -33,6 +33,7 @@ function bootstrap() {
   mediator.targetSize = 500;
   mediator.progress = 0;
   mediator.sizeText = 16;
+  mediator.selectedPoint = null;
   mediator.selectedEdge = null;
   setTimeout(() => (mediator.autoZoom = false), 0);
 

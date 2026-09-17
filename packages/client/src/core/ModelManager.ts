@@ -60,12 +60,12 @@ export class ModelManager {
 
     this.pointGraphManager = new PointGraphManager(this.mediator, edgeModelFactory);
 
-    this.unsubGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
-      if (this.isRunningFrame) return;
-      this.pointIndex = 0;
-      this.iterationChanged = false;
-      this.startOptimization();
-    });
+    // this.unsubGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
+    //   if (this.isRunningFrame) return;
+    //   this.pointIndex = 0;
+    //   this.iterationChanged = false;
+    //   this.startOptimization();
+    // });
 
     this.unsubStep = this.mediator.onModelManagerStep(() => {
       this.startOptimization();
@@ -89,7 +89,7 @@ export class ModelManager {
     if (this.optimizationCallback !== null) return;
     if (this.pointGraphManager.getPoints().length < 2) return;
 
-    // this.optimizationCallback = this.animation.addCallback(() => this.runStep());
+    this.optimizationCallback = this.animation.addCallback(() => this.runStep());
   }
 
   /**
@@ -115,6 +115,9 @@ export class ModelManager {
       this.stopOptimization();
       return;
     }
+
+    ///TODO здесь вызвать функцию которая Делает сортированный список моделей по количеству точек
+    ///    points.map(p=>p.embeddings)
 
     const frameStart = performance.now();
     let graphChanged = false;
