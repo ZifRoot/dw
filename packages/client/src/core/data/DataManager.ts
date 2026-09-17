@@ -92,7 +92,7 @@ export class DataManager {
           z: existing?.z,
           title: doc.title,
           updated_at: serverUpdatedAt,
-          pinned: false,
+          pinned: existing?.pinned ?? false,
         };
         await this.db.points.put(pointTable);
       }
