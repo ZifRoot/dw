@@ -12,6 +12,10 @@ export class PointsScene {
   private d3Points: d3.Selection<SVGGElement, PointModel, SVGGElement, unknown> | null = null;
   private groupMap: Map<string, SVGGElement> = new Map();
   private unsubPointsGraphUpdated: () => void;
+  private unsubSelectedPoint: () => void;
+  private unsubPointUpdate: () => void;
+  private unsubPointsUpdating: () => void;
+  private unsubSizeText: () => void;
 
   constructor(
     private svgEngine: SvgEngine,
@@ -19,14 +23,13 @@ export class PointsScene {
     private pointGraphManager: PointGraphManager,
     groupName = "points-scene",
   ) {
-    this.pointGraphManager = pointGraphManager;
     this.syncRefs();
     this.rootGroup = svgEngine.createGroup(groupName);
 
     this.registerDragDetector();
     this.setupClickHandler();
 
-    // Подписка на обновление графа точек (без передачи данных)
+    // Подписка на обновление графа точек (без передачи данных).
     this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
       this.syncRefs();
       this.syncDomWithPoints();
@@ -43,7 +46,7 @@ export class PointsScene {
   }
 
   public getPointById(id: string): PointModel | null {
-    return this.pointGraphManager.getPointCollection().getById(id);
+    return this.pointGraphManager.getPointById(id);
   }
 
   public get Entities() {
@@ -51,14 +54,7 @@ export class PointsScene {
   }
 
   public removePoints(ids: string[]): void {
-    if (ids.length === 0) return;
-    for (const id of ids) {
-      const group = this.groupMap.get(id);
-      if (group) d3.select(group).remove();
-      this.groupMap.delete(id);
-    }
-    this.pointGraphManager.getPointCollection().removes(ids);
-    this.syncGroupSelectionAndStyles();
+    this.pointGraphManager.removePoints(ids);
   }
 
   public removePointsBy(predicate: (point: PointModel) => boolean): void {
@@ -109,7 +105,11 @@ export class PointsScene {
 
   public destroy(): void {
     if (this.unregisterDrag) this.unregisterDrag();
-    if (this.unsubPointsGraphUpdated) this.unsubPointsGraphUpdated();
+    this.unsubPointsGraphUpdated();
+    this.unsubSelectedPoint();
+    this.unsubPointUpdate();
+    this.unsubPointsUpdating();
+    this.unsubSizeText();
   }
 
   private syncRefs(): void {
@@ -120,31 +120,24 @@ export class PointsScene {
   private syncDomWithPoints(): void {
     const selection = this.rootGroup.selectAll<SVGGElement, PointModel>("g.point-group").data(this.points, (d) => d.id);
 
-    // Удаляем старые группы и чистим groupMap
+    // Удаляем старые группы и чистим groupMap.
     selection
       .exit<PointModel>()
       .each((d) => this.groupMap.delete(d.id))
       .remove();
 
-    // Создаём новые группы
+    // Создаём новые группы.
     const enter = selection.enter().append("g").attr("class", "point-group");
     enter.append("circle").attr("class", "point");
     enter.append("text").attr("class", "point-label").attr("dy", "0.35em");
 
-    // Добавляем новые записи в groupMap
+    // Добавляем новые записи в groupMap.
     const map = this.groupMap;
     enter.each(function (d) {
       map.set(d.id, this);
     });
 
     this.d3Points = selection.merge(enter);
-    this.applyUpdatesToGroups();
-    this.updatePointStyles();
-  }
-
-  private syncGroupSelectionAndStyles(): void {
-    // Пересоздаём groupSelection без удаления DOM (группы уже удалены отдельно)
-    this.d3Points = this.rootGroup.selectAll<SVGGElement, PointModel>("g.point-group").data(this.points, (d) => d.id);
     this.applyUpdatesToGroups();
     this.updatePointStyles();
   }
@@ -161,10 +154,6 @@ export class PointsScene {
       .classed("pinned", (d) => d.pinned)
       .attr("transform", (d) => `translate(${d.x},${d.y})`); // scale(${d.z})
     target.select("text.point-label").text((d) => d.text);
-    // target
-    //   .select("circle.point")
-    //   // .attr("r",(d)=>d.z 20 * inv)
-    //   .attr("fill", (d) => (d.fixed ? "#ffaa44" : "#00ff001e"));
     if (this.mediator.autoZoom) this.fitView();
   }
 
@@ -192,7 +181,7 @@ export class PointsScene {
       const point = group.datum();
       if (!point) return null;
 
-      // Временно фиксируем точку на время перетаскивания
+      // Временно фиксируем точку на время перетаскивания.
       point.dragged = true;
       this.applyUpdatesToGroups(group);
 
@@ -209,8 +198,12 @@ export class PointsScene {
           },
           onDragEnd: (el) => {
             const p = d3.select<SVGGElement, PointModel>(el as SVGGElement).datum();
+            if (!p) return;
             p.dragged = false;
             this.applyUpdatesToGroups(d3.select(el as SVGGElement));
+
+            // Сигнализируем о завершённом изменении Model-позиции.
+            this.mediator.pointUpdated(p.id);
           },
         },
       };
@@ -218,10 +211,10 @@ export class PointsScene {
   }
 
   dom2Model(domEle?: Element | null): PointModel | null {
-    // Если кликнули по пустому месту - снимаем выделение
+    // Если кликнули по пустому месту - снимаем выделение.
     if (!domEle) return null;
 
-    let d3Ele = d3.select<SVGGElement, PointModel>(domEle as SVGGElement);
+    const d3Ele = d3.select<SVGGElement, PointModel>(domEle as SVGGElement);
     return d3Ele.datum();
   }
 
@@ -243,28 +236,37 @@ export class PointsScene {
       const target = event.target as Element;
       const domEle = target.closest?.(".point-group");
 
-      // Получаем предыдущую выбранную точку из медиатора
-      const previousSelectedId = this.mediator.selectedPoint?.id;
-      const previousPoint = previousSelectedId ? (this.pointGraphManager.getPointCollection().getById(previousSelectedId) ?? null) : null;
-
+      // PointModel.selected — единственный источник состояния выбора.
+      const previousPoint = this.points.find((point) => point.selected) ?? null;
       if (previousPoint) {
         previousPoint.selected = false;
       }
 
-      // Если кликнули по пустому месту - снимаем выделение
+      // Если кликнули по пустому месту - снимаем выделение.
       const point = this.dom2Model(domEle);
 
-      // Переключаем состояние текущей точки
-      if (point) point.selected = point.id != previousSelectedId;
+      if (point) {
+        point.selected = point.id !== previousPoint?.id;
+      }
 
-      this.mediator.selectedPoint = this.model2UI(point);
-
+      this.mediator.selectPoint(this.model2UI(point));
       this.applyUpdatesToGroups(this.d3Points);
     });
   }
 
   private subscribeToMediatorEvents(): void {
-    this.mediator.onPointUpdate(({ pointId, changes }) => {
+    this.unsubSelectedPoint = this.mediator.onSelectedPoint((point) => {
+      if (point !== null) return;
+
+      // UI-команда "Выйти" снимает выбор в Model.
+      const selectedPoint = this.points.find((item) => item.selected);
+      if (selectedPoint) {
+        selectedPoint.selected = false;
+        this.applyUpdatesToGroups(this.d3Points);
+      }
+    });
+
+    this.unsubPointUpdate = this.mediator.onPointUpdate(({ pointId, changes }) => {
       const point = this.getPointById(pointId);
       if (!point) return;
       if (changes.text !== undefined) point.text = changes.text;
@@ -273,7 +275,8 @@ export class PointsScene {
       if (changes.y !== undefined) point.y = changes.y;
       this.applyUpdatesToGroups(this.d3Points);
     });
-    this.mediator.onPointsUpdating(() => this.updateAllPointsPositions());
-    this.mediator.onSizeText(() => this.updatePointStyles());
+
+    this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateAllPointsPositions());
+    this.unsubSizeText = this.mediator.onSizeText(() => this.updatePointStyles());
   }
 }
