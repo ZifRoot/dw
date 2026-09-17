@@ -65,6 +65,28 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({
         <input type="checkbox" checked={fixed} onChange={handleFixedChange} />
         Зафиксировать (не участвует в физике)
       </label>
+
+      <h4>Соседние точки</h4>
+      {point.neighbors.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th>Название</th>
+              <th>Cosine distance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {point.neighbors.map((neighbor) => (
+              <tr key={neighbor.id}>
+                <td>{neighbor.name || neighbor.id}</td>
+                <td>{neighbor.cosineDistance.toFixed(4)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div>Нет соседей</div>
+      )}
     </div>
   );
 };
