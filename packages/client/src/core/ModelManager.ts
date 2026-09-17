@@ -65,12 +65,27 @@ export class ModelManager {
     this.pointGraphManager = new PointGraphManager(this.mediator, edgeModelFactory);
 
     this.unsubStep = this.mediator.onModelManagerStep(() => {
-      this.startOptimization();
+      this.toggleOptimization();
     });
   }
 
   public getPointGraphManager(): PointGraphManager {
     return this.pointGraphManager;
+  }
+
+  /**
+   * Переключить состояние оптимизации.
+   *
+   * Повторный вызов во время работы останавливает оптимизацию.
+   * Следующий вызов снова запускает её.
+   */
+  public toggleOptimization(): void {
+    if (this.optimizationCallback !== null) {
+      this.stopOptimization();
+      return;
+    }
+
+    this.startOptimization();
   }
 
   /**
