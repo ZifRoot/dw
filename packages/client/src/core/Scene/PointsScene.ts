@@ -124,6 +124,15 @@ export class PointsScene {
     this.d3Points = selection.merge(enter);
     this.updateAllProperties();
     this.updatePointStyles();
+
+    // Обновляем информацию о соседях для выбранной точки.
+    const selectedPointId = this.mediator.selectedPoint?.id;
+    if (selectedPointId) {
+      const selectedPoint = this.pointGraphManager.getPointById(selectedPointId);
+      if (selectedPoint) {
+        this.mediator.selectedPoint = this.model2UI(selectedPoint);
+      }
+    }
   }
 
   pointsUpdating() {
@@ -224,17 +233,34 @@ export class PointsScene {
   }
 
   model2UI(point?: PointModel | null): UIPoint | null {
-    return point
-      ? {
-          id: point.id,
-          x: point.x,
-          y: point.y,
-          z: point.z,
-          text: point.text,
-          pinned: point.pinned,
-          selected: point.selected,
-        }
-      : null;
+    if (!point) return null;
+
+    const neighbors = this.pointGraphManager
+      .getEdgesForPoint(point.id)
+      .map((edge) => {
+        const neighborId = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
+        const neighbor = this.pointGraphManager.getPointById(neighborId);
+        if (!neighbor) return null;
+
+        return {
+          id: neighbor.id,
+          name: neighbor.text,
+          cosineDistance: edge.cosineDistance,
+        };
+      })
+      .filter((neighbor): neighbor is NonNullable<typeof neighbor> => neighbor !== null)
+      .sort((a, b) => a.cosineDistance - b.cosineDistance);
+
+    return {
+      id: point.id,
+      x: point.x,
+      y: point.y,
+      z: point.z,
+      text: point.text,
+      pinned: point.pinned,
+      selected: point.selected,
+      neighbors,
+    };
   }
 
   groupClick(event: any) {
