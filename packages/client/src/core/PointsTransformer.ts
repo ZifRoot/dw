@@ -30,7 +30,7 @@ export class PointsTransformer {
 
     // Передаём только ID изменённой точки; сам объект берём из графа.
     this.unsubPointUpdated = this.mediator.onPointUpdated(async ({ pointId }) => {
-      const point = this.pointGraphManager.getPointCollection().getById(pointId);
+      const point = this.pointGraphManager.getPointById(pointId);
       if (point) {
         await this.savePoints([point]);
       }
