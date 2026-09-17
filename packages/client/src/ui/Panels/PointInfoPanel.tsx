@@ -66,6 +66,28 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({
         Зафиксировать (не участвует в физике)
       </label>
 
+      {(point.embeddingModelNames ?? []).length > 0 && (
+        <div>
+          <strong>Embedding models:</strong>
+          <div>
+            {(point.embeddingModelNames ?? []).map((modelName) => (
+              <span
+                key={modelName}
+                style={{
+                  display: "inline-block",
+                  margin: "2px 4px 2px 0",
+                  padding: "2px 6px",
+                  border: "1px solid currentColor",
+                  borderRadius: "10px",
+                }}
+              >
+                {modelName}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <h4>Соседние точки</h4>
       {(point.neighbors ?? []).length > 0 ? (
         <table>
