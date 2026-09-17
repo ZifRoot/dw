@@ -8,7 +8,7 @@
 
 **[CURRENT_POSITION.md](./CURRENT_POSITION.md)**
 
-Этот документ описывает целевую архитектурную модель и ограничения для последующих изменений. Фактическое состояние `dev` может пока от неё отличаться; расхождения зафиксированы в отдельном аудите.
+Этот документ описывает текущую архитектурную модель и ограничения для последующих изменений. Актуальные расхождения и оставшиеся архитектурные цели зафиксированы в отдельном аудите.
 
 ## View: UI и Graph
 
@@ -51,13 +51,13 @@ src/
 |---|---|
 | `DataManager` | Работа с таблицами данных, IndexedDB и API. Передаёт таблицы непосредственно в `PointsTransformer`. |
 | `PointsTransformer` | Граница Table ↔ Model. Преобразует `PointTable`, `EmbeddingTable`, `EdgeTable` в `PointModel` и `EdgeRefs`, а при сохранении выполняет обратное преобразование. |
-| `PointGraphManager` | Владеет коллекцией `PointModel` и `NeighborGraph`. Является единой точкой управления количеством Model-сущностей. |
+| `PointGraphManager` | Владеет коллекцией `PointModel` и `NeighborGraph`. Является единой точкой управления количеством Model-сущностей. Создаётся в контексте `ModelManager`. |
 | `NeighborGraph` | Хранит `EdgeModel` и индекс смежности. `edgeCollection` является источником истины. |
-| `ModelManager` | Строит и постепенно улучшает граф ближайших соседей. Использует `PointGraphManager`. |
+| `ModelManager` | Строит и постепенно улучшает граф ближайших соседей, создаёт `PointGraphManager` и предоставляет ему фабрику `EdgeModel`. |
 | `PointsScene` | View Graph для точек. Работает непосредственно с `PointModel[]`. |
 | `EdgesScene` | View Graph для рёбер. Работает непосредственно с `EdgeModel[]`. |
 | `AppMediator` | Сигналы, команды и небольшой UI-state. Не хранит графовые данные. |
-| `AnimationEngine` | Общий механизм выполнения callbacks по `requestAnimationFrame`. |
+| `AnimationEngine` | Единственный владелец `requestAnimationFrame` и общий механизм выполнения callbacks. |
 | `RepulsionEngine` | Physics: отталкивание точек. |
 | `GraphEngine` | Physics: притяжение связанных точек. |
 | `ZDampingEngine` | Physics: затухание по Z. |
@@ -75,11 +75,13 @@ EntityCollection<PointModel>
 NeighborGraph
 ```
 
-Один экземпляр используется совместно `PointsScene`, `EdgesScene` и `ModelManager`.
+Один экземпляр используется совместно `PointsScene`, `EdgesScene`, `PointsTransformer` и `ModelManager`.
 
 Для Graph View коллекции предоставляют живые массивы. Это означает, что сцены работают с теми же объектами Model, которые находятся в `PointGraphManager`; отдельная синхронизация копий не требуется.
 
-Количество сущностей должно изменяться через `PointGraphManager`. Изменение полей существующего Model (`x`, `y`, `z`, `selected`, `dragged`, `pinned` и т. п.) допускается непосредственно View Graph и physics.
+Количество сущностей должно изменяться через `PointGraphManager`. В частности, удаление точки сначала удаляет связанные рёбра, затем саму точку.
+
+Изменение полей существующего Model (`x`, `y`, `z`, `selected`, `dragged`, `pinned` и т. п.) допускается непосредственно View Graph и physics.
 
 ### NeighborGraph
 
@@ -112,7 +114,9 @@ adjacency: Map<pointId, Set<edgeId>>
 
 Ограничение количества связей задаётся параметром `K`.
 
-Преобразование `EdgeRef → EdgeModel` является отдельной архитектурной темой. Согласованное направление для следующего этапа — фабрика, определяемая/создаваемая в контексте `ModelManager`, передаётся в `PointGraphManager`, а затем в `NeighborGraph`. `EdgeRef` пока не перепроектируется.
+Преобразование `EdgeRef → EdgeModel` создаётся в контексте `ModelManager`, передаётся в `PointGraphManager`, а затем в `NeighborGraph`. `PointGraphManager` не содержит собственной реализации фабрики.
+
+`EdgeRef` пока не перепроектируется: его оставшаяся смешанная ответственность требует отдельного анализа.
 
 ---
 
@@ -144,13 +148,28 @@ graph TD
 1. `DataManager` передаёт таблицы в `PointsTransformer` напрямую.
 2. `PointsTransformer` является границей Table ↔ Model.
 3. `PointGraphManager` является источником истины для текущих точек и графа.
-4. `PointsScene`, `EdgesScene` и `ModelManager` используют один экземпляр `PointGraphManager`.
+4. `PointsScene`, `EdgesScene`, `PointsTransformer` и `ModelManager` используют один экземпляр `PointGraphManager`.
 5. View Graph получает Model напрямую, а не через `AppMediator`.
 6. View UI получает события и UI-state через `AppMediator`.
 7. Большие массивы Model и Table через `AppMediator` не передаются.
 8. Количество Model-сущностей изменяется через `PointGraphManager`.
-9. Изменения полей существующих Model могут выполняться View Graph и physics напрямую.
+9. Изменения полей существующих Model могут выполняться View Graph и physics.
 10. Если изменение Model должно быть замечено другими подсистемами, публикуется соответствующий небольшой сигнал.
+11. Только `AnimationEngine` непосредственно вызывает `requestAnimationFrame`.
+
+---
+
+## Selection
+
+Состояние выбора принадлежит `PointModel.selected`, поскольку оно участвует в вычислении `PointModel.fixed`.
+
+`AppMediator.selectPoint()` только публикует `UIPoint | null` для UI. Отдельного `selectedPoint` state в медиаторе нет.
+
+---
+
+## Position update
+
+Drag непосредственно изменяет `PointModel.x/y`. При завершении drag `PointsScene` публикует `pointUpdated(pointId)`, после чего `PointsTransformer` может сохранить актуальную точку.
 
 ---
 
@@ -192,7 +211,7 @@ ZDampingEngine
 
 Они используют общий `AnimationEngine` для выполнения по кадрам и непосредственно изменяют поля существующих `PointModel`.
 
-Архитектурное правило: **только `AnimationEngine` непосредственно вызывает `requestAnimationFrame`**.
+Physics engines имеют `destroy()`, который освобождает animation callback и подписку на `AppMediator`.
 
 `EnginePipeline` пока не реализован. Это следующая архитектурная цель для организации последовательности physics engines и единого механизма уведомления об изменениях позиций.
 
@@ -200,10 +219,8 @@ ZDampingEngine
 
 ## Текущее состояние архитектуры
 
-Документ [CURRENT_POSITION.md](./CURRENT_POSITION.md) фиксирует согласованную модель. Он не означает, что `dev` уже полностью соответствует ей.
+Документ [CURRENT_POSITION.md](./CURRENT_POSITION.md) фиксирует согласованную модель.
 
-Фактические расхождения `dev` зафиксированы в:
+Результат выравнивания и оставшиеся вопросы зафиксированы в:
 
 **[CLIENT_ARCHITECTURE_AUDIT.md](./CLIENT_ARCHITECTURE_AUDIT.md)**
-
-Аудит не является планом автоматического рефакторинга: сначала фиксируются факты и границы расхождений, затем каждое изменение рассматривается отдельно.
