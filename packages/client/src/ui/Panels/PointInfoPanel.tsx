@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { AppMediator } from '../../core/AppMediator';
 import { UIPoint } from '../../core/ui-models';
 
-
 interface PointInfoPanelProps {
   point: UIPoint;
   mediator: AppMediator;
@@ -13,7 +12,7 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({ point, mediator 
   const [text, setText] = useState(point.text);
   const [fixed, setFixed] = useState(point.pinned || false);
 
-  // Обновляем локальное состояние при смене точки (если вдруг пришёл новый объект)
+  // Обновляем локальное состояние при смене точки (если вдруг пришёл новый объект).
   useEffect(() => {
     setText(point.text);
     setFixed(point.pinned || false);
@@ -34,8 +33,7 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({ point, mediator 
   return (
     <div >
       <h3>Информация о точке</h3>
-      <button onClick={() => mediator.selectedPoint = null}>Выйти</button>
-      {/* className={styles.button} */}
+      <button onClick={() => mediator.selectPoint(null)}>Выйти</button>
       <div><strong>ID:</strong> {point.id}</div>
       <div>
         <strong>Текст:</strong>
