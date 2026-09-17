@@ -23,30 +23,32 @@ export class EdgesScene {
     groupName = "edges-scene",
   ) {
     this.syncRefs();
-    this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
 
-    this.rootGroup.on("click", (event) => {
-      const target = event.target as Element;
-      const line = target.closest?.(".highlighted");
-      if (!line) return;
-      const edge = d3.select(line).datum() as EdgeModel;
-      if (!edge) return;
-      const uiEdge: UIEdge = {
-        id: edge.id,
-        sourceId: edge.sourceId,
-        targetId: edge.targetId,
-        distance: edge.distance,
-        visible: true,
-      };
-      this.mediator.selectedEdge = uiEdge;
-    });
+    this.rootGroup = svgEngine.createGroup(groupName);
+    this.rootGroup.on("click", (e) => this.groupClick(e));
 
     this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point));
     this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => this.renderLines());
     this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateLines());
     this.unsubPointsUpdated = this.mediator.onPointsUpdated(() => this.updateLines());
     this.unsubPointUpdated = this.mediator.onPointUpdated((point) => this.updateLines());
+  }
+
+  groupClick(event: any) {
+    const target = event.target as Element;
+    const line = target.closest?.(".highlighted");
+    if (!line) return;
+    const edge = d3.select(line).datum() as EdgeModel;
+    if (!edge) return;
+    const uiEdge: UIEdge = {
+      id: edge.id,
+      sourceId: edge.sourceId,
+      targetId: edge.targetId,
+      distance: edge.distance,
+      visible: true,
+    };
+    this.mediator.selectedEdge = uiEdge;
   }
 
   // Подсветка рёбер, инцидентных данной точке (или снятие подсветки).

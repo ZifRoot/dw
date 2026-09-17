@@ -9,8 +9,10 @@ export interface DragCallbacks<T extends Element> {
   onDrag?: (element: T, deltaWorld: [number, number], worldPos: [number, number], event: MouseEvent) => void;
   onDragEnd?: (element: T, event: MouseEvent) => void;
 }
+type _DragElem = { element: Element; callbacks: DragCallbacks<Element> };
+export type DragElem = _DragElem | null;
 export interface Detector {
-  predicate: (event: MouseEvent) => { element: Element; callbacks: DragCallbacks<Element> } | null;
+  predicate: (event: MouseEvent) => DragElem;
 }
 
 export type ZoomCallback = (transform: ZoomTransform) => void;
@@ -135,7 +137,7 @@ export class SvgEngine {
    * @param predicate Функция, получающая MouseEvent и возвращающая { element, callbacks } или null.
    * @returns Функция для отписки.
    */
-  public registerDragDetector(predicate: (event: MouseEvent) => { element: Element; callbacks: DragCallbacks<Element> } | null): () => void {
+  public registerDragDetector(predicate: (event: MouseEvent) => DragElem): () => void {
     const detector = { predicate };
     this.detectors.add(detector);
     // Обновляем zoom-фильтр, чтобы он учитывал новый предикат
@@ -201,6 +203,13 @@ export class SvgEngine {
   }
 
   public createGroup(className?: string): d3.Selection<SVGGElement, unknown, null, undefined> {
+    if (className) {
+      const existing = this.container.select<SVGGElement>(`g.${className}`);
+      if (!existing.empty()) {
+        return existing as unknown as d3.Selection<SVGGElement, unknown, null, undefined>;
+      }
+    }
+
     const group = this.container.append("g");
     if (className) group.attr("class", className);
     return group;
