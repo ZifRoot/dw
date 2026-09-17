@@ -2,238 +2,208 @@
 
 Пакет клиентского приложения для визуализации графов точек и их эмбеддингов.
 
+## Архитектурная точка отсчёта
+
+Актуальное согласованное архитектурное положение зафиксировано в отдельном документе:
+
+**[CURRENT_POSITION.md](./CURRENT_POSITION.md)**
+
+Этот документ описывает целевую архитектурную модель и ограничения для последующих изменений. Фактическое состояние `dev` может пока от неё отличаться; расхождения зафиксированы в отдельном аудите.
+
+## View: UI и Graph
+
+В проекте различаются два представления:
+
+- **View UI** — React-компоненты, панели управления и информационные панели. Они взаимодействуют с системой через `AppMediator`.
+- **View Graph** — графическое представление точек и рёбер. Сейчас реализовано через D3/SVG (`PointsScene`, `EdgesScene`). Оно получает Model напрямую через `PointGraphManager` и использует live references.
+
+Поэтому граница Model → View различается:
+
+```text
+Model → View Graph
+        напрямую через PointGraphManager / live Model references
+
+Model/System → View UI
+              через AppMediator (events + UI state)
+```
+
+`AppMediator` не является хранилищем графа и не должен использоваться для передачи больших массивов `PointModel`, `EdgeModel` или таблиц.
+
+---
+
 ## Структура исходного кода
 
-```
+```text
 src/
-├── core/           # Ядро приложения (логика, модели, физика)
-├── ui/             # UI компоненты (панели управления, информационные панели)
-├── clients/        # API клиенты для взаимодействия с бэкендом
-├── styles/         # Стили приложения
-├── index.ts        # Точка входа приложения
+├── core/           # Ядро приложения, модели, граф, физика и инфраструктура
+├── ui/             # View UI: React-компоненты
+├── clients/        # API-клиенты
+├── styles/         # Стили
+├── index.ts        # Точка входа
 └── global.d.ts     # Глобальные типы TypeScript
 ```
 
 ---
 
-## Архитектура ядра (`core/`)
+## Основные компоненты
 
-Ядро приложения разделено на следующие модули:
-
-### 1. Менеджеры и Координаторы
-
-| Класс | Описание |
-|-------|----------|
-| `AppMediator` | Центральный посредник приложения. Передаёт команды, UI-события и небольшие сигналы между компонентами. Крупные массивы точек, рёбер, таблиц и моделей через mediator не передаются. |
-| `BaseMediator` | Базовый класс для медиаторов. Реализует паттерн Observer через `EventTarget`, предоставляет методы `set/get/has` для состояния и `emit` для событий. |
-| `ModelManager` | Строит и постепенно улучшает граф ближайших соседей. Использует общий `PointGraphManager` и вычисляет среднее косинусное расстояние по общим моделям эмбеддингов. Работает инкрементально через `requestAnimationFrame`. |
-| `PointGraphManager` | Единственный источник истины для текущих `PointModel` и графа связей. Инкапсулирует `EntityCollection<PointModel>` и `NeighborGraph`. |
-| `PointsTransformer` | Преобразует данные из таблиц базы данных (`PointTable`, `EmbeddingTable`, `EdgeTable`) в модели (`PointModel`, `EmbeddingModel`, `EdgeRefs`). Обновляет `PointGraphManager` напрямую. |
-| `DataManager` | Управляет IndexedDB базой данных (`CanvasPositionsDB`) и API клиентами (`DocumentsApi`, `EmbeddingsApi`). Загружает и сохраняет таблицы и передаёт их напрямую в `PointsTransformer`. |
-
-**Правило передачи данных:** `AppMediator` используется как канал сигналов и команд. Если компоненту нужны актуальные точки или рёбра, он получает их из `PointGraphManager`, а не из mediator.
-
----
-
-### 2. Модели данных
-
-#### Основные модели
-
-| Класс/Интерфейс | Описание |
-|-----------------|----------|
-| `PointModel` | Расширяет `Point` (x, y, z). Содержит `id`, `text`, флаги `dragged`, `selected`, `pinned`. Владеет коллекцией `embeddings: Map<string, EmbeddingModel>`. Свойство `fixed` возвращает `true`, если точка зафиксирована. |
-| `EmbeddingModel` | Модель эмбеддинга документа. Содержит `docid`, `modelName`, вектор `value[]`, метаданные. Вычисляет `activeIndices` — знаковые индексы активных размерностей (положительные/отрицательные значения выше порога). Предоставляет методы для подсчёта пересечений с другими эмбеддингами. |
-| `EdgeModel` | Модель ребра графа. Реализует интерфейсы `Edge` и `EdgeRef`. Содержит ссылки на `source` и `target` (`PointModel`), вычисляет `intersectionSet` (общие активные индексы), `intersectionCount`, `color` на основе паттерна. |
-| `Point` | Базовый класс точки с координатами (x, y, z). Предоставляет методы мутации: `set`, `add`, `sub`, `scale`, `normalize` и статические аналоги. |
-| `PointMath` | Интерфейс для математических операций с точками (2D или 3D). |
-
-#### Вспомогательные модели
-
-| Класс/Интерфейс | Описание |
-|-----------------|----------|
-| `Edge` | Интерфейс ребра: `source: PointModel`, `target: PointModel`. |
-| `EdgeRef` | Интерфейс ссылки на ребро: `sourceId`, `targetId`, `modelName?`, `distance?`. |
-| `EdgeRefs` | Тип-массив ссылок на рёбра: `EdgeRef[]`. |
-| `EdgeIndex` | Интерфейс индекса ребра: `sourceIndex`, `targetIndex` (используется в алгоритме триангуляции). |
-| `UIPoint` | UI-представление точки: `id`, `x`, `y`, `z`, `text`, `fixed`. |
-| `UIEdge` | UI-представление ребра: `id`, `sourceId`, `targetId`, `distance?`, `visible`. |
+| Класс | Ответственность |
+|---|---|
+| `DataManager` | Работа с таблицами данных, IndexedDB и API. Передаёт таблицы непосредственно в `PointsTransformer`. |
+| `PointsTransformer` | Граница Table ↔ Model. Преобразует `PointTable`, `EmbeddingTable`, `EdgeTable` в `PointModel` и `EdgeRefs`, а при сохранении выполняет обратное преобразование. |
+| `PointGraphManager` | Владеет коллекцией `PointModel` и `NeighborGraph`. Является единой точкой управления количеством Model-сущностей. |
+| `NeighborGraph` | Хранит `EdgeModel` и индекс смежности. `edgeCollection` является источником истины. |
+| `ModelManager` | Строит и постепенно улучшает граф ближайших соседей. Использует `PointGraphManager`. |
+| `PointsScene` | View Graph для точек. Работает непосредственно с `PointModel[]`. |
+| `EdgesScene` | View Graph для рёбер. Работает непосредственно с `EdgeModel[]`. |
+| `AppMediator` | Сигналы, команды и небольшой UI-state. Не хранит графовые данные. |
+| `AnimationEngine` | Общий механизм выполнения callbacks по `requestAnimationFrame`. |
+| `RepulsionEngine` | Physics: отталкивание точек. |
+| `GraphEngine` | Physics: притяжение связанных точек. |
+| `ZDampingEngine` | Physics: затухание по Z. |
 
 ---
 
-### 3. Коллекции и Графы
+## Model и граф
 
-| Класс | Описание |
-|-------|----------|
-| `EntityCollection<T>` | Универсальная коллекция сущностей с индексацией по ID. Хранит массив `items` и `indexMap: Map<string, number>` для быстрого доступа. Предоставляет методы `getById`, `add`, `_setPoints` (пакетное обновление с разделением на вставку/обновление). |
-| `NeighborGraph` | Единое хранилище графа связей и плоского списка рёбер. Использует `adjacency: Map<string, Set<string>>` для представления смежности. Обеспечивает консистентность: при добавлении ребра модель добавляется в оба направления. При обнаружении несимметричности выдаётся предупреждение. |
-| `Delaunay` | Реализация алгоритма триангуляции Делоне. Принимает массив точек `PointMath2d[]`, возвращает уникальные рёбра `EdgeIndex[]`. Использует супер-треугольник, находит "плохие" треугольники, строит границу и обновляет триангуляцию. |
+### PointGraphManager
 
----
+`PointGraphManager` содержит:
 
-### 4. Физические движки
+```text
+EntityCollection<PointModel>
+NeighborGraph
+```
 
-| Класс | Описание |
-|-------|----------|
-| `RepulsionEngine` | Движок отталкивания точек. Использует закон обратных квадратов для вычисления сил отталкивания между всеми парами точек. Поддерживает температуру симуляции, останавливается при достижении `stopTemperature`. |
-| `GraphEngine` | Движок притяжения связанных точек (рёбер графа). Применяет силу пружины к связанным точкам, стремясь к `targetDistance`. Работает в цикле анимации. |
-| `ZDampingEngine` | Движок затухания по оси Z. Применяет демпфирование к координате Z точек, стабилизируя вертикальное положение. Использует `dampingFactor` (например, 0.999) для постепенного уменьшения Z. |
+Один экземпляр используется совместно `PointsScene`, `EdgesScene` и `ModelManager`.
 
----
+Для Graph View коллекции предоставляют живые массивы. Это означает, что сцены работают с теми же объектами Model, которые находятся в `PointGraphManager`; отдельная синхронизация копий не требуется.
 
-### 5. Движки рендеринга и анимации
+Количество сущностей должно изменяться через `PointGraphManager`. Изменение полей существующего Model (`x`, `y`, `z`, `selected`, `dragged`, `pinned` и т. п.) допускается непосредственно View Graph и physics.
 
-| Класс | Описание |
-|-------|----------|
-| `AnimationEngine` | Управление циклом анимации через `requestAnimationFrame`. Поддерживает очередь колбэков (`Set<AnimationCallback>`), автоматический старт/остановку при добавлении/удалении колбэков. Предоставляет хуки `AfterStep` и `onStop`. |
-| `SvgEngine` | Универсальный движок для работы с SVG-холстом. Управляет SVG, zoom/pan (через d3-zoom), координатами. Поддерживает перетаскивание элементов через единый предикат (определяется сценой). Zoom автоматически отключается на элементах, для которых `dragPredicate` возвращает `true`. |
-| `PointsScene` | Сцена для отрисовки точек. Получает точки напрямую из `PointGraphManager`, а через mediator получает только сигналы об изменениях. |
-| `EdgesScene` | Сцена для отрисовки рёбер графа. Получает рёбра напрямую из `PointGraphManager` и реагирует на сигнал `POINTS_GRAPH_UPDATED`. |
+### NeighborGraph
 
----
+`NeighborGraph` хранит два синхронизированных представления одного графа:
 
-### 6. Утилиты и помощники
+```text
+edgeCollection: EntityCollection<EdgeModel>
+adjacency: Map<pointId, Set<edgeId>>
+```
 
-| Класс | Описание |
-|-------|----------|
-| `ActiveDimensionsBuilder` | Вычисляет порог активации размерностей для эмбеддингов. Может использовать фиксированный порог или адаптивно вычислять его на основе распределения значений (целевая доля активных размерностей). |
-| `PatternMatcher` | Сопоставитель паттернов для эмбеддингов. Вычисляет `patternScore` (количество общих активных индексов) и определяет цвет пары через `PatternColorPalette`. |
-| `PatternColorPalette` | Палитра цветов для визуализации паттернов пересечения. Генерирует цвет на основе хэша отсортированного множества активных индексов. |
+`edgeCollection` — источник истины. `adjacency` — индекс смежности.
+
+Каждое ребро зарегистрировано в adjacency обоих концов. В adjacency не должно быть неизвестных `edgeId`.
+
+Не следует выносить `edgeCollection` из `NeighborGraph` и превращать `NeighborGraph` в индекс над внешним хранилищем.
 
 ---
 
-### 7. Работа с данными (IndexedDB)
+## ModelManager
 
-#### Менеджер и хранилище
+`ModelManager` постепенно улучшает граф.
 
-| Класс | Описание |
-|-------|----------|
-| `CanvasPositionsDB` | Расширяет `Database`. Определяет таблицы IndexedDB: `points`, `embeddings`, `edges`. Настраивает индексы для каждой таблицы (по дате обновления, заголовку и т.д.). |
-| `DataManager` | (см. раздел 1) |
+Текущий алгоритм рассматривает:
 
-#### Таблицы данных
+1. текущих соседей;
+2. соседей соседей;
+3. случайных кандидатов.
 
-| Интерфейс | Описание |
-|-----------|----------|
-| `PointTable` | Структура точки в БД: `id`, `x`, `y`, `z`, `title`, `updated_at`. |
-| `EmbeddingTable` | Структура эмбеддинга в БД: `session_id`, `model_name`, `value[]`, `created_at`, `processingTimeMs`. |
-| `EdgeTable` | Структура ребра в БД: `id`, `source_id`, `target_id`, `model_name?`, `distance?`, `updated_at`. |
+Критерий текущей реализации — среднее косинусное расстояние по общим моделям эмбеддингов.
 
-#### Базовые классы IndexedDB
+Ограничение количества связей задаётся параметром `K`.
 
-| Класс/Интерфейс | Описание |
-|-----------------|----------|
-| `Database` | Абстрактный базовый класс для работы с IndexedDB. Управляет подключением к БД, регистрирует таблицы, предоставляет методы для транзакций. |
-| `Table<T, TKey>` | Реализация таблицы IndexedDB. Предоставляет CRUD-операции через конфигурацию `TableConfig`. |
-| `ITable<T, TKey>` | Интерфейс таблицы: методы `get`, `put`, `delete`, `query`, `forEach`. |
-| `IIndex` | Интерфейс индекса таблицы. |
-| `TableConfig` | Конфигурация таблицы: имя, ключевое поле, индексы. |
-
----
-
-### 8. Интерфейсы
-
-| Интерфейс | Описание |
-|-----------|----------|
-| `IEdgeModelFactory` | Фабрика для создания `EdgeModel` из `EdgeRef`. Используется `NeighborGraph` для ленивого создания моделей рёбер. |
-
----
-
-### 9. Тестирование
-
-| Класс | Описание |
-|-------|----------|
-| `PointsSceneTester` | Тестовый класс для симуляции изменений сцены. Позволяет настраивать процент обновляемых точек, количество новых точек, интервал между итерациями. Используется для отладки производительности и стабильности визуализации. |
+Преобразование `EdgeRef → EdgeModel` является отдельной архитектурной темой. Согласованное направление для следующего этапа — фабрика, определяемая/создаваемая в контексте `ModelManager`, передаётся в `PointGraphManager`, а затем в `NeighborGraph`. `EdgeRef` пока не перепроектируется.
 
 ---
 
 ## Поток данных
 
-Главный принцип: **крупные данные проходят напрямую между владельцами состояния; mediator передаёт только сигналы и небольшие UI-команды.**
-
 ```mermaid
 graph TD
-    A[Backend API] -->|fetch| B[DataManager]
-    B -->|load/save| C[CanvasPositionsDB / IndexedDB]
+    A[Backend API] --> B[DataManager]
+    C[IndexedDB] <--> B
     B -->|PointTable + EmbeddingTable + EdgeTable| D[PointsTransformer]
     D -->|PointModel + EdgeRefs| E[PointGraphManager]
 
-    E -->|points| F[PointsScene]
-    E -->|edges| G[EdgesScene]
-    E -->|points + graph| H[ModelManager]
+    E -->|live PointModel[]| F[PointsScene / View Graph]
+    E -->|live EdgeModel[]| G[EdgesScene / View Graph]
+    E --> H[ModelManager]
 
-    H -->|изменяет граф напрямую| E
+    M[AppMediator]
+    M -.->|events / commands / UI state| F
+    M -.->|events / commands / UI state| G
+    M -.->|signals| H
+    M -.->|reload / save commands| B
 
-    M[AppMediator] -.->|сигналы / команды| D
-    M -.->|сигналы / команды| F
-    M -.->|сигналы / команды| G
-    M -.->|сигналы| H
-
-    I[AnimationEngine] -->|step| J[RepulsionEngine]
-    I -->|step| K[GraphEngine]
-    I -->|step| L[ZDampingEngine]
-    J & K & L -->|изменяют PointModel| E
-    I -.->|POINTS_UPDATING| M
+    E -->|Model changes| F
+    E -->|Model changes| G
 ```
 
-### Правила потока данных
+### Основные правила
 
-1. `DataManager` не публикует крупные таблицы через `AppMediator`.
-2. `PointsTransformer` получает таблицы напрямую от `DataManager` и обновляет `PointGraphManager`.
-3. `PointGraphManager` является источником истины для текущих точек и рёбер.
-4. `PointsScene`, `EdgesScene` и `ModelManager` используют один и тот же экземпляр `PointGraphManager`.
-5. `AppMediator` передаёт только сигналы (`POINTS_GRAPH_UPDATED`, `POINTS_UPDATING`, `POINTS_UPDATED`) и небольшие данные UI (`pointId`, `changes`, выбранный элемент и т.п.).
-6. Сохранение сцены (`saveScene`) читает точки и рёбра напрямую из `PointGraphManager`.
-
----
-
-## Основные события (AppMediator)
-
-| Событие | Payload | Описание |
-|---------|---------|----------|
-| `PROGRESS` | `number` | Прогресс загрузки/обработки |
-| `TARGET_SIZE` | `number` | Целевое количество точек |
-| `TEMPERATURE` | `number` | Температура физической симуляции |
-| `AUTO_ZOOM` | `boolean` | Режим авто-зума |
-| `SELECTED_POINT` | `UIPoint \| null` | Выбранная точка |
-| `SELECTED_EDGE` | `UIEdge \| null` | Выбранное ребро |
-| `POINT_UPDATE` | `{ pointId, changes }` | Команда UI на изменение одной точки |
-| `POINT_UPDATED` | `{ pointId }` | Сигнал изменения одной точки; объект передаётся через `PointGraphManager` |
-| `EDGE_UPDATE` | `{ edgeId, changes }` | Команда UI на изменение одного ребра |
-| `POINTS_UPDATING` | — | Частый сигнал обновления координат; массив точек не передаётся |
-| `POINTS_UPDATED` | — | Сигнал завершения массового обновления; массив точек не передаётся |
-| `POINTS_GRAPH_UPDATED` | — | Сигнал изменения состава точек или рёбер |
-| `MODEL_MANAGER_STEP` | — | Команда запуска/продолжения оптимизации графа |
-| `START_REPULSION` | — | Запуск физической симуляции |
-| `RELOAD_TABLES` | — | Команда перезагрузки таблиц из БД |
-| `SAVE_POSITIONS` | — | Команда сохранения текущей сцены |
-| `POSITIONS_SAVED` | — | Сигнал успешного сохранения текущей сцены |
-
-### Что больше не передаётся через mediator
-
-- `EdgeRefs[]` / `EdgeModel[]`;
-- `PointModel[]`;
-- `{ points, edges }` из `POINTS_MODEL_READY`;
-- `PointTable[]`, `EmbeddingTable[]`, `EdgeTable[]` при загрузке данных;
-- массив точек в `POINTS_UPDATING` и `POINTS_UPDATED`.
-
-Это уменьшает количество копирований/ссылок на крупные структуры в событийном слое и делает владение состоянием явным.
+1. `DataManager` передаёт таблицы в `PointsTransformer` напрямую.
+2. `PointsTransformer` является границей Table ↔ Model.
+3. `PointGraphManager` является источником истины для текущих точек и графа.
+4. `PointsScene`, `EdgesScene` и `ModelManager` используют один экземпляр `PointGraphManager`.
+5. View Graph получает Model напрямую, а не через `AppMediator`.
+6. View UI получает события и UI-state через `AppMediator`.
+7. Большие массивы Model и Table через `AppMediator` не передаются.
+8. Количество Model-сущностей изменяется через `PointGraphManager`.
+9. Изменения полей существующих Model могут выполняться View Graph и physics напрямую.
+10. Если изменение Model должно быть замечено другими подсистемами, публикуется соответствующий небольшой сигнал.
 
 ---
 
-## Зависимости
+## Сохранение
 
-- **d3** — визуализация, zoom/pan, drag-and-drop
-- **IndexedDB** — локальное хранение данных
-- **TypeScript** — строгая типизация
+Сохранение текущей сцены выполняется через:
 
----
-
-## Быстрый старт
-
-```bash
-cd packages/client
-npm install
-npm run dev
+```text
+View UI
+  ↓
+AppMediator.savePositions()
+  ↓
+PointsTransformer
+  ↓
+PointGraphManager
+  ↓
+PointTable[] / EdgeTable[]
+  ↓
+DataManager
+  ↓
+IndexedDB
 ```
 
-Приложение запустится на `http://localhost:5173` (или другой порт, указанный в выводе Vite).
+Model не передаётся через Mediator.
+
+---
+
+## Physics и AnimationEngine
+
+Текущие physics engines:
+
+```text
+RepulsionEngine
+      ↓
+GraphEngine
+      ↓
+ZDampingEngine
+```
+
+Они используют общий `AnimationEngine` для выполнения по кадрам и непосредственно изменяют поля существующих `PointModel`.
+
+Архитектурное правило: **только `AnimationEngine` непосредственно вызывает `requestAnimationFrame`**.
+
+`EnginePipeline` пока не реализован. Это следующая архитектурная цель для организации последовательности physics engines и единого механизма уведомления об изменениях позиций.
+
+---
+
+## Текущее состояние архитектуры
+
+Документ [CURRENT_POSITION.md](./CURRENT_POSITION.md) фиксирует согласованную модель. Он не означает, что `dev` уже полностью соответствует ей.
+
+Фактические расхождения `dev` зафиксированы в:
+
+**[CLIENT_ARCHITECTURE_AUDIT.md](./CLIENT_ARCHITECTURE_AUDIT.md)**
+
+Аудит не является планом автоматического рефакторинга: сначала фиксируются факты и границы расхождений, затем каждое изменение рассматривается отдельно.
