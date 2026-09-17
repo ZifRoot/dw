@@ -14,6 +14,7 @@ export class EdgesScene {
   private unsubPointsGraphUpdated: () => void;
   private unsubPointsUpdating: () => void;
   private unsubPointUpdated: (() => void) | null = null;
+  private unsubPointUpdating: (() => void) | null = null;
   private unsubPointsUpdated: (() => void) | null = null;
 
   constructor(
@@ -23,30 +24,33 @@ export class EdgesScene {
     groupName = "edges-scene",
   ) {
     this.syncRefs();
-    this.rootGroup = svgEngine.createGroup(groupName);
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
 
-    this.rootGroup.on("click", (event) => {
-      const target = event.target as Element;
-      const line = target.closest?.(".highlighted");
-      if (!line) return;
-      const edge = d3.select(line).datum() as EdgeModel;
-      if (!edge) return;
-      const uiEdge: UIEdge = {
-        id: edge.id,
-        sourceId: edge.sourceId,
-        targetId: edge.targetId,
-        distance: edge.distance,
-        visible: true,
-      };
-      this.mediator.selectedEdge = uiEdge;
-    });
+    this.rootGroup = svgEngine.createGroup(groupName);
+    this.rootGroup.on("click", (e) => this.groupClick(e));
 
     this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point));
     this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => this.renderLines());
     this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateLines());
     this.unsubPointsUpdated = this.mediator.onPointsUpdated(() => this.updateLines());
     this.unsubPointUpdated = this.mediator.onPointUpdated((point) => this.updateLines());
+    this.unsubPointUpdating = this.mediator.onPointUpdating((point) => this.updateLines());
+  }
+
+  groupClick(event: any) {
+    const target = event.target as Element;
+    const line = target.closest?.(".highlighted");
+    if (!line) return;
+    const edge = d3.select(line).datum() as EdgeModel;
+    if (!edge) return;
+    const uiEdge: UIEdge = {
+      id: edge.id,
+      sourceId: edge.sourceId,
+      targetId: edge.targetId,
+      distance: edge.distance,
+      visible: true,
+    };
+    this.mediator.selectedEdge = uiEdge;
   }
 
   // Подсветка рёбер, инцидентных данной точке (или снятие подсветки).
@@ -70,8 +74,9 @@ export class EdgesScene {
     if (this.unregisterSelectedPoint) this.unregisterSelectedPoint();
     if (this.unsubPointsGraphUpdated) this.unsubPointsGraphUpdated();
     if (this.unsubPointUpdated) this.unsubPointUpdated();
+    if (this.unsubPointUpdating) this.unsubPointUpdating();
     if (this.unsubPointsUpdated) this.unsubPointsUpdated();
-    if (this.unsubPointsUpdating) this.unsubPointsUpdating();
+    if (this.unsubPointsUpdating) this.unsubPointsUpdating();    
     this.clear();
   }
 

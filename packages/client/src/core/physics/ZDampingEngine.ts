@@ -11,14 +11,20 @@ export class ZDampingConfig {
 export class ZDampingEngine {
   private temperature = 0;
   public points: PointModel[] = [];
-  unsubCallback: AnimationCallback | null = null;
+  private unsubCallback: AnimationCallback | null = null;
+  private readonly unsubStartRepulsion: () => void;
 
   constructor(
     public mediator: AppMediator,
     public animation: AnimationEngine,
     public config: ZDampingConfig,
   ) {
-    mediator.onStartRepulsion(() => this.start());
+    this.unsubStartRepulsion = mediator.onStartRepulsion(() => this.start());
+  }
+
+  public destroy(): void {
+    this.stop();
+    this.unsubStartRepulsion();
   }
 
   start() {

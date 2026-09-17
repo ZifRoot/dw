@@ -1,8 +1,11 @@
 // core/ModelManager.ts
 import { AppMediator } from "./AppMediator";
+import { AnimationCallback, AnimationEngine } from "./Engines/AnimationEngine";
 import { PointModel } from "./models/PointModel";
 import { EdgeModel } from "./models/EdgeModel";
+import { EdgeRef } from "./models/EdgeRef";
 import { PointGraphManager } from "./PointGraphManager";
+import { IEdgeModelFactory } from "./IEdgeModelFactory";
 
 interface ScoredCandidate {
   targetId: string;
@@ -14,31 +17,35 @@ interface ScoredCandidate {
 /**
  * ModelManager – строит и постепенно улучшает граф ближайших соседей.
  *
+ * ModelManager владеет контекстом создания EdgeModel: фабрика создаётся здесь
+ * и передаётся в PointGraphManager. Сам PointGraphManager не знает, как
+ * преобразовать EdgeRef в EdgeModel.
+ *
  * Поиск кандидатов использует текущих соседей точки, соседей этих соседей
  * и небольшую случайную выборку. Поэтому вместо полного перебора всех точек
  * алгоритм работает с локальной окрестностью графа и постепенно улучшает её.
  *
- * Улучшение выполняется инкрементально: за один requestAnimationFrame
- * обрабатывается только столько точек, сколько помещается в заданный бюджет
- * времени. Это позволяет не блокировать основной поток браузера.
+ * Улучшение выполняется инкрементально: за один callback обрабатывается только
+ * столько точек, сколько помещается в заданный бюджет времени. Планирование
+ * callback и requestAnimationFrame полностью принадлежат AnimationEngine.
  */
 export class ModelManager {
   private readonly K: number;
   private readonly randomCandidates: number;
   private readonly frameBudgetMs: number;
+  private readonly pointGraphManager: PointGraphManager;
 
   private pointIndex = 0;
   private iterationChanged = false;
-  private rafId: number | null = null;
-  private generation = 0;
   private isRunningFrame = false;
+  private optimizationCallback: AnimationCallback | null = null;
 
   private readonly unsubGraphUpdated: () => void;
   private readonly unsubStep: () => void;
 
   constructor(
     private mediator: AppMediator,
-    private pointGraphManager: PointGraphManager,
+    private animation: AnimationEngine,
     K: number = 3,
     randomCandidates: number = 3,
     frameBudgetMs: number = 6,
@@ -47,16 +54,26 @@ export class ModelManager {
     this.randomCandidates = Math.max(0, randomCandidates);
     this.frameBudgetMs = Math.max(1, frameBudgetMs);
 
-    this.unsubGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
-      if (this.isRunningFrame) return;
-      this.pointIndex = 0;
-      this.iterationChanged = false;
-      this.startOptimization();
-    });
+    const edgeModelFactory: IEdgeModelFactory = {
+      create: (edgeRef) => this.edgeRefToEdgeModel(edgeRef),
+    };
+
+    this.pointGraphManager = new PointGraphManager(this.mediator, edgeModelFactory);
+
+    // this.unsubGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
+    //   if (this.isRunningFrame) return;
+    //   this.pointIndex = 0;
+    //   this.iterationChanged = false;
+    //   this.startOptimization();
+    // });
 
     this.unsubStep = this.mediator.onModelManagerStep(() => {
       this.startOptimization();
     });
+  }
+
+  public getPointGraphManager(): PointGraphManager {
+    return this.pointGraphManager;
   }
 
   public destroy(): void {
@@ -66,43 +83,41 @@ export class ModelManager {
   }
 
   /**
-   * Запустить непрерывное улучшение графа через requestAnimationFrame.
+   * Запустить непрерывное улучшение графа через AnimationEngine.
    */
   private startOptimization(): void {
-    if (this.rafId !== null) return;
+    if (this.optimizationCallback !== null) return;
     if (this.pointGraphManager.getPoints().length < 2) return;
 
-    this.generation++;
-    const generation = this.generation;
-    this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+    this.optimizationCallback = this.animation.addCallback(() => this.runStep());
   }
 
   /**
-   * Остановить запланированное улучшение графа.
+   * Остановить улучшение графа.
+   * requestAnimationFrame здесь не используется: им управляет AnimationEngine.
    */
   private stopOptimization(): void {
-    this.generation++;
-
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
+    if (this.optimizationCallback !== null) {
+      this.optimizationCallback();
+      this.optimizationCallback = null;
     }
   }
 
   /**
    * Выполнить один временной квант оптимизации.
    *
-   * Важно: requestAnimationFrame сам по себе не делает большой расчёт
-   * неблокирующим. Поэтому внутри одного кадра явно ограничиваем объём
-   * работы по performance.now().
+   * Важно: AnimationEngine вызывает этот метод в своём animation frame,
+   * а внутри одного кадра объём работы ограничивается performance.now().
    */
-  private runFrame(generation: number): void {
-    this.rafId = null;
-
-    if (generation !== this.generation) return;
-
+  private runStep(): void {
     const points = this.pointGraphManager.getPoints();
-    if (points.length < 2) return;
+    if (points.length < 2) {
+      this.stopOptimization();
+      return;
+    }
+
+    ///TODO здесь вызвать функцию которая Делает сортированный список моделей по количеству точек
+    ///    points.map(p=>p.embeddings)
 
     const frameStart = performance.now();
     let graphChanged = false;
@@ -128,15 +143,82 @@ export class ModelManager {
       this.iterationChanged = false;
 
       // Если полный проход не изменил ни одного ребра, локальная оптимизация
-      // сошлась и можно остановить requestAnimationFrame.
+      // сошлась и callback можно удалить из AnimationEngine.
       if (!iterationChanged) {
+        this.stopOptimization();
         return;
       }
     } else if (graphChanged) {
       this.iterationChanged = true;
     }
+  }
 
-    this.rafId = requestAnimationFrame(() => this.runFrame(generation));
+  /**
+   * Создать EdgeModel из EdgeRef в контексте ModelManager.
+   */
+  private edgeRefToEdgeModel(edgeRef: EdgeRef): EdgeModel | null {
+    const pointCollection = this.pointGraphManager.getPointCollection();
+    const sourceIndex = pointCollection.indexMap.get(edgeRef.sourceId);
+    const targetIndex = pointCollection.indexMap.get(edgeRef.targetId);
+
+    if (sourceIndex == null || targetIndex == null) {
+      console.warn(`edgeRefToEdgeModel: point not found: ${edgeRef.sourceId} or ${edgeRef.targetId}`);
+      return null;
+    }
+
+    // Нормализуем порядок source/target по индексу для консистентности id ребра.
+    let sourceId = edgeRef.sourceId;
+    let targetId = edgeRef.targetId;
+
+    if (sourceIndex > targetIndex) {
+      [sourceId, targetId] = [targetId, sourceId];
+    }
+
+    const source = pointCollection.getById(sourceId);
+    const target = pointCollection.getById(targetId);
+
+    if (!source || !target) {
+      console.warn(`edgeRefToEdgeModel: point not found: ${edgeRef.sourceId} or ${edgeRef.targetId}`);
+      return null;
+    }
+
+    let modelName = edgeRef.modelName;
+
+    if (!modelName) {
+      let bestModel: string | null = null;
+      let maxIntersection = -1;
+
+      const sourceModels = new Set(source.embeddings.keys());
+
+      // Ищем общую модель с максимальным пересечением активных размерностей.
+      for (const [targetModelName, targetEmb] of target.embeddings.entries()) {
+        if (sourceModels.has(targetModelName)) {
+          const sourceEmb = source.embeddings.get(targetModelName)!;
+          const intersection = sourceEmb.intersectionCount(targetEmb);
+
+          if (intersection > maxIntersection) {
+            maxIntersection = intersection;
+            bestModel = targetModelName;
+          }
+        }
+      }
+      modelName = bestModel ?? undefined;
+    }
+
+    if (!modelName) {
+      console.warn(`edgeRefToEdgeModel: no common embedding model for ${source.id} and ${target.id}`);
+      return null;
+    }
+
+    const embSource = source.embeddings.get(modelName);
+    const embTarget = target.embeddings.get(modelName);
+
+    if (!embSource || !embTarget) {
+      console.warn(`edgeRefToEdgeModel: missing embedding for model ${modelName}`);
+      return null;
+    }
+
+    return new EdgeModel(source, target, 100, modelName);
   }
 
   /**

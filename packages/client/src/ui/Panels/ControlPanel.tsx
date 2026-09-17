@@ -60,6 +60,7 @@ export const ControlPanel: React.FC<Props> = ({ mediator }) => {
       <button className={styles.button} onClick={() => mediator.startGraph()}>Старт Graph</button>
       <button className={styles.button} onClick={() => mediator.savePositions()}>Сохранить</button>
       <button className={styles.button} onClick={handleComputeEmbeddings}>Вычисление эмбеддингов</button>
+      <button className={styles.button} onClick={() => mediator.modelManagerStep()}>ModelManager</button>
       {savedAt && <span className={styles.saved}>Сохранено в {savedAt}</span>}
       <div>Температура: {temperature.toFixed(4)}</div>
       <div>Прогресс: {progress.toFixed(4)}</div>

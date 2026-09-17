@@ -5,4 +5,5 @@ export interface PointTable {
   z?: number;
   title: string;
   updated_at: number;
+  pinned:boolean;
 }

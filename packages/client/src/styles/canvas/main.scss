@@ -28,7 +28,7 @@ svg {
   border: rgb(21, 255, 0) solid 2px;
 }
 
-.main-area {
+#main-area {
   display: grid;
   grid-template-columns: 1fr auto;
   transition: all 0.2s;

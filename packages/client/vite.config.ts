@@ -41,6 +41,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@shared": "../shared/src",
+        "@clients/*": "src/clients/*",
       },
     },
   };

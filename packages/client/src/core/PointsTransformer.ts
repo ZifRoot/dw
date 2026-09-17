@@ -30,7 +30,7 @@ export class PointsTransformer {
 
     // Передаём только ID изменённой точки; сам объект берём из графа.
     this.unsubPointUpdated = this.mediator.onPointUpdated(async ({ pointId }) => {
-      const point = this.pointGraphManager.getPointCollection().getById(pointId);
+      const point = this.pointGraphManager.getPointById(pointId);
       if (point) {
         await this.savePoints([point]);
       }
@@ -63,7 +63,7 @@ export class PointsTransformer {
   private convertPointsTableToModel(pointsTable: PointTable[]): PointModel[] {
     return pointsTable.map((pt) => {
       const math = { x: pt.x ?? 0, y: pt.y ?? 0, z: pt.z ?? 0 };
-      return new PointModel(math, pt.id, pt.title);
+      return new PointModel(math, pt.id, pt.title, undefined, undefined, pt.pinned);
     });
   }
 
@@ -96,6 +96,7 @@ export class PointsTransformer {
       z: p.z,
       title: p.text,
       updated_at: Date.now(),
+      pinned: p.pinned,
     }));
     await this.dataManager.savePointsTable(pointTables);
   }

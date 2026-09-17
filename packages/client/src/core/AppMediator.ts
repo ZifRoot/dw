@@ -9,7 +9,7 @@ export interface AppEventMap {
   [AppMediator.AUTO_ZOOM]: boolean;
   [AppMediator.SELECTED_POINT]: UIPoint | null;
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
-  [AppMediator.POINT_UPDATE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
+  [AppMediator.POINT_CHANGE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
   [AppMediator.POINT_UPDATED]: { pointId: string };
   [AppMediator.POINTS_UPDATED]: undefined;
@@ -29,7 +29,7 @@ export class AppMediator extends BaseMediator {
   static AUTO_ZOOM = "auto-zoom";
   static SELECTED_POINT = "selected-point";
   static SELECTED_EDGE = "selected-edge";
-  static POINT_UPDATE = "point-update";
+  static POINT_CHANGE = "point-update";
   static POINT_UPDATED = "point-updated";
   static EDGE_UPDATE = "edge-update";
 
@@ -44,6 +44,7 @@ export class AppMediator extends BaseMediator {
   static MODEL_MANAGER_STEP = "model-manager-step";
   static SAVE_POSITIONS = "save-positions";
   static POSITIONS_SAVED = "positions-saved";
+  static POINT_UPDATING = "point-updating";
 
   public get progress(): number {
     return this.get(AppMediator.PROGRESS) ?? 0;
@@ -94,8 +95,16 @@ export class AppMediator extends BaseMediator {
     this.set(AppMediator.SIZE_TEXT, value);
   }
 
-  public updatePoint(pointId: string, changes: Partial<Omit<UIPoint, "id">>): void {
-    this.emit(AppMediator.POINT_UPDATE, { pointId, changes });
+  /**
+   * Уведомить UI о текущем выборе.
+   * Само состояние выбора хранится в PointModel и не дублируется в медиаторе.
+   */
+  public selectPoint(value: UIPoint | null): void {
+    this.emit(AppMediator.SELECTED_POINT, value);
+  }
+
+  public pointChange(pointId: string, changes: Partial<Omit<UIPoint, "id">>): void {
+    this.emit(AppMediator.POINT_CHANGE, { pointId, changes });
   }
 
   public updateEdge(edgeId: string, changes: Partial<Omit<UIEdge, "id">>): void {
@@ -124,17 +133,21 @@ export class AppMediator extends BaseMediator {
     this.emit(AppMediator.POSITIONS_SAVED);
   }
 
-  /** Сигнал: одна точка изменилась. Передаём только её идентификатор. */
+  /** Сигнал: одна точка изменилась.*/
   public pointUpdated(pointId: string): void {
     this.emit(AppMediator.POINT_UPDATED, { pointId });
   }
 
-  /** Частый сигнал: физика обновила позиции. Данные остаются в PointGraphManager. */
+  /** Частый сигнал: физика обновила позиции.*/
   public pointsUpdating(): void {
     this.emit(AppMediator.POINTS_UPDATING);
   }
+  /** Частый сигнал: Drag.*/
+  public pointUpdating(pointId: string): void {
+    this.emit(AppMediator.POINT_UPDATING, { pointId });
+  }
 
-  /** Редкий сигнал: физика закончила обновление. Данные остаются в PointGraphManager. */
+  /** Редкий сигнал: физика закончила обновление.*/
   public pointsUpdated(): void {
     this.emit(AppMediator.POINTS_UPDATED);
   }
@@ -166,9 +179,6 @@ export class AppMediator extends BaseMediator {
   public onSelectedEdge(callback: (edge: UIEdge | null) => void): () => void {
     return this.on(AppMediator.SELECTED_EDGE, callback);
   }
-  public onPointUpdate(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void {
-    return this.on(AppMediator.POINT_UPDATE, callback);
-  }
   public onSizeText(callback: (value: number) => void): () => void {
     return this.on(AppMediator.SIZE_TEXT, callback);
   }
@@ -196,19 +206,25 @@ export class AppMediator extends BaseMediator {
   public onPositionsSaved(callback: () => void): () => void {
     return this.on(AppMediator.POSITIONS_SAVED, callback);
   }
+  public onPointsGraphUpdated(callback: () => void): () => void {
+    return this.on(AppMediator.POINTS_GRAPH_UPDATED, callback);
+  }
+  public onModelManagerStep(callback: () => void): () => void {
+    return this.on(AppMediator.MODEL_MANAGER_STEP, callback);
+  }
   public onPointsUpdating(callback: () => void): () => void {
     return this.on(AppMediator.POINTS_UPDATING, callback);
   }
   public onPointsUpdated(callback: () => void): () => void {
     return this.on(AppMediator.POINTS_UPDATED, callback);
   }
+  public onPointChange(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void {
+    return this.on(AppMediator.POINT_CHANGE, callback);
+  }
   public onPointUpdated(callback: (detail: { pointId: string }) => void): () => void {
     return this.on(AppMediator.POINT_UPDATED, callback);
   }
-  public onPointsGraphUpdated(callback: () => void): () => void {
-    return this.on(AppMediator.POINTS_GRAPH_UPDATED, callback);
-  }
-  public onModelManagerStep(callback: () => void): () => void {
-    return this.on(AppMediator.MODEL_MANAGER_STEP, callback);
+  public onPointUpdating(callback: (detail: { pointId: string }) => void): () => void {
+    return this.on(AppMediator.POINT_UPDATING, callback);
   }
 }

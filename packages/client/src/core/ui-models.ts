@@ -6,6 +6,7 @@ export interface UIPoint {
   z: number;
   text: string;
   pinned: boolean;
+  selected: boolean;
 }
 
 export interface UIEdge {
