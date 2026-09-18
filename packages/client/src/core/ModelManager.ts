@@ -217,26 +217,9 @@ export class ModelManager {
    * Создать EdgeModel из EdgeRef в контексте ModelManager.
    */
   private edgeRefToEdgeModel(edgeRef: EdgeRef): EdgeModel | null {
-    const pointCollection = this.pointGraphManager.getPointCollection();
-
-    let sourceId = edgeRef.sourceId;
-    let targetId = edgeRef.targetId;
-
-    const sourceIndex = pointCollection.indexMap.get(sourceId);
-    const targetIndex = pointCollection.indexMap.get(targetId);
-
-    if (sourceIndex == null || targetIndex == null) {
-      console.warn(`[ModelManager] Point not found for edge: ${sourceId} -> ${targetId}`);
-      return null;
-    }
-
-    // Нормализуем порядок концов для консистентности id ребра.
-    if (sourceIndex > targetIndex) {
-      [sourceId, targetId] = [targetId, sourceId];
-    }
-
-    const source = pointCollection.getById(sourceId);
-    const target = pointCollection.getById(targetId);
+    const { sourceId, targetId } = edgeRef;
+    const source = this.pointGraphManager.getPointById(sourceId);
+    const target = this.pointGraphManager.getPointById(targetId);
 
     if (!(source instanceof PointModel) || !(target instanceof PointModel)) {
       console.warn(`[ModelManager] Embedding point not found for edge: ${edgeRef.sourceId} -> ${edgeRef.targetId}`);
@@ -256,7 +239,6 @@ export class ModelManager {
 
     return new EdgeModel(source, target, modelName);
   }
-
   /**
    * Улучшить соседей одной точки.
    *
