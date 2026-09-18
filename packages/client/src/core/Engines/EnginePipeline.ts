@@ -67,6 +67,22 @@ export class EnginePipeline {
     }));
   }
 
+  /**
+   * Возвращает снимок конфигурации pipeline для UI.
+   * Внутренний массив entries наружу не передаётся.
+   */
+  public getConfiguration(): ReadonlyArray<{
+    name: string;
+    enabled: boolean;
+    config: Readonly<Record<string, unknown>>;
+  }> {
+    return this.entries.map((entry) => ({
+      name: entry.name,
+      enabled: entry.enabled ?? true,
+      config: { ...entry.algorithm.config },
+    }));
+  }
+
   /** Включить или выключить алгоритм по его имени. */
   public setEnabled(engineName: string, enabled: boolean): void {
     const entry = this.entries.find((item) => item.name === engineName);
