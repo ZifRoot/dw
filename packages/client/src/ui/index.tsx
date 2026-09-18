@@ -18,7 +18,7 @@ export function createInfoPanel(container: HTMLElement, mediator: AppMediator) {
   const root = createRoot(container);
   root.render(
     <InfoPanel>
-      <AdaptiveInfoContent mediator={mediator} pipelines={[]} />
+      <AdaptiveInfoContent mediator={mediator} />
     </InfoPanel>,
   );
 }
