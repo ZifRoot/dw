@@ -33,3 +33,41 @@ svg {
   grid-template-columns: 1fr auto;
   transition: all 0.2s;
 }
+
+
+.mediator-scene {
+  pointer-events: none;
+}
+
+.mediator-scene__title,
+.mediator-scene__column-title,
+.mediator-scene__node text {
+  fill: white;
+  font-family: sans-serif;
+  font-size: 12px;
+}
+
+.mediator-scene__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.mediator-scene__column-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mediator-scene__node rect {
+  fill: #202020;
+  stroke: #888;
+  stroke-width: 1;
+}
+
+.mediator-scene__nodes--event rect {
+  fill: #303030;
+}
+
+.mediator-scene__link {
+  stroke: #888;
+  stroke-opacity: 0.45;
+}
