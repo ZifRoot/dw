@@ -5,7 +5,7 @@ import { EdgeModel } from "./models/EdgeModel";
 import { EdgeRef } from "./models/EdgeRef";
 import { PointModel } from "./models/PointModel";
 import { PointGraphManager } from "./collections/PointGraphManager";
-import { IEdgeModelFactory } from "./interfaces/IEdgeModelFactory";
+import { IEdgeFactory } from "./interfaces/IEdgeFactory";
 import { cosineDistance } from "@utils/vector";
 
 interface ScoredCandidate {
@@ -58,7 +58,7 @@ export class ModelManager {
     this.randomCandidates = Math.max(0, Math.floor(randomCandidates));
     this.frameBudgetMs = Math.max(1, frameBudgetMs);
 
-    const edgeModelFactory: IEdgeModelFactory = {
+    const edgeModelFactory: IEdgeFactory = {
       create: (edgeRef) => this.edgeRefToEdgeModel(edgeRef),
     };
 
@@ -147,7 +147,7 @@ export class ModelManager {
 
       const edgesToRemove = this.pointGraphManager
         .getEdgesArray()
-        .filter((edge) => edge.modelName !== model);
+        .filter((edge): edge is EdgeModel => edge instanceof EdgeModel && edge.modelName !== model);
 
       if (edgesToRemove.length > 0) {
         this.pointGraphManager.removeEdges(edgesToRemove);
@@ -280,7 +280,10 @@ export class ModelManager {
     const modelName = this.activeModelName;
     if (!modelName) return false;
 
-    const currentEdges = this.pointGraphManager.getEdgesForPoint(source.id);
+    const currentEdges = this.pointGraphManager
+      .getEdgesForPoint(source.id)
+      .filter((edge): edge is EdgeModel => edge instanceof EdgeModel);
+
     const scored: ScoredCandidate[] = currentEdges.map((edge) => ({
       targetId: this.getOtherPointId(edge, source.id),
       distance: edge.cosineDistance,
@@ -298,7 +301,9 @@ export class ModelManager {
     const candidateIds = new Set<string>();
 
     for (const neighborId of seedNeighbors) {
-      const neighborEdges = this.pointGraphManager.getEdgesForPoint(neighborId);
+      const neighborEdges = this.pointGraphManager
+        .getEdgesForPoint(neighborId)
+        .filter((edge): edge is EdgeModel => edge instanceof EdgeModel);
 
       for (const edge of neighborEdges) {
         if (candidateIds.size >= this.K * this.K) break;
@@ -357,7 +362,7 @@ export class ModelManager {
         modelName,
       });
 
-      changed = edge !== null || changed;
+      changed = edge instanceof EdgeModel || changed;
     }
 
     return changed;
