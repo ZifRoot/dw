@@ -238,8 +238,8 @@ export class ModelManager {
     const source = pointCollection.getById(sourceId);
     const target = pointCollection.getById(targetId);
 
-    if (!source || !target) {
-      console.warn(`[ModelManager] Point not found for edge: ${edgeRef.sourceId} -> ${edgeRef.targetId}`);
+    if (!(source instanceof PointModel) || !(target instanceof PointModel)) {
+      console.warn(`[ModelManager] Embedding point not found for edge: ${edgeRef.sourceId} -> ${edgeRef.targetId}`);
       return null;
     }
 
@@ -308,7 +308,7 @@ export class ModelManager {
       if (existingTargets.has(candidateId)) continue;
 
       const target = this.pointGraphManager.getPointById(candidateId);
-      if (!target) continue;
+      if (!(target instanceof PointModel)) continue;
 
       const distance = this.calculateCosineDistance(source, target, modelName);
       if (distance !== null) {
@@ -365,7 +365,7 @@ export class ModelManager {
     const modelName = this.activeModelName;
     if (!modelName || this.randomCandidates === 0) return [];
 
-    const points = this.pointGraphManager.getPoints();
+    const points = this.pointGraphManager.getPoints<PointModel>();
     if (points.length < 2) return [];
 
     const result = new Set<string>();
