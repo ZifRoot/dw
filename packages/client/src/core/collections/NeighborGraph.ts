@@ -36,21 +36,8 @@ export class NeighborGraph {
   public hasEdge(edgeRef: EdgeRef): boolean {
     if (edgeRef.sourceId === edgeRef.targetId) return false;
 
-    const edgeIds = this.adjacency.get(edgeRef.sourceId);
-    if (!edgeIds) return false;
-
-    for (const id of edgeIds) {
-      const edge = this.edgeCollection.getById(id);
-      if (
-        edge &&
-        ((edge.sourceId === edgeRef.sourceId && edge.targetId === edgeRef.targetId) ||
-          (edge.sourceId === edgeRef.targetId && edge.targetId === edgeRef.sourceId))
-      ) {
-        return true;
-      }
-    }
-
-    return false;
+    const edge = this.factory.create(edgeRef);
+    return edge !== null && this.edgeCollection.getById(edge.id) !== null;
   }
 
   public addEdge(edgeRef: EdgeRef): Edge | null {
