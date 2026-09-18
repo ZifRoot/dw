@@ -5,6 +5,7 @@ import { InfoPanel } from "./Panels/InfoPanel";
 import { AdaptiveInfoContent } from "./components/AdaptiveInfoContent";
 import { AppMediator } from "../core/AppMediator";
 import { EnginePipeline } from "../core/Engines/EnginePipeline";
+import { EnginePipeline } from "../core/Engines/EnginePipeline";
 
 export function createControlPanel(
   container: HTMLElement,
@@ -14,11 +15,15 @@ export function createControlPanel(
   root.render(<ControlPanel mediator={mediator} />);
 }
 
-export function createInfoPanel(container: HTMLElement, mediator: AppMediator) {
+export function createInfoPanel(
+  container: HTMLElement,
+  mediator: AppMediator,
+  pipelines: EnginePipeline[],
+) {
   const root = createRoot(container);
   root.render(
     <InfoPanel>
-      <AdaptiveInfoContent mediator={mediator} />
+      <AdaptiveInfoContent mediator={mediator} pipelines={pipelines} />
     </InfoPanel>,
   );
 }
