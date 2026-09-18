@@ -6,6 +6,7 @@ import { EdgesScene } from "./core/Scene/EdgesScene";
 import { createControlPanel, createInfoPanel } from "./ui";
 import { RepulsionEngine, RepulsionEngineConfig } from "./core/physics/RepulsionEngine";
 import { AnimationEngine } from "./core/Engines/AnimationEngine";
+import { EnginePipeline } from "./core/Engines/EnginePipeline";
 import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
 import { ZDampingConfig, ZDampingEngine } from "./core/physics/ZDampingEngine";
 import { DataManager } from "./core/data/DataManager";
@@ -49,9 +50,16 @@ function bootstrap() {
   const dataManager = new DataManager(mediator);
   const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
 
-  const zdampingEngine = new ZDampingEngine(mediator, animationEngine, new ZDampingConfig());
-  const graphEngine = new GraphEngine(mediator, animationEngine, new GraphEngineConfig());
-  const repulsionEngine = new RepulsionEngine(mediator, animationEngine, new RepulsionEngineConfig());
+  const zdampingEngine = new ZDampingEngine(new ZDampingConfig());
+  const graphEngine = new GraphEngine(new GraphEngineConfig());
+  const repulsionEngine = new RepulsionEngine(new RepulsionEngineConfig());
+  const enginePipeline = new EnginePipeline(
+    mediator,
+    animationEngine,
+    graphEngine,
+    repulsionEngine,
+    zdampingEngine,
+  );
 
   animationEngine.AfterStep = () => mediator.pointsUpdating();
 
