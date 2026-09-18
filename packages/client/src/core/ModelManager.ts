@@ -97,7 +97,7 @@ export class ModelManager {
   public getModelsByPointCount(): ModelPointCount[] {
     const modelPointCounts = new Map<string, number>();
 
-    for (const point of this.pointGraphManager.getPoints()) {
+    for (const point of this.pointGraphManager.getPoints<PointModel>()) {
       for (const modelName of point.embeddings.keys()) {
         modelPointCounts.set(modelName, (modelPointCounts.get(modelName) ?? 0) + 1);
       }
@@ -182,7 +182,7 @@ export class ModelManager {
   private runStep(): void {
     if (this.destroyed) return;
 
-    const points = this.pointGraphManager.getPoints();
+    const points = this.pointGraphManager.getPoints<PointModel>();
     if (points.length < 2 || this.activeModelName === null) {
       this.stopOptimization();
       return;

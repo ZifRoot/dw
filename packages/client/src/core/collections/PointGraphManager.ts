@@ -1,5 +1,5 @@
 // core/PointGraphManager.ts
-import { PointModel } from "../models/PointModel";
+import { Point } from "../models/Point";
 import { Edge } from "../models/Edge";
 import { EntityCollection } from "../collections/EntityCollection";
 import { NeighborGraph } from "../collections/NeighborGraph";
@@ -14,7 +14,7 @@ import { IEdgeFactory } from "../interfaces/IEdgeFactory";
  * Гарантирует консистентность: при изменении точек автоматически очищает "висячие" рёбра.
  */
 export class PointGraphManager {
-  private pointCollection: EntityCollection<PointModel> = new EntityCollection((p) => p.id);
+  private pointCollection: EntityCollection<Point> = new EntityCollection((p) => p.id);
   private graph: NeighborGraph;
 
   constructor(
@@ -38,7 +38,7 @@ export class PointGraphManager {
   /**
    * Обновить коллекцию точек и синхронизировать граф.
    */
-  public updatePoints(points: PointModel[]): void {
+  public updatePoints(points: Point[]): void {
     const oldIds = new Set(this.pointCollection.indexMap.keys());
     const newIds = new Set(points.map((point) => point.id));
 
@@ -52,13 +52,11 @@ export class PointGraphManager {
   /**
    * Добавить точки через менеджер графа.
    */
-  public addPoints(points: PointModel[]): void {
+  public addPoints(points: Point[]): void {
     if (points.length === 0) return;
 
-    const toInsert: PointModel[] = [];
-    const toUpdate: PointModel[] = [];
-    this.pointCollection._setPoints(points, toInsert, toUpdate);
-    this.mediator.pointsGraphUpdated();
+    this.pointCollection._setPoints(points, [], []);
+    // this.mediator.pointsGraphUpdated();
   }
 
   /**
@@ -73,18 +71,17 @@ export class PointGraphManager {
 
     this.removeEdgesForPoints(existingIds);
     this.pointCollection.removes(existingIds);
-    this.mediator.pointsGraphUpdated();
+    // this.mediator.pointsGraphUpdated();
   }
 
   /**
    * Обновить коллекцию точек и синхронизировать граф.
    */
-  public update(points: PointModel[], edges: EdgeRefs): void {
+  public update(points: Point[], edges: EdgeRefs): void {
     this.updatePoints(points);
     this.initFromRefs(edges);
-    this.mediator.pointsGraphUpdated();
+    // this.mediator.pointsGraphUpdated();
   }
-
 
   /**
    * Инициализировать граф случайными связями (до K на точку).
@@ -142,7 +139,7 @@ export class PointGraphManager {
   /**
    * Получить точку по идентификатору.
    */
-  public getPointById(id: string): PointModel | null {
+  public getPointById(id: string): Point | null {
     return this.pointCollection.getById(id) ?? null;
   }
 
@@ -153,15 +150,15 @@ export class PointGraphManager {
     return this.graph.getEdgesForPoint(id);
   }
 
-  public getPoints(): PointModel[] {
-    return this.pointCollection.items;
+  public getPoints<T extends Point>(): T[] {
+    return this.pointCollection.items as T[];
   }
 
   /**
    * Получить ссылку на живой массив точек (не копию).
    * Используется сценами для прямого доступа без синхронизации.
    */
-  public getPointsArray(): PointModel[] {
+  public getPointsArray(): Point[] {
     return this.pointCollection.items;
   }
 
@@ -188,7 +185,7 @@ export class PointGraphManager {
    * Оставлен для совместимости с существующим кодом.
    * Изменение количества точек должно выполняться через методы PointGraphManager.
    */
-  public getPointCollection(): EntityCollection<PointModel> {
+  public getPointCollection(): EntityCollection<Point> {
     return this.pointCollection;
   }
 

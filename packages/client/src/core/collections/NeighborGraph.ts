@@ -11,7 +11,7 @@ import { EntityCollection } from "./EntityCollection";
  *
  * Граф хранится как ДВА синхронизированных представления одного набора рёбер:
  *
- * 1. **Плоский список рёбер** — `edgeCollection: EntityCollection<EdgeModel>`.
+ * 1. **Плоский список рёбер** — `edgeCollection: EntityCollection<Edge>`.
  *    Единственный источник правды. Каждое ребро лежит здесь ровно один раз,
  *    независимо от количества инцидентных точек.
  *
@@ -62,7 +62,7 @@ export class NeighborGraph {
   private adjacency: Map<string, Set<string>> = new Map();
 
   /**
-   * @param factory Фабрика EdgeModel из EdgeRef. Граф не знает конкретный класс ребра.
+   * @param factory Фабрика Edge из EdgeRef. Граф не знает конкретный класс ребра.
    */
   constructor(private factory: IEdgeFactory) {
     this.edgeCollection = new EntityCollection<Edge>((edge) => edge.id);
@@ -306,11 +306,11 @@ export class NeighborGraph {
    * Возвращается ЖИВОЙ массив коллекции, не копия. Ссылка стабильна,
    * порядок может меняться после удаления (swap-with-last).
    */
-  public getAllEdgeModels(): Edge[] {
+  public getAllEdges(): Edge[] {
     return this.edgeCollection.items;
   }
 
-  /** То же, что getAllEdgeModels — оставлено для совместимости. */
+  /** То же, что getAllEdges — оставлено для совместимости. */
   public getEdgesArrayDirect(): Edge[] {
     return this.edgeCollection.items;
   }

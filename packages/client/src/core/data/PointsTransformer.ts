@@ -10,6 +10,7 @@ import { EdgeRefs } from "../models/EdgeRefs";
 import { PointGraphManager } from "../collections/PointGraphManager";
 import { Edge } from "../models/Edge";
 import { EdgeModel } from "../models/EdgeModel";
+import { Point } from "../models/Point";
 
 export class PointsTransformer {
   private unsubPointsUpdated: () => void;
@@ -89,7 +90,7 @@ export class PointsTransformer {
     }
   }
 
-  private async savePoints(points: PointModel[]): Promise<void> {
+  private async savePoints(points: Point[]): Promise<void> {
     const pointTables: PointTable[] = points.map((p) => ({
       id: p.id,
       x: p.x,

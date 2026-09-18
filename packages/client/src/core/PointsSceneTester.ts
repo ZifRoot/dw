@@ -2,9 +2,9 @@
 import { AppMediator } from "./AppMediator";
 import { PointGraphManager } from "./collections/PointGraphManager";
 import { EdgeRef } from "./models/EdgeRef";
-import { PointModel } from "./models/PointModel";
 import { PointMath } from "./models/PointMath";
 import { Safe } from "@utils/logger";
+import { Point } from "./models/Point";
 
 interface TestConfig {
   /** Доля точек, которые перемещаются на каждой итерации (0-1). */
@@ -44,8 +44,8 @@ export class PointsSceneTester {
     this.config = {
       updateFrationRange: config.updateFrationRange ?? [0.2, 0.7],
       removeFrationRange: config.removeFrationRange ?? [0.05, 0.2],
-      targetSize: config.targetSize ?? 5,
-      intervalMs: config.intervalMs ?? 1000,
+      targetSize: config.targetSize ?? 50,
+      intervalMs: config.intervalMs ?? 4000,
       verbose: config.verbose ?? true,
       fullGraph: config.fullGraph ?? true,
     };
@@ -79,7 +79,7 @@ export class PointsSceneTester {
   @Safe
   private _iteration(): void {
     const start = performance.now();
-    let points = this.pointGraphManager.getPointsArray();
+    const points = this.pointGraphManager.getPointsArray();
 
     const removeCount = this.randomInt(0, Math.max(0, points.length - this.config.targetSize));
 
@@ -92,8 +92,6 @@ export class PointsSceneTester {
       this.pointGraphManager.removePoints(ids);
     }
 
-    points = this.pointGraphManager.getPointsArray();
-
     const [updateMin, updateMax] = this.config.updateFrationRange;
     const updateCount = this.randomInt(Math.floor(points.length * updateMin), Math.ceil(points.length * updateMax));
     const updatedPoints = [...points].shuffle().slice(0, updateCount);
@@ -103,17 +101,16 @@ export class PointsSceneTester {
     }
 
     const addCount = this.randomInt(0, Math.max(0, this.config.targetSize - points.length));
-    const newPoints: PointModel[] = [];
+    const newPoints: Point[] = [];
 
     for (let i = 0; i < addCount; i++) {
       newPoints.push(this.generateRandomPoint());
     }
 
     this.pointGraphManager.addPoints(newPoints);
-    points = this.pointGraphManager.getPointsArray();
 
     const edges = this.createEdges(points);
-    this.pointGraphManager.update(points, edges);
+    this.pointGraphManager.initFromRefs(edges);
 
     const duration = performance.now() - start;
     const finalPoints = this.pointGraphManager.getPointsArray();
@@ -121,6 +118,7 @@ export class PointsSceneTester {
     this.log(
       `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, рёбер=${edges.length}, время=${duration.toFixed(2)}ms`,
     );
+    this.mediator.pointsGraphUpdated();
   }
 
   /**
@@ -130,13 +128,14 @@ export class PointsSceneTester {
    * Сам тестер не создаёт Edge и не знает, как именно
    * конкретный граф хранит или создаёт модели рёбер.
    */
-  private createEdges(points: PointModel[]): EdgeRef[] {
+  private createEdges(points: Point[]): EdgeRef[] {
     if (!this.config.fullGraph) return [];
 
     const edges: EdgeRef[] = [];
 
     for (let i = 0; i < points.length; i++) {
-      for (let j = i + 1; j < points.length; j++) {
+      for (let k = 1; k < 4; k++) {
+        let j = (i + k) % points.length;
         edges.push({
           sourceId: points[i].id,
           targetId: points[j].id,
@@ -147,13 +146,13 @@ export class PointsSceneTester {
     return edges;
   }
 
-  private generateRandomPoint(): PointModel {
+  private generateRandomPoint(): Point {
     const id = `p${this.nextId++}`;
 
-    return new PointModel(new PointMath(Math.random() * 800, Math.random() * 600, 0), id, id.slice(1, 3));
+    return new Point({ x: Math.random() * 800, y: Math.random() * 600, z: 0 }, id, id.slice(0, 6));
   }
 
-  private mutatePoint(point: PointModel): void {
+  private mutatePoint(point: Point): void {
     point.x = Math.max(0, Math.min(1000, point.x + (Math.random() - 0.5) * 100));
     point.y = Math.max(0, Math.min(800, point.y + (Math.random() - 0.5) * 100));
 
