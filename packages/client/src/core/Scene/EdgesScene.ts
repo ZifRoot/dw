@@ -1,174 +1,120 @@
 import { SvgEngine } from "../Engines/SvgEngine.ts";
-import { EntityCollection } from "./indexer.ts";
-import { PointsScene } from "./PointsScene.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
-import { UIEdge } from "../ui-models.ts";
-
-export interface Edge {
-  id: string; // уникальный идентификатор ребра (например, "sourceId-targetId")
-  sourceId: string;
-  targetId: string;
-  distance?: number; // опционально
-  // другие поля, например, thickness, color, fixed и т.д.
-}
+import { UIEdge, UIPoint } from "../models/ui-models.ts";
+import { EdgeModel } from "../models/EdgeModel.ts";
+import { PointGraphManager } from "../collections/PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private edges: Edge[] = [];
-  public entites: EntityCollection<Edge>;
-  private groupSelection: d3.Selection<SVGLineElement, Edge, SVGGElement, unknown> | null = null;
-  private pointsScene!: PointsScene;
-  unregisterSelectedPoint: () => void;
+  private edges: EdgeModel[] = [];
+  private d3Edges: d3.Selection<SVGLineElement, EdgeModel, SVGGElement, unknown> | null = null;
+
+  private unregisterSelectedPoint: () => void;
+  private unsubPointsGraphUpdated: () => void;
+  private unsubPointsUpdating: () => void;
+  private unsubPointUpdated: (() => void) | null = null;
+  private unsubPointUpdating: (() => void) | null = null;
+  private unsubPointsUpdated: (() => void) | null = null;
 
   constructor(
     private svgEngine: SvgEngine,
     private mediator: AppMediator,
+    private pointGraphManager: PointGraphManager,
     groupName = "edges-scene",
   ) {
-    this.entites = new EntityCollection<Edge>((p) => p.id);
-    this.edges = this.entites.items;
-    this.svgEngine = svgEngine;
-    this.rootGroup = svgEngine.createGroup(groupName);
+    this.syncRefs();
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
-    this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => {
-      this.highlightEdgesForPoint(point?.id ?? null);
-    });
-    this.rootGroup.on("click", (event) => {
-      const target = event.target as Element;
-      const line = target.closest?.(".edge");
-      if (line && d3.select(line).classed("highlighted")) {
-        const edge = d3.select(line).datum() as Edge;
-        if (edge) {
-          const uiEdge: UIEdge = {
-            id: edge.id,
-            sourceId: edge.sourceId,
-            targetId: edge.targetId,
-            distance: edge.distance,
-            visible: true,
-          };
-          this.mediator.selectedEdge = uiEdge;
-          // this.mediator.selectedPoint = null;
-        }
-      }
-    });
+
+    this.rootGroup = svgEngine.createGroup(groupName);
+    this.rootGroup.on("click", (e) => this.groupClick(e));
+
+    this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point));
+    this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => this.renderLines());
+    this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateLines());
+    this.unsubPointsUpdated = this.mediator.onPointsUpdated(() => this.updateLines());
+    this.unsubPointUpdated = this.mediator.onPointUpdated((point) => this.updateLines());
+    this.unsubPointUpdating = this.mediator.onPointUpdating((point) => this.updateLines());
   }
 
-  // Подсветка рёбер, инцидентных данной точке (или снятие подсветки)
-  private highlightEdgesForPoint(pointId: string | null): void {
-    if (!this.groupSelection) return;
+  groupClick(event: any) {
+    const target = event.target as Element;
+    const line = target.closest?.(".highlighted");
+    if (!line) return;
+    const edge = d3.select(line).datum() as EdgeModel;
+    if (!edge) return;
+    const uiEdge: UIEdge = {
+      id: edge.id,
+      sourceId: edge.sourceId,
+      targetId: edge.targetId,
+      distance: edge.distance,
+      visible: true,
+    };
+    this.mediator.selectedEdge = uiEdge;
+  }
+
+  // Подсветка рёбер, инцидентных данной точке (или снятие подсветки).
+  private highlightEdgesForPoint(point: UIPoint | null): void {
+    const pointId = point?.id ?? null;
+    if (!this.d3Edges) return;
     if (!pointId) {
-      // Снимаем подсветку со всех рёбер
-      this.groupSelection.classed("highlighted", false);
+      this.d3Edges.classed("highlighted", false);
       return;
     }
-    // Находим рёбра, где sourceId или targetId совпадает с pointId
     const relatedEdgeIds = new Set<string>();
     for (const edge of this.edges) {
       if (edge.sourceId === pointId || edge.targetId === pointId) {
         relatedEdgeIds.add(edge.id);
       }
     }
-    // Применяем класс highlighted и делаем кликабельными
-    this.groupSelection.classed("highlighted", (d) => relatedEdgeIds.has(d.id));
+    this.d3Edges.classed("highlighted", (d) => relatedEdgeIds.has(d.id));
   }
 
-  // При уничтожении сцены отписываемся
   public destroy(): void {
     if (this.unregisterSelectedPoint) this.unregisterSelectedPoint();
+    if (this.unsubPointsGraphUpdated) this.unsubPointsGraphUpdated();
+    if (this.unsubPointUpdated) this.unsubPointUpdated();
+    if (this.unsubPointUpdating) this.unsubPointUpdating();
+    if (this.unsubPointsUpdated) this.unsubPointsUpdated();
+    if (this.unsubPointsUpdating) this.unsubPointsUpdating();    
+    this.clear();
   }
 
-  /** Подключить сцену точек для автоматического обновления линий при движении точек */
-  public attachToPointsScene(pointsScene: PointsScene): void {
-    this.pointsScene = pointsScene;
-    pointsScene.onPointMoved = () => this.updateLines();
-    // При зуме линии не меняют координат, но если стили зависят от зума – можно обновить
-  }
-
-  // ========== Управление рёбрами (upsert, удаление, очистка) ==========
-
-  /** Обновить существующие рёбра и добавить новые (upsert) – мутирует массив */
-  public setEdges(edges: Edge[]): void {
-    const toInsert: Edge[] = [];
-    const toUpdate: Edge[] = [];
-    this.entites.clear();
-
-    this.entites._setPoints(edges, toInsert, toUpdate);
-
-    // Синхронизируем DOM
-    this.syncDomWithEdges(toUpdate, toInsert);
-  }
-
-  /** Удалить рёбра по списку id */
-  public removeEdges(ids: string[]): void {
-    this.entites._removePoints(ids);
-    // После мутации перерисовываем DOM
-    this.renderLines();
-  }
-
-  /** Удалить рёбра по предикату */
-  public removeEdgesBy(predicate: (edge: Edge) => boolean): void {
-    const toDeleteIds = this.edges.filter(predicate).map((e) => e.id);
-    this.removeEdges(toDeleteIds);
-  }
-
-  /** Очистить все рёбра */
   public clear(): void {
     this.rootGroup.selectAll("*").remove();
-    this.entites.clear();
-    this.groupSelection = null;
-  }
-
-  // ========== Приватные методы синхронизации DOM ==========
-
-  private syncDomWithEdges(toUpdate: Edge[], toInsert: Edge[]): void {
-    // Полная перерисовка – проще, чем поддерживать частичное обновление.
-    // Для производительности можно реализовать инкрементальное обновление,
-    // но поскольку рёбер обычно меньше, чем точек, оставим полную перерисовку.
-    this.renderLines();
+    this.d3Edges = null;
   }
 
   private renderLines(): void {
-    if (this.edges.length === 0) return;
+    const lines = this.rootGroup.selectAll<SVGLineElement, EdgeModel>("line.edge").data(this.edges, (d) => d.id);
 
-    // Создаём линии с привязкой данных
-    this.groupSelection = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
+    lines.exit().remove();
+    const enter = lines.enter().append("line").attr("class", "edge");
 
-    this.groupSelection.enter().append("line").attr("class", "edge");
-
-    this.groupSelection.exit().remove();
-
-    this.groupSelection = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
-
+    this.d3Edges = enter.merge(lines);
     this.updateLines();
   }
 
   private updateLines(): void {
-    if (!this.groupSelection || !this.pointsScene) return;
-
-    const pointsMap = new Map(this.pointsScene.getPoints().map((p) => [p.id, p]));
-    // let source = pointsMap.get(e.sourceId);
-    // let target = pointsMap.get(e.targetId);
-    // if (!source || !target) return;
-    this.groupSelection
-      .attr("x1", (e) => this.pointsScene.getPointById(e.sourceId)?.x ?? 1000)
-      .attr("y1", (e) => this.pointsScene.getPointById(e.sourceId)?.y ?? 1000)
-      .attr("x2", (e) => this.pointsScene.getPointById(e.targetId)?.x ?? 1000)
-      .attr("y2", (e) => this.pointsScene.getPointById(e.targetId)?.y ?? 1000);
+    if (!this.d3Edges) return;
+    this.d3Edges
+      .attr("x1", (e) => e.source.x)
+      .attr("y1", (e) => e.source.y)
+      .attr("x2", (e) => e.target.x)
+      .attr("y2", (e) => e.target.y);
   }
+
   private updatePointStyles(scale: number): void {
-    if (!this.groupSelection) return;
+    if (!this.d3Edges) return;
     const invScale = 1 / scale;
-    // this.groupSelection.attr("stroke-width", 10 * invScale);
+    this.d3Edges.style("stroke-width", 2 * invScale);
   }
 
-  // ========== Публичные методы для внешнего доступа ==========
-  public getEdges(): Edge[] {
-    return this.edges;
+  public getEdgeById(id: string): EdgeModel | null {
+    return this.pointGraphManager.getEdgeCollection().getById(id);
   }
 
-  public getEdgeById(id: string): Edge | undefined {
-    const idx = this.entites.indexMap.get(id);
-    return idx !== undefined ? this.edges[idx] : undefined;
+  private syncRefs(): void {
+    this.edges = this.pointGraphManager.getEdgesArray();
   }
 }

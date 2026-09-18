@@ -49,6 +49,12 @@ export interface EmbeddingsSessionIdGet200ResponseInner {
      * @memberof EmbeddingsSessionIdGet200ResponseInner
      */
     sessionId: string;
+    /**
+     * 
+     * @type {Date}
+     * @memberof EmbeddingsSessionIdGet200ResponseInner
+     */
+    createdAt: Date;
 }
 
 /**
@@ -60,6 +66,7 @@ export function instanceOfEmbeddingsSessionIdGet200ResponseInner(value: object):
     if (!('dimension' in value) || value['dimension'] === undefined) return false;
     if (!('processingTimeMs' in value) || value['processingTimeMs'] === undefined) return false;
     if (!('sessionId' in value) || value['sessionId'] === undefined) return false;
+    if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
     return true;
 }
 
@@ -78,6 +85,7 @@ export function EmbeddingsSessionIdGet200ResponseInnerFromJSONTyped(json: any, i
         'dimension': json['dimension'],
         'processingTimeMs': json['processing_time_ms'],
         'sessionId': json['sessionId'],
+        'createdAt': (new Date(json['createdAt'])),
     };
 }
 
@@ -97,6 +105,7 @@ export function EmbeddingsSessionIdGet200ResponseInnerToJSONTyped(value?: Embedd
         'dimension': value['dimension'],
         'processing_time_ms': value['processingTimeMs'],
         'sessionId': value['sessionId'],
+        'createdAt': value['createdAt'].toISOString(),
     };
 }
 

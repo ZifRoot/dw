@@ -1,5 +1,5 @@
 {
-  "name": "deepseek-w",
+  "name": "dw",
   "version": "1.0.0",
   "description": "To make it easy for you to get started with GitLab, here's a list of recommended next steps.",
   "homepage": "https://gitlab.com/yakov.norev/deepseek-w#readme",
@@ -14,18 +14,21 @@
   "author": "",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/client",
+    "packages/server"
   ],
   "scripts": {
-    "generate:all": "npm run generate:client && npm run generate:server",
+    "link:shared": "bash ./link-shared.sh",
+    "generate:all": "npm run generate:dew && npm run generate:embedder",
     "generate:dew": "cd generators\\dew && generate.cmd",
-    "generate:server": "cd generators && openapi-generator-cli generate -i openapi.json -g typescript-node -o ../packages/server/src/api -c config.server.json",
+    "generate:embedder": "cd generators\\embedder && generate.cmd",
     "debug:server": "cd packages/server && npm run debug",
     "debug:client": "cd packages/client && npm run debug",
     "release:server": "cd packages/server && npm run release",
-    "release:client": "npm run build:client:release && cd packages/client && npm run preview",
+    "release:client": "cd packages/client && npm run release",
     "build:server:release": "cd packages/server && npm run build:release",
     "build:client:release": "cd packages/client && npm run build:release",
+    "build:release": "npm run build:client:release && npm run build:server:release",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -33,7 +36,6 @@
     "docker:up": "ts-node src/db/db-manager.ts up",
     "docker:down": "ts-node src/db/db-manager.ts down",
     "generate-api": "cd ./generators/embedder && openapi-generator-cli batch ./configs/fetch.json ./configs/node.json ./configs/axios.json",
-    "ddd": "cd ddd && mdforge split http://localhost:8081/api/document/dd363e2e-0f1a-479d-8b74-ffc33dbcfd1d/fragment/msg_36_frag_3/text .",
     "clean": "rm -rf packages/client/src/api packages/server/src/api packages/client/dist packages/server/dist"
   },
   "devDependencies": {
@@ -51,5 +53,9 @@
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.23",
     "zod": "^4.4.3"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "@openapitools/openapi-generator-cli@2.41.0": true
   }
 }

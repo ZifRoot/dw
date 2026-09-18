@@ -1,5 +1,5 @@
 {
     "inputSpec": "./specs/openapi.json",
-    "outputDir": "./../../packages/client/src/clients/dew/fetch",
-    "generatorName": "typescript-fetch"
+    "outputDir": "./../../packages/client/src/clients/dew/axios",
+    "generatorName": "typescript-axios"
 }

@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import { BaseController, ParamsIdSchema } from "./base.controller";
 import type { EmbeddingCreate } from "@models/EmbeddingCreate";
-import { IProgram } from "src/iprogram";
+import { IProgram } from "../iprogram";
 import "@utils/array-extensions";
 import { toDate } from "@utils/date-utils";
 
@@ -12,6 +12,7 @@ export const EmbeddingDtoSchema = z.object({
   dimension: z.number().int().positive(),
   processing_time_ms: z.number().nonnegative(),
   sessionId: z.string().uuid(),
+  createdAt: z.date(),
 });
 export type EmbeddingDto = z.infer<typeof EmbeddingDtoSchema>;
 
@@ -99,10 +100,8 @@ export class EmbeddingsController extends BaseController {
       async (c) => {
         try {
           const { updateat, modelname } = c.req.valid("query");
-          if (!updateat) {
-            return c.json({ error: "updateat" }, 400);
-          }
-          const embeddings = await this.repo.findEmbeddingsByDate(toDate(updateat as any) ?? undefined, modelname);
+          let updateat_up = updateat ?? new Date();
+          const embeddings = await this.repo.findEmbeddingsByDate(toDate(updateat_up as any) ?? undefined, modelname);
           return c.json(embeddings, 200);
         } catch (err) {
           console.error(err);
@@ -137,9 +136,10 @@ export class EmbeddingsController extends BaseController {
         try {
           const embeddingsDto = c.req.valid("json");
           const embeddingsCreate = embeddingsDto.map((dto) => this.dtoToEmbeddingCreate(dto));
-          const count = [...embeddingsCreate.groupBy((a) => a.sessionId).entries()].reduce(async (r, c) => {
-            return (await r) + (await this.repo.createManyEmbeddings(c[0], c[1]));
-          }, Promise.resolve(0));
+          let count = 0;
+          for (const [sessionId, embeddings] of embeddingsCreate.groupBy((a) => a.sessionId).entries()) {
+            count += await this.repo.createManyEmbeddings(sessionId, embeddings);
+          }
 
           return c.json({ status: "ok", received: count }, 200);
         } catch (err) {

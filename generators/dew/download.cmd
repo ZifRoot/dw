@@ -1,5 +1,5 @@
 @echo off
-set URL="http://localhost:8081/api/openapi.json"
+set URL="http://localhost:3000/api/openapi.json"
 set TARGET=".\specs\openapi.json"
 set TEMP=%TARGET%.tmp
 
@@ -10,3 +10,4 @@ if %errorlevel% equ 0 (
 ) else (
     del /f /q "%TEMP%" 2>nul
 )
+echo "Downloaded"

@@ -1,93 +1,161 @@
 # deepseek-w
 
+Система визуализации и навигации по чат-сессиям DeepSeek в виде интерактивного графа. Сервер синхронизирует историю чатов с веб-API DeepSeek, генерирует векторные эмбеддинги через внешний сервис и хранит данные в PostgreSQL. Клиент отображает сессии как точки на 2D/3D канвасе, где близкие по смыслу сессии располагаются рядом благодаря физическому движку на D3.js.
 
+## Особенности
 
-## Getting started
+- **Синхронизация с DeepSeek**: Автоматическая загрузка истории чат-сессий, сообщений и файлов
+- **Векторные эмбеддинги**: Генерация и агрегация эмбеддингов для семантического поиска и кластеризации
+- **Интерактивная визуализация**: Граф сессий с физической симуляцией (отталкивание, притяжение, drag'n'drop)
+- **Локальный кэш**: IndexedDB для офлайн-работы и быстрой загрузки
+- **API с OpenAPI документацией**: Swagger UI доступен на `/api/`
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Технологический стек
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+| Компонент | Технологии |
+|-----------|------------|
+| **Monorepo** | npm workspaces, TypeScript ^6.0.3 |
+| **Server** | Express ^5, Hono ^4, Drizzle ORM ^0.45, PostgreSQL 15, Zod ^4 |
+| **Client** | React ^18, Vite ^4, D3.js ^7, Axios, Sass |
+| **External Services** | DeepSeek Web API, Embedding Service (localhost:8000) |
+| **DevTools** | openapi-generator-cli, drizzle-kit, tsc-alias |
 
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Структура проекта
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/yakov.norev/deepseek-w.git
-git branch -M main
-git push -uf origin main
+deepseek-w/
+├── packages/
+│   ├── server/          # Бэкенд: API, синхронизация DeepSeek, эмбеддинги
+│   ├── client/          # Фронтенд: визуализация на D3.js
+│   └── shared/          # Общие утилиты (логгер, декораторы, векторы)
+├── generators/
+│   ├── dew/             # Генерация API клиента сервера
+│   └── embedder/        # Генерация API клиента embedding-сервиса
+├── .vscode/             # Конфигурации отладки
+└── link-shared.cmd      # Скрипт создания джанкшенов для shared
 ```
 
-## Integrate with your tools
+## Быстрый старт
 
-* [Set up project integrations](https://gitlab.com/yakov.norev/deepseek-w/-/settings/integrations)
+### Предварительные требования
 
-## Collaborate with your team
+- Node.js >= 18
+- Docker и Docker Compose
+- Windows (для работы джанкшенов `link-shared.cmd`) или Linux/Mac (требуется адаптация скрипта)
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### Установка
 
-## Test and Deploy
+1. Клонируйте репозиторий:
+```bash
+git clone <repository-url>
+cd deepseek-w
+```
 
-Use the built-in continuous integration in GitLab.
+2. Установите зависимости:
+```bash
+npm install
+```
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+3. Создайте джанкшены для shared-модуля (**только Windows**):
+```bash
+./link-shared.cmd
+```
 
-***
+Для Linux/Mac используйте `ln -s` вместо `mklink /J`.
 
-# Editing this README
+4. Запустите сервер (автоматически поднимет PostgreSQL в Docker):
+```bash
+npm run debug:server
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Сервер запустится на `http://localhost:8081`, Swagger UI: `http://localhost:8081/api/`
 
-## Suggestions for a good README
+5. В отдельном терминале запустите клиент:
+```bash
+npm run debug:client
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+Клиент откроется на `http://localhost:3000`
 
-## Name
-Choose a self-explaining name for your project.
+## Основные скрипты
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Корневой package.json
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+| Команда | Описание |
+|---------|----------|
+| `npm run link:shared` | Создать джанкшены для shared-модуля |
+| `npm run generate:all` | Перегенерировать API клиенты (dew + embedder) |
+| `npm run debug:server` | Запуск сервера в режиме отладки (port 8081) |
+| `npm run debug:client` | Запуск клиента в режиме разработки (port 3000) |
+| `npm run build:release` | Сборка релизных версий клиента и сервера |
+| `npm run db:generate` | Генерация миграций Drizzle |
+| `npm run db:migrate` | Применение миграций |
+| `npm run docker:up` | Поднять PostgreSQL в Docker |
+| `npm run docker:down` | Остановить PostgreSQL |
+| `npm run clean` | Удалить сгенерированные файлы и сборки |
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Server (packages/server)
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+| Команда | Описание |
+|---------|----------|
+| `npm run debug` | Отладка с `tsx watch` и `--inspect` |
+| `npm run release` | Сборка и запуск релизной версии |
+| `npm run db:studio` | Открыть Drizzle Studio для просмотра БД |
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### Client (packages/client)
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+| Команда | Описание |
+|---------|----------|
+| `npm run debug` | Vite dev-сервер с hot-reload |
+| `npm run build:release` | Production сборка |
+| `npm run preview` | Preview production сборки (port 4173) |
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## Архитектура
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### Сервер
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+- **Express + Hono**: Express как обёртка, Hono для OpenAPI endpoints на `/api`
+- **Drizzle ORM**: Типобезопасная работа с PostgreSQL
+- **Embedder**: Оркестрация задач генерации эмбеддингов через внешний сервис `:8000`
+- **DeepSeek Client**: Синхронизация с `chat.deepseek.com/api/v0`
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+Потоки данных:
+1. `POST /api/actions/update` — синхронизация сессий и файлов с DeepSeek
+2. `POST /api/actions/update-embedding` — генерация эмбеддингов
+3. `GET /api/documents` — получение списка сессий
+4. `GET /api/embeddings/session/:id` — эмбеддинги сессии
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### Клиент
 
-## License
-For open source projects, say how it is licensed.
+- **AppMediator**: Централизованная шина событий между компонентами
+- **SvgEngine**: Рендеринг на SVG с использованием D3.js
+- **Physics Engines**: RepulsionEngine, GraphEngine, ZDampingEngine
+- **DataManager**: Синхронизация IndexedDB ↔ Server API
+- **ModelManager**: Построение графа соседства на основе косинусного расстояния
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+### База данных
+
+PostgreSQL 15 запускается в Docker на порту 6000:
+- Host port: 6000 → Container port: 5432
+- Данные хранятся в `./data/postgres` (volume)
+- `.env` генерируется автоматически при первом запуске
+
+## Известные проблемы
+
+- **Windows-специфичные скрипты**: `link-shared.cmd`, `docker:up/down` требуют адаптации для Linux/Mac
+- **TypeScript version conflict**: Client использует TS ^5.0.0, root — ^6.0.3
+- **Embedder spec bug**: `generators/embedder/download.cmd` скачивает spec с неправильного URL
+- **Отсутствие тестов**: Проект не имеет unit/integration тестов
+- **Нет аутентификации API**: Креденшелы DeepSeek хранятся в БД без шифрования
+
+## Лицензия
+
+ISC
+
+## Статус проекта
+
+Активная разработка. Проект содержит рабочий код, но требует доработки в части:
+- Обработки ошибок в Embedder
+- Кроссплатформенной совместимости
+- Документации API клиентов
+- Тестового покрытия

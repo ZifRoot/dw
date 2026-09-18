@@ -21,6 +21,11 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    build: {
+      sourcemap: mode === "production" ? false : true,
+      // es2022 — поддержка top-level await (используется в index.ts)
+      target: "es2022",
+    },
     server: {
       host: "0.0.0.0",
       port: 3000,
@@ -33,12 +38,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins,
-    build: {
-      sourcemap: mode === "production" ? false : true,
-    },
     resolve: {
       alias: {
         "@shared": "../shared/src",
+        "@clients/*": "src/clients/*",
       },
     },
   };

@@ -81,7 +81,7 @@ export interface ChatMessage {
   ban_regenerate: boolean;
   status: MessageStatus;
   accumulated_token_usage: number;
-  files: ChatMessageFile[]; // теперь типизировано
+  files?: ChatMessageFile[]; // теперь типизировано
   feedback: unknown | null;
   inserted_at: number;
   search_enabled: boolean;

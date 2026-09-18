@@ -6,9 +6,10 @@
   "scripts": {
     "debug": "vite --port 3000",
     "release": "npm run build:release && npm run run:release",
-    "build:release": "vite build --mode production",
+    "build:release": "npm run typecheck && vite build --mode production",
     "run:release": "npm run preview",
-    "preview": "vite preview --port 4173"
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit > build.log 2>&1"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -23,7 +24,7 @@
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.0.0",
     "sass": "^1.99.0",
-    "typescript": "^5.0.0",
+    "typescript": "^6.0.3",
     "vite": "^4.0.0",
     "vite-plugin-importmap": "^0.1.1",
     "vite-tsconfig-paths": "^6.1.1"

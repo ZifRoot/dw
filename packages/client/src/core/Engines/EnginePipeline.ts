@@ -1,0 +1,106 @@
+import { AppMediator } from "../AppMediator";
+import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
+import { BaseAlgorithm } from "./BaseAlgorithm";
+
+export interface EnginePipelineEntry {
+  algorithm: BaseAlgorithm;
+  enabled?: boolean;
+}
+
+/**
+ * Описывает набор алгоритмов и порядок их выполнения.
+ *
+ * Pipeline отвечает за ЧТО и В КАКОМ ПОРЯДКЕ выполнять.
+ * AnimationEngine отвечает за КОГДА и как распределить выполнение по кадрам.
+ */
+export class EnginePipeline {
+  private entries: EnginePipelineEntry[] = [];
+  private disposeCallbacks: (() => void) | null = null;
+  private running = false;
+  private destroyed = false;
+  private readonly unsubscribeStart: () => void;
+
+  constructor(
+    private readonly mediator: AppMediator,
+    private readonly animation: AnimationEngine,
+    private readonly onRedraw: AnimationCallback,
+  ) {
+    this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
+  }
+
+  /** Установить алгоритмы и их порядок. Повтор одного алгоритма разрешён. */
+  public setConfiguration(entries: EnginePipelineEntry[]): void {
+    if (this.destroyed) return;
+    this.stop();
+    this.entries = entries.map((entry) => ({
+      algorithm: entry.algorithm,
+      enabled: entry.enabled ?? true,
+    }));
+  }
+
+  /** Включить или выключить алгоритм по позиции в pipeline. */
+  public setEnabled(index: number, enabled: boolean): void {
+    const entry = this.entries[index];
+    if (!entry || entry.enabled === enabled) return;
+
+    entry.enabled = enabled;
+    if (enabled) {
+      if (this.running) entry.algorithm.start();
+    } else {
+      entry.algorithm.stop();
+    }
+    if (this.running) this.rebuild();
+  }
+
+  /** Запустить все включённые алгоритмы. */
+  public start(): void {
+    if (this.destroyed) return;
+    for (const entry of this.entries) {
+      if (entry.enabled) entry.algorithm.start();
+    }
+    this.running = true;
+    this.rebuild();
+  }
+
+  /** Остановить pipeline и снять его регистрацию из AnimationEngine. */
+  public stop(): void {
+    this.disposeCallbacks?.();
+    this.disposeCallbacks = null;
+    this.running = false;
+    for (const entry of this.entries) entry.algorithm.stop();
+  }
+
+  /** Освободить все подписки. */
+  public destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.stop();
+    this.unsubscribeStart();
+  }
+
+  private rebuild(): void {
+    this.disposeCallbacks?.();
+    this.disposeCallbacks = null;
+
+    const callbacks: AnimationCallback[] = [];
+    for (const entry of this.entries) {
+      if (!entry.enabled) continue;
+      callbacks.push((deltaTime) => entry.algorithm.step(deltaTime));
+    }
+
+    if (callbacks.length === 0) {
+      this.running = false;
+      return;
+    }
+
+    callbacks.push((deltaTime) => {
+      this.onRedraw(deltaTime);
+      const activeEntries = this.entries.filter((entry) => entry.enabled);
+      if (activeEntries.length > 0 && activeEntries.every((entry) => !entry.algorithm.isRunning)) {
+        this.stop();
+      }
+    });
+
+    this.disposeCallbacks = this.animation.addCallbacks(callbacks);
+  }
+}
