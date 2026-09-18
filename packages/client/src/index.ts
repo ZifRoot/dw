@@ -46,10 +46,11 @@ function Tester(mediator: AppMediator) {
   return pointGraphManager;
 }
 
-function PointGraphManager(b: "dw" | "tester", mediator: AppMediator, animationEngine: AnimationEngine) {
+function PointGraphManager(b: "dw" | "tester" | "", mediator: AppMediator, animationEngine: AnimationEngine) {
   let X = {
     dw: (mediator: AppMediator, animationEngine: AnimationEngine) => DW(mediator, animationEngine),
     tester: (mediator: AppMediator, animationEngine: AnimationEngine) => Tester(mediator),
+    "": () => null,
   };
 
   return X[b](mediator, animationEngine);
@@ -72,18 +73,21 @@ function bootstrap() {
 
   const svgEngine = new SvgEngine(canvasDiv);
   const animationEngine = new AnimationEngine();
-  const pointGraphManager = PointGraphManager("dw", mediator, animationEngine);
-  const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
-  const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
   const mediatorScene = new MediatorScene(mediator, svgEngine);
+  const pointGraphManager = PointGraphManager("", mediator, animationEngine);
 
-  const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
-  const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
-  const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
+  if (pointGraphManager) {
+    const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
+    const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
 
-  const enginePipeline = new EnginePipeline(mediator, animationEngine);
+    const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
+    const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
+    const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
 
-  enginePipeline.setConfiguration([{ algorithm: repulsionAlgorithm }, { algorithm: graphAlgorithm }, { algorithm: zdampingAlgorithm }]);
+    const enginePipeline = new EnginePipeline(mediator, animationEngine);
+
+    enginePipeline.setConfiguration([{ algorithm: repulsionAlgorithm }, { algorithm: graphAlgorithm }, { algorithm: zdampingAlgorithm }]);
+  }
 
   createControlPanel(controlPanelDiv, mediator);
   createInfoPanel(infoPanelDiv, mediator);
