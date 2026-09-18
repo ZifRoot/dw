@@ -51,6 +51,10 @@ export class PointsSceneTester {
     };
   }
 
+  public getPointGraphManager(): PointGraphManager {
+    return this.pointGraphManager;
+  }
+
   public start(): void {
     if (this.timerId !== null) return;
 
