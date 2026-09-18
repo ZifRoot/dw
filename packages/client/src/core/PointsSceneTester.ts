@@ -4,7 +4,7 @@ import { PointGraphManager } from "./collections/PointGraphManager";
 import { EdgeRef } from "./models/EdgeRef";
 import { Point } from "./models/Point";
 import { Safe } from "@utils/logger";
-import { levenshteinDistance } from "@shared/utils/levenshtein-distance";
+import { levenshteinDistance } from "../../../shared/src/utils/levenshtein-distance";
 
 interface TestConfig {
   /** Интервал между повторными расчётами в мс. */
