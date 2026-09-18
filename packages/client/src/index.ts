@@ -3,7 +3,7 @@ import { AppMediator } from "./core/AppMediator";
 import { PointsScene } from "./core/Scene/PointsScene";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
-import { createControlPanel, createInfoPanel } from "./ui";
+import { createControlPanel, createInfoPanel, createPipelinePanel } from "./ui";
 import { RepulsionAlgorithm, RepulsionEngineConfig } from "./core/physics/RepulsionAlgorithm";
 import { AnimationEngine } from "./core/Engines/AnimationEngine";
 import { EnginePipeline } from "./core/Engines/EnginePipeline";
@@ -76,6 +76,7 @@ function start(way: Way) {
   const mainArea = creatediv("main-area", app);
   const canvasDiv = creatediv("canvas-container", mainArea);
   const infoPanelDiv = creatediv("info-panel", mainArea);
+  const pipelinePanelDiv = creatediv("pipeline-panel", mainArea);
 
   const mediator = new AppMediator();
   mediator.temperature = 100;
@@ -114,6 +115,7 @@ function start(way: Way) {
 
   createControlPanel(controlPanelDiv, mediator);
   createInfoPanel(infoPanelDiv, mediator);
+  createPipelinePanel(pipelinePanelDiv, mediator, [enginePipeline]);
 }
 
 function bootstrap() {
