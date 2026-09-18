@@ -1,5 +1,3 @@
-import { AppMediator } from "../AppMediator";
-import { AnimationCallback, AnimationEngine } from "../Engines/AnimationEngine";
 import { EdgeModel } from "../models/EdgeModel";
 
 export class GraphEngineConfig {
@@ -9,45 +7,17 @@ export class GraphEngineConfig {
 }
 
 export class GraphEngine {
-  private temperature = 0;
   edges!: EdgeModel[];
-  private unsubCallback: AnimationCallback | null = null;
-  private readonly unsubStartRepulsion: () => void;
 
-  constructor(
-    public mediator: AppMediator,
-    public animation: AnimationEngine,
-    public config: GraphEngineConfig,
-  ) {
-    this.unsubStartRepulsion = this.mediator.onStartRepulsion(() => this.start());
-  }
+  constructor(public config: GraphEngineConfig) {}
 
-  public destroy(): void {
-    this.stop();
-    this.unsubStartRepulsion();
-  }
-
-  start() {
-    this.unsubCallback ??= this.animation.addCallback(() => this.step());
-  }
-
-  stop() {
-    if (this.unsubCallback != null) {
-      this.unsubCallback();
-      this.unsubCallback = null;
-    }
-  }
 
   setEdges(edges: EdgeModel[]) {
     this.edges = edges;
   }
 
-  step(): void {
-    this.temperature = this.applyStep();
-    this.mediator.temperature = this.temperature;
-    if (this.temperature < this.config.stopTemperature) {
-      this.stop();
-    }
+  public step(): number {
+    return this.applyStep();
   }
 
   public applyStep(): number {
@@ -92,5 +62,9 @@ export class GraphEngine {
     }
 
     return temp;
+  }
+
+  public getStopTemperature(): number {
+    return this.config.stopTemperature;
   }
 }
