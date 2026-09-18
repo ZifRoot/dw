@@ -39,7 +39,7 @@ function bootstrap() {
   setTimeout(() => (mediator.autoZoom = false), 0);
 
   const svgEngine = new SvgEngine(canvasDiv);
-  const animationEngine = new AnimationEngine({ frameBudgetMs: 6 });
+  const animationEngine = new AnimationEngine();
 
   const modelManager = new ModelManager(mediator, animationEngine, 4);
   const pointGraphManager = modelManager.getPointGraphManager();

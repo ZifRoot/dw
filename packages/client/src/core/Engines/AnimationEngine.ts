@@ -95,10 +95,7 @@ export class AnimationEngine {
         return;
       }
 
-      this.frameBudgetMs = Math.max(
-        1,
-        (totalFrameTime / measuredFrames) * COMPUTATION_BUDGET_RATIO,
-      );
+      this.frameBudgetMs = Math.max(1, (totalFrameTime / measuredFrames) * COMPUTATION_BUDGET_RATIO);
       this.isCalibrating = false;
       this.start();
     };
@@ -117,11 +114,7 @@ export class AnimationEngine {
     const callbackCount = this.order.length;
     let executed = 0;
 
-    while (
-      this.callbacks.size > 0 &&
-      executed < callbackCount &&
-      (executed === 0 || performance.now() - frameStart < this.frameBudgetMs)
-    ) {
+    while (this.callbacks.size > 0 && executed < callbackCount && (executed === 0 || performance.now() - frameStart < this.frameBudgetMs)) {
       if (this.order.length === 0) break;
       if (this.cursor >= this.order.length) this.cursor = 0;
       const id = this.order[this.cursor];
