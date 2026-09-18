@@ -4,13 +4,17 @@ import { EdgeInfoPanel } from "../Panels/EdgeInfoPanel";
 import { PointInfoPanel } from "../Panels/PointInfoPanel";
 import { AppMediator } from "../../core/AppMediator";
 import { UIEdge, UIPoint } from "../../core/models/ui-models";
+import { PipelinePanel } from "../Panels/PipelinePanel";
+import { EnginePipeline } from "../../core/Engines/EnginePipeline";
 
 interface AdaptiveInfoContentProps {
   mediator: AppMediator;
+  pipelines: EnginePipeline[];
 }
 
 export const AdaptiveInfoContent: React.FC<AdaptiveInfoContentProps> = ({
   mediator,
+  pipelines,
 }) => {
   const [selectedPoint, setSelectedPoint] = useState<UIPoint | null>(
     mediator.selectedPoint,
@@ -44,6 +48,7 @@ export const AdaptiveInfoContent: React.FC<AdaptiveInfoContentProps> = ({
       {selectedEdge && (
         <EdgeInfoPanel edge={selectedEdge} mediator={mediator} />
       )}
+      <PipelinePanel mediator={mediator} pipelines={pipelines} />
       <br />
       <div>Выберите объект (точку или линию)</div>
       <div>
