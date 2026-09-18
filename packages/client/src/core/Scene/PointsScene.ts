@@ -2,14 +2,16 @@ import { DragElem, SvgEngine } from "../Engines/SvgEngine";
 import * as d3 from "d3";
 import { UIPoint } from "../models/ui-models";
 import { AppMediator } from "../AppMediator";
-import { PointModel } from "../models/PointModel";
+import { Point } from "../models/Point";
+import { EdgeModel } from "../models/EdgeModel";
 import { PointGraphManager } from "../collections/PointGraphManager";
+import { PointModel } from "../models/PointModel";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private points: PointModel[] = [];
+  private points: Point[] = [];
   private unregisterDrag: (() => void) | null = null;
-  private d3Points: d3.Selection<SVGGElement, PointModel, SVGGElement, unknown> | null = null;
+  private d3Points: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
   private domMap: Map<string, SVGGElement> = new Map();
   private unsubPointsGraphUpdated: () => void;
   // private unsubSelectedPoint: () => void;
@@ -39,7 +41,7 @@ export class PointsScene {
     this.mediator.onAutoZoom(() => this.fitView());
   }
 
-  public getPointById(id?: string | null): PointModel | null {
+  public getPointById(id?: string | null): Point | null {
     return id != null ? this.pointGraphManager.getPointById(id) : null;
   }
 
@@ -47,12 +49,12 @@ export class PointsScene {
     this.pointGraphManager.removePoints(ids);
   }
 
-  public removePointsBy(predicate: (point: PointModel) => boolean): void {
+  public removePointsBy(predicate: (point: Point) => boolean): void {
     const ids = this.points.filter(predicate).map((p) => p.id);
     if (ids.length) this.removePoints(ids);
   }
 
-  public getPoints(): PointModel[] {
+  public getPoints(): Point[] {
     return this.points;
   }
 
@@ -98,11 +100,11 @@ export class PointsScene {
 
   // ========== Приватные методы синхронизации DOM ==========
   private syncDomWithPoints(): void {
-    const selection = this.rootGroup.selectAll<SVGGElement, PointModel>("g.point-group").data(this.points, (d) => d.id);
+    const selection = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
 
     // Удаляем старые группы и чистим groupMap.
     selection
-      .exit<PointModel>()
+      .exit<Point>()
       .each((d) => this.domMap.delete(d.id))
       .remove();
 
@@ -136,7 +138,7 @@ export class PointsScene {
     if (this.mediator.autoZoom) this.fitView();
   }
 
-  private updateAllProperties(d3Sel?: d3.Selection<SVGGElement, PointModel, any, any> | null): void {
+  private updateAllProperties(d3Sel?: d3.Selection<SVGGElement, Point, any, any> | null): void {
     d3Sel ??= this.d3Points;
     if (!d3Sel) return;
 
@@ -149,14 +151,14 @@ export class PointsScene {
     this.updatePositions(d3Sel);
   }
 
-  public updatePositions(d3Sel?: d3.Selection<SVGGElement, PointModel, any, any> | null): void {
+  public updatePositions(d3Sel?: d3.Selection<SVGGElement, Point, any, any> | null): void {
     d3Sel ??= this.d3Points;
     if (!d3Sel) return;
 
     d3Sel.attr("transform", (d) => `translate(${d.x},${d.y})`); // scale(${d.z})
   }
 
-  private updatePointStyles(scale?: number, d3Sel?: d3.Selection<SVGGElement, PointModel, any, any> | null): void {
+  private updatePointStyles(scale?: number, d3Sel?: d3.Selection<SVGGElement, Point, any, any> | null): void {
     d3Sel ??= this.d3Points;
     if (!d3Sel) return;
 
@@ -173,7 +175,7 @@ export class PointsScene {
   updateUIById(pointId: string) {
     const domEle = this.domMap.get(pointId);
     if (!domEle) return;
-    let d3dom = d3.select<SVGGElement, PointModel>(domEle);
+    let d3dom = d3.select<SVGGElement, Point>(domEle);
     if (d3dom) this.updateAllProperties(d3dom);
   }
   // ========== Инициализация подсистем ==========
@@ -184,7 +186,7 @@ export class PointsScene {
     const element = target.closest?.(".point-group");
     if (!element) return null;
 
-    const group = d3.select<SVGGElement, PointModel>(element as SVGGElement);
+    const group = d3.select<SVGGElement, Point>(element as SVGGElement);
     const point = group.datum();
     if (!point) return null;
 
@@ -196,7 +198,7 @@ export class PointsScene {
       element,
       callbacks: {
         onDrag: (el, deltaWorld) => {
-          const d3Dom = d3.select<SVGGElement, PointModel>(el as SVGGElement);
+          const d3Dom = d3.select<SVGGElement, Point>(el as SVGGElement);
           const p = d3Dom.datum();
           if (!p) return;
           d3Dom.each((p) => {
@@ -207,7 +209,7 @@ export class PointsScene {
           this.mediator.pointUpdating(p.id);
         },
         onDragEnd: (el) => {
-          const d3Dom = d3.select<SVGGElement, PointModel>(el as SVGGElement);
+          const d3Dom = d3.select<SVGGElement, Point>(el as SVGGElement);
           const p = d3Dom.datum();
           if (!p) return;
           p.dragged = false;
@@ -220,15 +222,15 @@ export class PointsScene {
     };
   }
 
-  dom2Model(domEle?: Element | null): PointModel | null {
-    return this.checkModel(domEle instanceof Element ? d3.select<Element, PointModel>(domEle).datum() : null);
+  dom2Point(domEle?: Element | null): Point | null {
+    return this.checkModel(domEle instanceof Element ? d3.select<Element, Point>(domEle).datum() : null);
   }
 
-  checkModel(x: any): PointModel | null {
-    return x instanceof PointModel ? x : null;
+  checkModel(x: any): Point | null {
+    return x instanceof Point ? x : null;
   }
 
-  model2UI(point?: PointModel | null): UIPoint | null {
+  model2UI(point?: Point | null): UIPoint | null {
     if (!point) return null;
 
     const neighbors = this.pointGraphManager
@@ -241,11 +243,11 @@ export class PointsScene {
         return {
           id: neighbor.id,
           name: neighbor.text,
-          cosineDistance: edge.cosineDistance,
+          cosineDistance: edge instanceof EdgeModel ? edge.cosineDistance : undefined,
         };
       })
       .filter((neighbor): neighbor is NonNullable<typeof neighbor> => neighbor !== null)
-      .sort((a, b) => a.cosineDistance - b.cosineDistance);
+      .sort((a, b) => (a.cosineDistance || 0) - (b.cosineDistance || 0));
 
     return {
       id: point.id,
@@ -256,7 +258,7 @@ export class PointsScene {
       pinned: point.pinned,
       selected: point.selected,
       neighbors,
-      embeddingModelNames: Array.from(point.embeddings.values()).map((embedding) => embedding.modelName),
+      embeddingModelNames: point instanceof PointModel ? Array.from(point.embeddings.values()).map((embedding) => embedding.modelName) : undefined,
     };
   }
 
@@ -271,7 +273,7 @@ export class PointsScene {
       this.updateUIById(previousPoint.id);
     }
 
-    const point = this.dom2Model(domEle);
+    const point = this.dom2Point(domEle);
 
     // Повторный клик по выбранной точке снимает выбор.
     if (point && point !== previousPoint) {

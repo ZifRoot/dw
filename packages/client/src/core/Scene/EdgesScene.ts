@@ -2,13 +2,13 @@ import { SvgEngine } from "../Engines/SvgEngine.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
 import { UIEdge, UIPoint } from "../models/ui-models.ts";
-import { EdgeModel } from "../models/EdgeModel.ts";
+import { Edge } from "../models/Edge.ts";
 import { PointGraphManager } from "../collections/PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private edges: EdgeModel[] = [];
-  private d3Edges: d3.Selection<SVGLineElement, EdgeModel, SVGGElement, unknown> | null = null;
+  private edges: Edge[] = [];
+  private d3Edges: d3.Selection<SVGLineElement, Edge, SVGGElement, unknown> | null = null;
 
   private unregisterSelectedPoint: () => void;
   private unsubPointsGraphUpdated: () => void;
@@ -41,7 +41,7 @@ export class EdgesScene {
     const target = event.target as Element;
     const line = target.closest?.(".highlighted");
     if (!line) return;
-    const edge = d3.select(line).datum() as EdgeModel;
+    const edge = d3.select(line).datum() as Edge;
     if (!edge) return;
     const uiEdge: UIEdge = {
       id: edge.id,
@@ -86,7 +86,7 @@ export class EdgesScene {
   }
 
   private renderLines(): void {
-    const lines = this.rootGroup.selectAll<SVGLineElement, EdgeModel>("line.edge").data(this.edges, (d) => d.id);
+    const lines = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
 
     lines.exit().remove();
     const enter = lines.enter().append("line").attr("class", "edge");
@@ -110,7 +110,7 @@ export class EdgesScene {
     this.d3Edges.style("stroke-width", 2 * invScale);
   }
 
-  public getEdgeById(id: string): EdgeModel | null {
+  public getEdgeById(id: string): Edge | null {
     return this.pointGraphManager.getEdgeCollection().getById(id);
   }
 

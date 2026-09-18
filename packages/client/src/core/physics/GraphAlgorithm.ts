@@ -1,6 +1,6 @@
 import { AppMediator } from "../AppMediator";
 import { PointGraphManager } from "../collections/PointGraphManager";
-import { EdgeModel } from "../models/EdgeModel";
+import { Edge } from "../models/Edge";
 import { BaseAlgorithm } from "../Engines/BaseAlgorithm";
 
 export class GraphEngineConfig {
@@ -26,7 +26,7 @@ export class GraphAlgorithm extends BaseAlgorithm {
     return maxShift;
   }
 
-  public applyPair(edge: EdgeModel): number {
+  public applyPair(edge: Edge): number {
     const targetDistance = edge.distance;
     const targetDistSq = targetDistance ** 2;
     const p1 = edge.source;

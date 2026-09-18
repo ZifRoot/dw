@@ -9,9 +9,7 @@ import { AnimationEngine } from "./core/Engines/AnimationEngine";
 import { EnginePipeline } from "./core/Engines/EnginePipeline";
 import { GraphAlgorithm, GraphEngineConfig } from "./core/physics/GraphAlgorithm";
 import { ZDampingConfig, ZDapperAlgorithm } from "./core/physics/ZDapperAlgorithm";
-import { DataManager } from "./core/data/DataManager";
-import { ModelManager } from "./core/ModelManager";
-import { PointsTransformer } from "./core/data/PointsTransformer";
+import { PointsSceneTester } from "./core/PointsSceneTester";
 
 function creatediv(id: string, parent: Node) {
   let div = document.getElementById(id);
@@ -41,14 +39,11 @@ function bootstrap() {
   const svgEngine = new SvgEngine(canvasDiv);
   const animationEngine = new AnimationEngine();
 
-  const modelManager = new ModelManager(mediator, animationEngine, 4);
-  const pointGraphManager = modelManager.getPointGraphManager();
+  const pointsSceneTester = new PointsSceneTester(mediator);
+  const pointGraphManager = pointsSceneTester.getPointGraphManager();
 
   const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
   const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
-
-  const dataManager = new DataManager(mediator);
-  const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
 
   const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
   const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
@@ -61,7 +56,7 @@ function bootstrap() {
   createControlPanel(controlPanelDiv, mediator);
   createInfoPanel(infoPanelDiv, mediator);
 
-  // dataManager.reloadTables();
+  pointsSceneTester.start();
 }
 
 bootstrap();
