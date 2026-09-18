@@ -3,8 +3,16 @@ import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
 import { BaseAlgorithm } from "./BaseAlgorithm";
 
 export interface EnginePipelineEntry {
+  /** Человекочитаемое название экземпляра алгоритма в UI. */
+  name: string;
   algorithm: BaseAlgorithm;
   enabled?: boolean;
+}
+
+export interface EnginePipelineConfigChange {
+  pipelineName: string;
+  engineName: string;
+  changes: Record<string, unknown>;
 }
 
 /**
@@ -19,12 +27,27 @@ export class EnginePipeline {
   private running = false;
   private destroyed = false;
   private readonly unsubscribeStart: () => void;
+  private readonly unsubscribeConfig: () => void;
 
   constructor(
     private readonly mediator: AppMediator,
     private readonly animation: AnimationEngine,
+    private readonly name: string,
   ) {
     this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
+    this.unsubscribeConfig = this.mediator.onPipelineEngineConfigChanged((change) => {
+      if (change.pipelineName !== this.name) return;
+
+      const entry = this.entries.find((item) => item.name === change.engineName);
+      if (!entry) return;
+
+      Object.assign(entry.algorithm.config, change.changes);
+    });
+  }
+
+  /** Возвращает человекочитаемое название pipeline. */
+  public get pipelineName(): string {
+    return this.name;
   }
 
   /** Установить алгоритмы и их порядок. Повтор одного алгоритма разрешён. */
@@ -32,6 +55,7 @@ export class EnginePipeline {
     if (this.destroyed) return;
     this.stop();
     this.entries = entries.map((entry) => ({
+      name: entry.name,
       algorithm: entry.algorithm,
       enabled: entry.enabled ?? true,
     }));
@@ -75,6 +99,7 @@ export class EnginePipeline {
     this.destroyed = true;
     this.stop();
     this.unsubscribeStart();
+    this.unsubscribeConfig();
   }
 
   private rebuild(): void {
