@@ -13,6 +13,7 @@ import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
 import { PointsTransformer } from "./core/data/PointsTransformer";
 import { PointsSceneTester } from "./core/PointsSceneTester";
+import { MediatorScene } from "./core/Scene/MediatorScene";
 
 function creatediv(id: string, parent: Node) {
   let div = document.getElementById(id);
@@ -74,6 +75,7 @@ function bootstrap() {
   const pointGraphManager = PointGraphManager("dw", mediator, animationEngine);
   const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
   const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
+  const mediatorScene = new MediatorScene(mediator, svgEngine);
 
   const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
   const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
