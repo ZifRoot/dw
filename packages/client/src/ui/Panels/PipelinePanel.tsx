@@ -56,7 +56,7 @@ export const PipelinePanel: React.FC<PipelinePanelProps> = ({
     );
     if (!pipeline) return;
 
-    pipeline.setEnabled(engineName, enabled);
+    mediator.pipelineEngineEnabledChanged(pipelineName, engineName, enabled);
 
     setStates((current) =>
       current.map((state) =>
