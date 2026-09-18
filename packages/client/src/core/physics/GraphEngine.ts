@@ -7,15 +7,18 @@ export class GraphEngineConfig {
 }
 
 export class GraphEngine {
-  edges!: EdgeModel[];
+  edges: EdgeModel[] = [];
 
   constructor(public config: GraphEngineConfig) {}
 
-
-  setEdges(edges: EdgeModel[]) {
+  public setEdges(edges: EdgeModel[]) {
     this.edges = edges;
   }
 
+  /**
+   * Выполнить один шаг физики.
+   * Возвращает температуру шага.
+   */
   public step(): number {
     return this.applyStep();
   }
@@ -53,13 +56,8 @@ export class GraphEngine {
 
     d.scale(k);
 
-    if (!p1.fixed) {
-      p1.sub(d);
-    }
-
-    if (!p2.fixed) {
-      p2.add(d);
-    }
+    if (!p1.fixed) p1.sub(d);
+    if (!p2.fixed) p2.add(d);
 
     return temp;
   }
