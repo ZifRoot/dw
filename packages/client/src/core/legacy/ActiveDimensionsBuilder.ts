@@ -1,6 +1,6 @@
 // core/ActiveDimensionsBuilder.ts
-import { PointModel } from "./models/PointModel";
-import { EmbeddingModel } from "./models/EmbeddingModel";
+import { PointModel } from "../models/PointModel";
+import { EmbeddingModel } from "../models/EmbeddingModel";
 
 export class ActiveDimensionsBuilder {
   private threshold: number | null = null;
@@ -35,13 +35,6 @@ export class ActiveDimensionsBuilder {
   public buildForPoint(point: PointModel, modelName: string, threshold: number): EmbeddingModel | null {
     const emb = point.embeddings.get(modelName);
     if (!emb) return null;
-    return new EmbeddingModel(
-      emb.docid,
-      emb.modelName,
-      emb.value,
-      emb.created_at,
-      emb.processingTimeMs,
-      threshold,
-    );
+    return new EmbeddingModel(emb.docid, emb.modelName, emb.value, emb.created_at, emb.processingTimeMs);
   }
 }

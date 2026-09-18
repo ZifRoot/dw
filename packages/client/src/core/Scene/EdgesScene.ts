@@ -1,9 +1,9 @@
 import { SvgEngine } from "../Engines/SvgEngine.ts";
 import * as d3 from "d3";
 import { AppMediator } from "../AppMediator.ts";
-import { UIEdge, UIPoint } from "../ui-models.ts";
+import { UIEdge, UIPoint } from "../models/ui-models.ts";
 import { EdgeModel } from "../models/EdgeModel.ts";
-import { PointGraphManager } from "../PointGraphManager.ts";
+import { PointGraphManager } from "../collections/PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;

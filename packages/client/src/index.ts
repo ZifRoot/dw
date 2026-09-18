@@ -10,7 +10,7 @@ import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
 import { ZDampingConfig, ZDampingEngine } from "./core/physics/ZDampingEngine";
 import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
-import { PointsTransformer } from "./core/PointsTransformer";
+import { PointsTransformer } from "./core/data/PointsTransformer";
 
 function creatediv(id: string, parent: Node) {
   let div = document.getElementById(id);

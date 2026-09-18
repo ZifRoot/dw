@@ -1,14 +1,14 @@
 // core/PointsTransformer.ts
-import { AppMediator } from "./AppMediator";
-import { DataManager } from "./data/DataManager";
-import { PointTable } from "./data/tables/PointTable";
-import { EmbeddingTable } from "./data/tables/EmbeddingTable";
-import { EdgeTable } from "./data/tables/EdgeTable";
-import { PointModel } from "./models/PointModel";
-import { EmbeddingModel } from "./models/EmbeddingModel";
-import { EdgeRefs } from "./models/EdgeRefs";
-import { PointGraphManager } from "./PointGraphManager";
-import { EdgeModel } from "./models/EdgeModel";
+import { AppMediator } from "../AppMediator";
+import { DataManager } from "./DataManager";
+import { PointTable } from "./tables/PointTable";
+import { EmbeddingTable } from "./tables/EmbeddingTable";
+import { EdgeTable } from "./tables/EdgeTable";
+import { PointModel } from "../models/PointModel";
+import { EmbeddingModel } from "../models/EmbeddingModel";
+import { EdgeRefs } from "../models/EdgeRefs";
+import { PointGraphManager } from "../collections/PointGraphManager";
+import { EdgeModel } from "../models/EdgeModel";
 
 export class PointsTransformer {
   private unsubPointsUpdated: () => void;

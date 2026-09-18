@@ -1,8 +1,8 @@
 // core/NeighborGraph.ts
-import { EdgeRef } from "./models/EdgeRef";
-import { EdgeModel } from "./models/EdgeModel";
+import { IEdgeModelFactory } from "../interfaces/IEdgeModelFactory";
+import { EdgeModel } from "../models/EdgeModel";
+import { EdgeRef } from "../models/EdgeRef";
 import { EntityCollection } from "./EntityCollection";
-import { IEdgeModelFactory } from "./IEdgeModelFactory";
 
 /**
  * NeighborGraph — единое хранилище графа связей.

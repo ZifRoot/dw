@@ -1,9 +1,9 @@
 import { DragElem, SvgEngine } from "../Engines/SvgEngine";
 import * as d3 from "d3";
-import { UIPoint } from "../ui-models";
+import { UIPoint } from "../models/ui-models";
 import { AppMediator } from "../AppMediator";
 import { PointModel } from "../models/PointModel";
-import { PointGraphManager } from "../PointGraphManager";
+import { PointGraphManager } from "../collections/PointGraphManager";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;

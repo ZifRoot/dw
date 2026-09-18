@@ -3,7 +3,7 @@ import { AppMediator } from "../AppMediator";
 import { PointTable } from "./tables/PointTable";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
 import { EdgeTable } from "./tables/EdgeTable";
-import { PointsTransformer } from "../PointsTransformer";
+import { PointsTransformer } from "./PointsTransformer";
 import { LogSafe, Safe } from "@utils/logger";
 import { toDate } from "@utils/date-utils";
 import { SingleExecution } from "@utils/single-runner";

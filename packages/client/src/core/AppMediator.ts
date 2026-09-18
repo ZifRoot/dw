@@ -1,6 +1,6 @@
 // core/AppMediator.ts
-import { BaseMediator } from "./BaseMediator";
-import { UIPoint, UIEdge } from "./ui-models";
+import { BaseMediator } from "./collections/BaseMediator";
+import { UIPoint, UIEdge } from "./models/ui-models";
 
 export interface AppEventMap {
   [AppMediator.PROGRESS]: number;

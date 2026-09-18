@@ -4,8 +4,8 @@ import { AnimationCallback, AnimationEngine } from "./Engines/AnimationEngine";
 import { EdgeModel } from "./models/EdgeModel";
 import { EdgeRef } from "./models/EdgeRef";
 import { PointModel } from "./models/PointModel";
-import { PointGraphManager } from "./PointGraphManager";
-import { IEdgeModelFactory } from "./IEdgeModelFactory";
+import { PointGraphManager } from "./collections/PointGraphManager";
+import { IEdgeModelFactory } from "./interfaces/IEdgeModelFactory";
 import { cosineDistance } from "@utils/vector";
 
 interface ScoredCandidate {

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { EdgeInfoPanel } from "../Panels/EdgeInfoPanel";
 import { PointInfoPanel } from "../Panels/PointInfoPanel";
 import { AppMediator } from "../../core/AppMediator";
-import { UIEdge, UIPoint } from "../../core/ui-models";
+import { UIEdge, UIPoint } from "../../core/models/ui-models";
 
 interface AdaptiveInfoContentProps {
   mediator: AppMediator;
