@@ -61,9 +61,9 @@ export class EnginePipeline {
     }));
   }
 
-  /** Включить или выключить алгоритм по позиции в pipeline. */
-  public setEnabled(index: number, enabled: boolean): void {
-    const entry = this.entries[index];
+  /** Включить или выключить алгоритм по его имени. */
+  public setEnabled(engineName: string, enabled: boolean): void {
+    const entry = this.entries.find((item) => item.name === engineName);
     if (!entry || entry.enabled === enabled) return;
 
     entry.enabled = enabled;
