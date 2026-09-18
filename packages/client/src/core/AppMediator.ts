@@ -26,6 +26,7 @@ export interface AppEventMap {
   [AppMediator.ADD_POINT]: undefined;
   [AppMediator.START_REPULSION]: undefined;
   [AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED]: EnginePipelineConfigChange;
+  [AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED]: { pipelineName: string; engineName: string; enabled: boolean };
 }
 
 export class AppMediator extends BaseMediator {
@@ -53,6 +54,7 @@ export class AppMediator extends BaseMediator {
   static POSITIONS_SAVED = "positions-saved";
   static POINT_UPDATING = "point-updating";
   static PIPELINE_ENGINE_CONFIG_CHANGED = "pipeline-engine-config-changed";
+  static PIPELINE_ENGINE_ENABLED_CHANGED = "pipeline-engine-enabled-changed";
 
   public get progress(): number {
     return this.get(AppMediator.PROGRESS) ?? 0;
@@ -141,6 +143,19 @@ export class AppMediator extends BaseMediator {
     });
   }
 
+  /** Передать Pipeline изменение состояния engine из UI. */
+  public pipelineEngineEnabledChanged(
+    pipelineName: string,
+    engineName: string,
+    enabled: boolean,
+  ): void {
+    this.emit(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, {
+      pipelineName,
+      engineName,
+      enabled,
+    });
+  }
+
   public startGraph(): void {
     this.emit(AppMediator.START_GRAPH);
   }
@@ -219,6 +234,12 @@ export class AppMediator extends BaseMediator {
     callback: (detail: EnginePipelineConfigChange) => void,
   ): () => void {
     return this.on(AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED, callback);
+  }
+
+  public onPipelineEngineEnabledChanged(
+    callback: (detail: { pipelineName: string; engineName: string; enabled: boolean }) => void,
+  ): () => void {
+    return this.on(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, callback);
   }
 
   public onStartGraph(callback: () => void): () => void {
