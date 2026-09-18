@@ -1,115 +1,106 @@
 import { AppMediator } from "../AppMediator";
 import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
-import { GraphEngine } from "../physics/GraphEngine";
-import { RepulsionEngine } from "../physics/RepulsionEngine";
-import { ZDampingEngine } from "../physics/ZDampingEngine";
+import { BaseAlgorithm } from "./BaseAlgorithm";
 
-interface PipelineEngine {
-  step(): number;
-  getStopTemperature(): number;
+export interface EnginePipelineEntry {
+  algorithm: BaseAlgorithm;
+  enabled?: boolean;
 }
 
 /**
- * Координирует физические движки.
+ * Описывает набор алгоритмов и порядок их выполнения.
  *
- * requestAnimationFrame остаётся ответственностью AnimationEngine.
- * Pipeline объединяет физические движки в один callback AnimationEngine.
+ * Pipeline отвечает за ЧТО и В КАКОМ ПОРЯДКЕ выполнять.
+ * AnimationEngine отвечает за КОГДА и как распределить выполнение по кадрам.
  */
 export class EnginePipeline {
-  private readonly engines: Map<PipelineEngine, boolean> = new Map();
-  private animationCallback: AnimationCallback | null = null;
+  private entries: EnginePipelineEntry[] = [];
+  private disposeCallbacks: (() => void) | null = null;
+  private running = false;
   private destroyed = false;
-
-  private readonly unsubStartRepulsion: () => void;
-  private readonly unsubStartGraph: () => void;
+  private readonly unsubscribeStart: () => void;
 
   constructor(
     private readonly mediator: AppMediator,
     private readonly animation: AnimationEngine,
-    graphEngine: GraphEngine,
-    repulsionEngine: RepulsionEngine,
-    zDampingEngine: ZDampingEngine,
+    private readonly onRedraw: AnimationCallback,
   ) {
-    this.engines.set(graphEngine, false);
-    this.engines.set(repulsionEngine, false);
-    this.engines.set(zDampingEngine, false);
-
-    this.unsubStartRepulsion = mediator.onStartRepulsion(() => this.startAll());
-    this.unsubStartGraph = mediator.onStartGraph(() => this.start(graphEngine));
+    this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
   }
 
-  public startAll(): void {
+  /** Установить алгоритмы и их порядок. Повтор одного алгоритма разрешён. */
+  public setConfiguration(entries: EnginePipelineEntry[]): void {
     if (this.destroyed) return;
-    for (const engine of this.engines.keys()) {
-      this.engines.set(engine, true);
+    this.stop();
+    this.entries = entries.map((entry) => ({
+      algorithm: entry.algorithm,
+      enabled: entry.enabled ?? true,
+    }));
+  }
+
+  /** Включить или выключить алгоритм по позиции в pipeline. */
+  public setEnabled(index: number, enabled: boolean): void {
+    const entry = this.entries[index];
+    if (!entry || entry.enabled === enabled) return;
+
+    entry.enabled = enabled;
+    if (enabled) {
+      if (this.running) entry.algorithm.start();
+    } else {
+      entry.algorithm.stop();
     }
-    this.ensureAnimation();
+    if (this.running) this.rebuild();
   }
 
-  public start(engine: PipelineEngine): void {
-    if (this.destroyed || !this.engines.has(engine)) return;
-    this.engines.set(engine, true);
-    this.ensureAnimation();
-  }
-
-  public stop(engine: PipelineEngine): void {
-    if (!this.engines.has(engine)) return;
-    this.engines.set(engine, false);
-    if (!this.hasActiveEngines()) this.stopAnimation();
-  }
-
-  public stopAll(): void {
-    for (const engine of this.engines.keys()) {
-      this.engines.set(engine, false);
+  /** Запустить все включённые алгоритмы. */
+  public start(): void {
+    if (this.destroyed) return;
+    for (const entry of this.entries) {
+      if (entry.enabled) entry.algorithm.start();
     }
-    this.stopAnimation();
+    this.running = true;
+    this.rebuild();
   }
 
+  /** Остановить pipeline и снять его регистрацию из AnimationEngine. */
+  public stop(): void {
+    this.disposeCallbacks?.();
+    this.disposeCallbacks = null;
+    this.running = false;
+    for (const entry of this.entries) entry.algorithm.stop();
+  }
+
+  /** Освободить все подписки. */
   public destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.stopAll();
-    this.unsubStartRepulsion();
-    this.unsubStartGraph();
-    this.engines.clear();
+    this.stop();
+    this.unsubscribeStart();
   }
 
-  private ensureAnimation(): void {
-    if (this.animationCallback !== null) return;
-    this.animationCallback = this.animation.addCallback(() => this.step());
-  }
+  private rebuild(): void {
+    this.disposeCallbacks?.();
+    this.disposeCallbacks = null;
 
-  private stopAnimation(): void {
-    if (this.animationCallback === null) return;
-    this.animationCallback();
-    this.animationCallback = null;
-  }
+    const callbacks: AnimationCallback[] = [];
+    for (const entry of this.entries) {
+      if (!entry.enabled) continue;
+      callbacks.push((deltaTime) => entry.algorithm.step(deltaTime));
+    }
 
-  private step(): void {
-    if (this.destroyed) return;
+    if (callbacks.length === 0) {
+      this.running = false;
+      return;
+    }
 
-    let temperature = 0;
-
-    for (const [engine, active] of this.engines) {
-      if (!active) continue;
-
-      const engineTemperature = engine.step();
-      temperature = Math.max(temperature, engineTemperature);
-
-      if (engineTemperature < engine.getStopTemperature()) {
-        this.engines.set(engine, false);
+    callbacks.push((deltaTime) => {
+      this.onRedraw(deltaTime);
+      const activeEntries = this.entries.filter((entry) => entry.enabled);
+      if (activeEntries.length > 0 && activeEntries.every((entry) => !entry.algorithm.isRunning)) {
+        this.stop();
       }
-    }
+    });
 
-    this.mediator.temperature = temperature;
-
-    if (!this.hasActiveEngines()) this.stopAnimation();
-  }
-
-  private hasActiveEngines(): boolean {
-    for (const active of this.engines.values()) {
-      if (active) return true;
-    }
-    return false;
+    this.disposeCallbacks = this.animation.addCallbacks(callbacks);
   }
 }

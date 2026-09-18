@@ -1,57 +1,101 @@
-export type AnimationCallback = () => void;
+export type AnimationCallback = (deltaTime: number) => void;
 
-// core/Engines/AnimationEngine.ts
+export interface AnimationEngineConfig {
+  frameBudgetMs?: number;
+}
+
+/**
+ * Планировщик фоновых работ на requestAnimationFrame.
+ *
+ * AnimationEngine не знает ничего о назначении зарегистрированных колбэков.
+ * Он только запускает их с учётом временного бюджета кадра и распределяет
+ * работу по принципу cooperative round-robin.
+ */
 export class AnimationEngine {
+  private readonly frameBudgetMs: number;
   private rafId: number | null = null;
-  private callbacks: Set<AnimationCallback> = new Set();
   private isRunning = false;
-  public AfterStep: AnimationCallback | null = null;
-  public onStop: AnimationCallback | null = null;
+  private nextCallbackId = 0;
+  private cursor = 0;
+  private lastFrameTime: number | null = null;
+  private callbacks = new Map<number, AnimationCallback>();
+  private order: number[] = [];
 
-  /** Добавить колбэк в очередь. Возвращает функцию для удаления. */
-  public addCallback(cb: AnimationCallback): AnimationCallback {
-    this.callbacks.add(cb);
-    if (!this.isRunning) {
-      this.start();
-    }
-    return () => this.removeCallback(cb);
+  constructor(config: AnimationEngineConfig = {}) {
+    this.frameBudgetMs = Math.max(1, config.frameBudgetMs ?? 6);
   }
 
-  /** Удалить колбэк напрямую (альтернатива вызову функции-отписки). */
-  public removeCallback(cb: AnimationCallback): void {
-    this.callbacks.delete(cb);
-    if (this.callbacks.size === 0) {
-      this.stop();
+  /** Добавить один колбэк в очередь. Возвращает функцию для удаления. */
+  public addCallback(callback: AnimationCallback): () => void {
+    const id = this.nextCallbackId++;
+    this.callbacks.set(id, callback);
+    this.order.push(id);
+    this.start();
+    return () => this.removeCallbackById(id);
+  }
+
+  /** Добавить группу колбэков и получить один disposer для всей группы. */
+  public addCallbacks(callbacks: AnimationCallback[]): () => void {
+    const disposers = callbacks.map((callback) => this.addCallback(callback));
+    let disposed = false;
+    return () => {
+      if (disposed) return;
+      disposed = true;
+      for (const dispose of disposers) dispose();
+    };
+  }
+
+  /** Удалить колбэк напрямую. */
+  public removeCallback(callback: AnimationCallback): void {
+    const entry = this.order.find((id) => this.callbacks.get(id) === callback);
+    if (entry !== undefined) this.removeCallbackById(entry);
+  }
+
+  private removeCallbackById(id: number): void {
+    if (!this.callbacks.delete(id)) return;
+    const index = this.order.indexOf(id);
+    if (index >= 0) {
+      this.order.splice(index, 1);
+      if (index < this.cursor) this.cursor--;
+      if (this.cursor >= this.order.length) this.cursor = 0;
     }
+    if (this.callbacks.size === 0) this.stop();
   }
 
   private start(): void {
-    if (this.isRunning) return;
-    if (this.callbacks.size === 0) return;
-
+    if (this.isRunning || this.callbacks.size === 0) return;
     this.isRunning = true;
+    this.lastFrameTime = null;
     this.scheduleStep();
   }
 
   private scheduleStep(): void {
-    this.rafId = requestAnimationFrame(() => this.step());
+    this.rafId = requestAnimationFrame((timestamp) => this.step(timestamp));
   }
 
-  public step(): void {
+  /** Выполнить один кадр планировщика. */
+  public step(timestamp = performance.now()): void {
     if (!this.isRunning) return;
-
     this.rafId = null;
+    const deltaTime = this.lastFrameTime === null ? 0 : timestamp - this.lastFrameTime;
+    this.lastFrameTime = timestamp;
 
-    // Выполняем все зарегистрированные колбэки.
-    for (const cb of this.callbacks) {
-      cb();
+    const frameStart = performance.now();
+    const callbackCount = this.order.length;
+    let executed = 0;
+
+    while (this.callbacks.size > 0 && executed < callbackCount && (executed === 0 || performance.now() - frameStart < this.frameBudgetMs)) {
+      if (this.order.length === 0) break;
+      if (this.cursor >= this.order.length) this.cursor = 0;
+      const id = this.order[this.cursor];
+      this.cursor = (this.cursor + 1) % this.order.length;
+      const callback = this.callbacks.get(id);
+      if (!callback) continue;
+      callback(deltaTime);
+      executed++;
     }
 
-    if (this.AfterStep) this.AfterStep();
-
-    if (this.isRunning && this.callbacks.size > 0) {
-      this.scheduleStep();
-    }
+    if (this.isRunning && this.callbacks.size > 0) this.scheduleStep();
   }
 
   public stop(): void {
@@ -59,17 +103,14 @@ export class AnimationEngine {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
-
-    const wasRunning = this.isRunning;
     this.isRunning = false;
-
-    if (wasRunning && this.onStop) {
-      this.onStop();
-    }
+    this.lastFrameTime = null;
   }
 
   public clear(): void {
     this.callbacks.clear();
+    this.order.length = 0;
+    this.cursor = 0;
     this.stop();
   }
 }

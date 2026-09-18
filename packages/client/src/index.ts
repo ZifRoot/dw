@@ -4,11 +4,11 @@ import { PointsScene } from "./core/Scene/PointsScene";
 import { SvgEngine } from "./core/Engines/SvgEngine";
 import { EdgesScene } from "./core/Scene/EdgesScene";
 import { createControlPanel, createInfoPanel } from "./ui";
-import { RepulsionEngine, RepulsionEngineConfig } from "./core/physics/RepulsionEngine";
+import { RepulsionAlgorithm, RepulsionEngineConfig } from "./core/physics/RepulsionAlgorithm";
 import { AnimationEngine } from "./core/Engines/AnimationEngine";
 import { EnginePipeline } from "./core/Engines/EnginePipeline";
-import { GraphEngine, GraphEngineConfig } from "./core/physics/GraphEngine";
-import { ZDampingConfig, ZDampingEngine } from "./core/physics/ZDampingEngine";
+import { GraphAlgorithm, GraphEngineConfig } from "./core/physics/GraphAlgorithm";
+import { ZDampingConfig, ZDapperAlgorithm } from "./core/physics/ZDapperAlgorithm";
 import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
 import { PointsTransformer } from "./core/data/PointsTransformer";
@@ -39,7 +39,7 @@ function bootstrap() {
   setTimeout(() => (mediator.autoZoom = false), 0);
 
   const svgEngine = new SvgEngine(canvasDiv);
-  const animationEngine = new AnimationEngine();
+  const animationEngine = new AnimationEngine({ frameBudgetMs: 6 });
 
   const modelManager = new ModelManager(mediator, animationEngine, 4);
   const pointGraphManager = modelManager.getPointGraphManager();
@@ -50,22 +50,13 @@ function bootstrap() {
   const dataManager = new DataManager(mediator);
   const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
 
-  const zdampingEngine = new ZDampingEngine(new ZDampingConfig());
-  const graphEngine = new GraphEngine(new GraphEngineConfig());
-  const repulsionEngine = new RepulsionEngine(new RepulsionEngineConfig());
-  new EnginePipeline(
-    mediator,
-    animationEngine,
-    graphEngine,
-    repulsionEngine,
-    zdampingEngine,
-  );
+  const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
+  const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
+  const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
 
-  animationEngine.AfterStep = () => mediator.pointsUpdating();
+  const enginePipeline = new EnginePipeline(mediator, animationEngine, () => mediator.pointsUpdating());
 
-  graphEngine.setEdges(pointGraphManager.getEdgesArray());
-  zdampingEngine.setPoints(pointGraphManager.getPointsArray());
-  repulsionEngine.setPoints(pointGraphManager.getPointsArray());
+  enginePipeline.setConfiguration([{ algorithm: repulsionAlgorithm }, { algorithm: graphAlgorithm }, { algorithm: zdampingAlgorithm }]);
 
   createControlPanel(controlPanelDiv, mediator);
   createInfoPanel(infoPanelDiv, mediator);
