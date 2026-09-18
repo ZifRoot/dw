@@ -8,10 +8,6 @@ export class EdgeModel extends Edge implements EdgeRef {
   public modelName: string;
   public cosineDistance: number;
 
-  /**
-   * Generate a unique ID for an edge based on source, target, and model name.
-   * Edges between the same points with different models remain distinct.
-   */
   static getId(sourceId: string, targetId: string, modelName: string): string {
     const [a, b] = [sourceId, targetId].sort();
     return `${a}:${b}:${modelName}`;
