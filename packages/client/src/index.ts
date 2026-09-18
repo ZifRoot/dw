@@ -12,6 +12,7 @@ import { ZDampingConfig, ZDapperAlgorithm } from "./core/physics/ZDapperAlgorith
 import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
 import { PointsTransformer } from "./core/data/PointsTransformer";
+import { PointsSceneTester } from "./core/PointsSceneTester";
 
 function creatediv(id: string, parent: Node) {
   let div = document.getElementById(id);
@@ -22,6 +23,36 @@ function creatediv(id: string, parent: Node) {
   return div;
 }
 
+function DW(mediator: AppMediator, animationEngine: AnimationEngine) {
+  const modelManager = new ModelManager(mediator, animationEngine, 4);
+  const pointGraphManager = modelManager.getPointGraphManager();
+  const dataManager = new DataManager(mediator);
+  const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
+  setTimeout(() => {
+    dataManager.reloadTables();
+  }, 1);
+
+  return pointGraphManager;
+}
+
+function Tester(mediator: AppMediator) {
+  const pointsSceneTester = new PointsSceneTester(mediator);
+  const pointGraphManager = pointsSceneTester.getPointGraphManager();
+  setTimeout(() => {
+    pointsSceneTester.start();
+  }, 1);
+
+  return pointGraphManager;
+}
+
+function PointGraphManager(b: "dw" | "tester", mediator: AppMediator, animationEngine: AnimationEngine) {
+  let X = {
+    dw: (mediator: AppMediator, animationEngine: AnimationEngine) => DW(mediator, animationEngine),
+    tester: (mediator: AppMediator, animationEngine: AnimationEngine) => Tester(mediator),
+  };
+
+  return X[b](mediator, animationEngine);
+}
 function bootstrap() {
   const app = creatediv("app", document.body);
   const controlPanelDiv = creatediv("control-panel", app);
@@ -40,15 +71,9 @@ function bootstrap() {
 
   const svgEngine = new SvgEngine(canvasDiv);
   const animationEngine = new AnimationEngine();
-
-  const modelManager = new ModelManager(mediator, animationEngine, 4);
-  const pointGraphManager = modelManager.getPointGraphManager();
-
+  const pointGraphManager = PointGraphManager("dw", mediator, animationEngine);
   const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
   const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
-
-  const dataManager = new DataManager(mediator);
-  const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
 
   const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
   const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
@@ -60,8 +85,6 @@ function bootstrap() {
 
   createControlPanel(controlPanelDiv, mediator);
   createInfoPanel(infoPanelDiv, mediator);
-
-  // dataManager.reloadTables();
 }
 
 bootstrap();

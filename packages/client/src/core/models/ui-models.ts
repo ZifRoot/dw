@@ -2,7 +2,7 @@
 export interface UIPointNeighbor {
   id: string;
   name: string;
-  cosineDistance: number;
+  cosineDistance?: number;
 }
 
 export interface UIPoint {

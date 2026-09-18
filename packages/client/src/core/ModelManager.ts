@@ -5,7 +5,7 @@ import { EdgeModel } from "./models/EdgeModel";
 import { EdgeRef } from "./models/EdgeRef";
 import { PointModel } from "./models/PointModel";
 import { PointGraphManager } from "./collections/PointGraphManager";
-import { IEdgeModelFactory } from "./interfaces/IEdgeModelFactory";
+import { IEdgeFactory } from "./interfaces/IEdgeFactory";
 import { cosineDistance } from "@utils/vector";
 
 interface ScoredCandidate {
@@ -58,7 +58,7 @@ export class ModelManager {
     this.randomCandidates = Math.max(0, Math.floor(randomCandidates));
     this.frameBudgetMs = Math.max(1, frameBudgetMs);
 
-    const edgeModelFactory: IEdgeModelFactory = {
+    const edgeModelFactory: IEdgeFactory = {
       create: (edgeRef) => this.edgeRefToEdgeModel(edgeRef),
     };
 
@@ -97,7 +97,7 @@ export class ModelManager {
   public getModelsByPointCount(): ModelPointCount[] {
     const modelPointCounts = new Map<string, number>();
 
-    for (const point of this.pointGraphManager.getPoints()) {
+    for (const point of this.pointGraphManager.getPoints<PointModel>()) {
       for (const modelName of point.embeddings.keys()) {
         modelPointCounts.set(modelName, (modelPointCounts.get(modelName) ?? 0) + 1);
       }
@@ -147,7 +147,7 @@ export class ModelManager {
 
       const edgesToRemove = this.pointGraphManager
         .getEdgesArray()
-        .filter((edge) => edge.modelName !== model);
+        .filter((edge): edge is EdgeModel => edge instanceof EdgeModel && edge.modelName !== model);
 
       if (edgesToRemove.length > 0) {
         this.pointGraphManager.removeEdges(edgesToRemove);
@@ -165,7 +165,7 @@ export class ModelManager {
    */
   private stopOptimization(): void {
     if (this.optimizationCallback !== null) {
-      this.optimizationCallback();
+      this.optimizationCallback(0);
       this.optimizationCallback = null;
     }
 
@@ -182,7 +182,7 @@ export class ModelManager {
   private runStep(): void {
     if (this.destroyed) return;
 
-    const points = this.pointGraphManager.getPoints();
+    const points = this.pointGraphManager.getPoints<PointModel>();
     if (points.length < 2 || this.activeModelName === null) {
       this.stopOptimization();
       return;
@@ -191,10 +191,7 @@ export class ModelManager {
     const frameStart = performance.now();
     let graphChanged = false;
 
-    while (
-      this.pointIndex < points.length &&
-      performance.now() - frameStart < this.frameBudgetMs
-    ) {
+    while (this.pointIndex < points.length && performance.now() - frameStart < this.frameBudgetMs) {
       graphChanged = this.improvePoint(points[this.pointIndex]) || graphChanged;
       this.pointIndex++;
     }
@@ -220,54 +217,28 @@ export class ModelManager {
    * Создать EdgeModel из EdgeRef в контексте ModelManager.
    */
   private edgeRefToEdgeModel(edgeRef: EdgeRef): EdgeModel | null {
-    const pointCollection = this.pointGraphManager.getPointCollection();
+    const { sourceId, targetId } = edgeRef;
+    const source = this.pointGraphManager.getPointById(sourceId);
+    const target = this.pointGraphManager.getPointById(targetId);
 
-    let sourceId = edgeRef.sourceId;
-    let targetId = edgeRef.targetId;
-
-    const sourceIndex = pointCollection.indexMap.get(sourceId);
-    const targetIndex = pointCollection.indexMap.get(targetId);
-
-    if (sourceIndex == null || targetIndex == null) {
-      console.warn(
-        `[ModelManager] Point not found for edge: ${sourceId} -> ${targetId}`,
-      );
-      return null;
-    }
-
-    // Нормализуем порядок концов для консистентности id ребра.
-    if (sourceIndex > targetIndex) {
-      [sourceId, targetId] = [targetId, sourceId];
-    }
-
-    const source = pointCollection.getById(sourceId);
-    const target = pointCollection.getById(targetId);
-
-    if (!source || !target) {
-      console.warn(
-        `[ModelManager] Point not found for edge: ${edgeRef.sourceId} -> ${edgeRef.targetId}`,
-      );
+    if (!(source instanceof PointModel) || !(target instanceof PointModel)) {
+      console.warn(`[ModelManager] Embedding point not found for edge: ${edgeRef.sourceId} -> ${edgeRef.targetId}`);
       return null;
     }
 
     const modelName = edgeRef.modelName || this.activeModelName;
     if (!modelName) {
-      console.warn(
-        `[ModelManager] No embedding model for edge: ${source.id} -> ${target.id}`,
-      );
+      console.warn(`[ModelManager] No embedding model for edge: ${source.id} -> ${target.id}`);
       return null;
     }
 
     if (!source.embeddings.has(modelName) || !target.embeddings.has(modelName)) {
-      console.warn(
-        `[ModelManager] Missing embedding "${modelName}" for ${source.id} or ${target.id}`,
-      );
+      console.warn(`[ModelManager] Missing embedding "${modelName}" for ${source.id} or ${target.id}`);
       return null;
     }
 
     return new EdgeModel(source, target, modelName);
   }
-
   /**
    * Улучшить соседей одной точки.
    *
@@ -280,7 +251,8 @@ export class ModelManager {
     const modelName = this.activeModelName;
     if (!modelName) return false;
 
-    const currentEdges = this.pointGraphManager.getEdgesForPoint(source.id);
+    const currentEdges = this.pointGraphManager.getEdgesForPoint(source.id).filter((edge): edge is EdgeModel => edge instanceof EdgeModel);
+
     const scored: ScoredCandidate[] = currentEdges.map((edge) => ({
       targetId: this.getOtherPointId(edge, source.id),
       distance: edge.cosineDistance,
@@ -298,7 +270,7 @@ export class ModelManager {
     const candidateIds = new Set<string>();
 
     for (const neighborId of seedNeighbors) {
-      const neighborEdges = this.pointGraphManager.getEdgesForPoint(neighborId);
+      const neighborEdges = this.pointGraphManager.getEdgesForPoint(neighborId).filter((edge): edge is EdgeModel => edge instanceof EdgeModel);
 
       for (const edge of neighborEdges) {
         if (candidateIds.size >= this.K * this.K) break;
@@ -318,7 +290,7 @@ export class ModelManager {
       if (existingTargets.has(candidateId)) continue;
 
       const target = this.pointGraphManager.getPointById(candidateId);
-      if (!target) continue;
+      if (!(target instanceof PointModel)) continue;
 
       const distance = this.calculateCosineDistance(source, target, modelName);
       if (distance !== null) {
@@ -338,11 +310,7 @@ export class ModelManager {
     let changed = false;
 
     for (const candidate of scored) {
-      if (
-        !candidate.isNew &&
-        !topKTargets.has(candidate.targetId) &&
-        candidate.model
-      ) {
+      if (!candidate.isNew && !topKTargets.has(candidate.targetId) && candidate.model) {
         this.pointGraphManager.removeEdge(candidate.model);
         changed = true;
       }
@@ -357,7 +325,7 @@ export class ModelManager {
         modelName,
       });
 
-      changed = edge !== null || changed;
+      changed = edge instanceof EdgeModel || changed;
     }
 
     return changed;
@@ -379,7 +347,7 @@ export class ModelManager {
     const modelName = this.activeModelName;
     if (!modelName || this.randomCandidates === 0) return [];
 
-    const points = this.pointGraphManager.getPoints();
+    const points = this.pointGraphManager.getPoints<PointModel>();
     if (points.length < 2) return [];
 
     const result = new Set<string>();
@@ -389,10 +357,7 @@ export class ModelManager {
       const index = Math.floor(Math.random() * points.length);
       const candidate = points[index];
 
-      if (
-        candidate.id !== source.id &&
-        candidate.embeddings.has(modelName)
-      ) {
+      if (candidate.id !== source.id && candidate.embeddings.has(modelName)) {
         result.add(candidate.id);
       }
     }
@@ -404,11 +369,7 @@ export class ModelManager {
    * Вычисляет косинусное расстояние двух точек по активной модели.
    * Возвращает null, если у одной из точек нет нужного embedding.
    */
-  private calculateCosineDistance(
-    p1: PointModel,
-    p2: PointModel,
-    modelName: string,
-  ): number | null {
+  private calculateCosineDistance(p1: PointModel, p2: PointModel, modelName: string): number | null {
     const emb1 = p1.embeddings.get(modelName);
     const emb2 = p2.embeddings.get(modelName);
 

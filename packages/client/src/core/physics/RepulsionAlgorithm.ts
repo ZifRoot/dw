@@ -1,7 +1,7 @@
 import { AppMediator } from "../AppMediator";
 import { PointGraphManager } from "../collections/PointGraphManager";
 import { PointMath } from "../models/PointMath";
-import { PointModel } from "../models/PointModel";
+import { Point } from "../models/Point";
 import { BaseAlgorithm } from "../Engines/BaseAlgorithm";
 
 export class RepulsionEngineConfig {
@@ -21,7 +21,7 @@ export class RepulsionAlgorithm extends BaseAlgorithm {
     super(mediator, pointGraphManager, config.stopTemperature);
   }
 
-  public applyPair1(p1: PointModel, p2: PointModel) {
+  public applyPair1(p1: Point, p2: Point) {
     const targetDistance = this.config.targetDistance;
     const minDistance = this.config.minDistance;
     if (p1.fixed && p2.fixed) return null;
@@ -50,7 +50,7 @@ export class RepulsionAlgorithm extends BaseAlgorithm {
     return { target1: p1.addNew(unit.scaleNew(-half)), target2: p2.addNew(unit.scaleNew(half)) };
   }
 
-  public applyPair2(p1: PointModel, p2: PointModel) {
+  public applyPair2(p1: Point, p2: Point) {
     const force = this.applyPair1(p1, p2);
     if (!force) return -1;
 
@@ -59,7 +59,7 @@ export class RepulsionAlgorithm extends BaseAlgorithm {
     return (p1.distTo(force.target1) + p2.distTo(force.target2)) / this.config.targetDistance;
   }
 
-  public applyPair(p1: PointModel, p2: PointModel): number {
+  public applyPair(p1: Point, p2: Point): number {
     const targetDistance = this.config.targetDistance;
     const minDistance = this.config.minDistance;
     const repulsionStrength = this.config.repulsionStrength;
