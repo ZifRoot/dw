@@ -8,6 +8,7 @@ import { PointModel } from "../models/PointModel";
 import { EmbeddingModel } from "../models/EmbeddingModel";
 import { EdgeRefs } from "../models/EdgeRefs";
 import { PointGraphManager } from "../collections/PointGraphManager";
+import { Edge } from "../models/Edge";
 import { EdgeModel } from "../models/EdgeModel";
 
 export class PointsTransformer {
@@ -101,12 +102,12 @@ export class PointsTransformer {
     await this.dataManager.savePointsTable(pointTables);
   }
 
-  private async saveEdges(edges: EdgeModel[]): Promise<void> {
+  private async saveEdges(edges: Edge[]): Promise<void> {
     const edgeTables: EdgeTable[] = edges.map((e) => ({
       id: e.id,
       source_id: e.sourceId,
       target_id: e.targetId,
-      model_name: e.modelName,
+      model_name: e instanceof EdgeModel ? e.modelName : undefined,
       distance: e.distance,
       updated_at: Date.now(),
     }));
