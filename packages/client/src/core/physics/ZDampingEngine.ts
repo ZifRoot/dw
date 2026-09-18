@@ -1,53 +1,26 @@
-import { AppMediator } from "../AppMediator";
-import { AnimationCallback, AnimationEngine } from "../Engines/AnimationEngine";
 import { PointModel } from "../models/PointModel";
 
 export class ZDampingConfig {
   public dampingFactor = 0.999;
   public threshold = 1;
   public stopTemperature = 1;
+  public getStopTemperature(): number {
+    return this.config.stopTemperature;
+  }
 }
 
 export class ZDampingEngine {
-  private temperature = 0;
   public points: PointModel[] = [];
-  private unsubCallback: AnimationCallback | null = null;
-  private readonly unsubStartRepulsion: () => void;
 
-  constructor(
-    public mediator: AppMediator,
-    public animation: AnimationEngine,
-    public config: ZDampingConfig,
-  ) {
-    this.unsubStartRepulsion = mediator.onStartRepulsion(() => this.start());
-  }
+  constructor(public config: ZDampingConfig) {}
 
-  public destroy(): void {
-    this.stop();
-    this.unsubStartRepulsion();
-  }
-
-  start() {
-    this.unsubCallback ??= this.animation.addCallback(() => this.step());
-  }
-
-  stop() {
-    if (this.unsubCallback != null) {
-      this.unsubCallback();
-      this.unsubCallback = null;
-    }
-  }
 
   public setPoints(points: PointModel[]) {
     this.points = points;
   }
 
-  private step(): void {
-    this.temperature = this.applyStep();
-    this.mediator.temperature = this.temperature;
-    if (this.temperature < this.config.stopTemperature) {
-      this.stop();
-    }
+  public step(): number {
+    return this.applyStep();
   }
 
   private applyStep(): number {
