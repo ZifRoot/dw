@@ -53,7 +53,7 @@ function bootstrap() {
   const zdampingEngine = new ZDampingEngine(new ZDampingConfig());
   const graphEngine = new GraphEngine(new GraphEngineConfig());
   const repulsionEngine = new RepulsionEngine(new RepulsionEngineConfig());
-  const enginePipeline = new EnginePipeline(
+  new EnginePipeline(
     mediator,
     animationEngine,
     graphEngine,
