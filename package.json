@@ -28,7 +28,7 @@
     "release:client": "cd packages/client && npm run release",
     "build:server:release": "cd packages/server && npm run build:release",
     "build:client:release": "cd packages/client && npm run build:release",
-    "build:release": "npm run build:client:release && npm run build:server :release",
+    "build:release": "npm run build:client:release && npm run build:server:release",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

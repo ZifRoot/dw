@@ -6,7 +6,7 @@ import { IRepository } from "./db/IRepository";
 import { ChatSessions } from "@models/ChatSessions";
 import { MessageFile } from "@models/MessageFile";
 import { User } from "@models/User";
-import { Deepseek, credentials } from "./deepseek";
+import { DW, credentials } from "./dw";
 
 import { IProgram } from "./iprogram";
 import { createExpressApp } from "./controllers";
@@ -70,13 +70,13 @@ export class Program implements IProgram {
 
     console.log(`User: ${user.name}`);
 
-    let deepseek = new Deepseek(user.credentials as credentials);
-    await this.FetchUser(deepseek, user, all);
-    await this.FilesUser(deepseek, user);
+    let dw = new DW(user.credentials as credentials);
+    await this.FetchUser(dw, user, all);
+    await this.FilesUser(dw, user);
   }
 
   @LogSafe
-  private async FilesUser(deepseek: Deepseek, user: User) {
+  private async FilesUser(dw: DW, user: User) {
     if (!this.repository) {
       console.error("null repository");
       return;
@@ -91,15 +91,15 @@ export class Program implements IProgram {
 
     console.log(`Файлов для скачевания ${files.length} будет скачено ${files.length}`);
 
-    let filesAs = files.map((file) => this.file_1(deepseek, file));
+    let filesAs = files.map((file) => this.file_1(dw, file));
 
     await Promise.all(filesAs);
   }
 
   @Safe
-  private async file_1(deepseek: Deepseek, file: MessageFile) {
+  private async file_1(dw: DW, file: MessageFile) {
     console.log(`Качаю ${file.file_name} | байт ${file.file_size}`);
-    let text = await deepseek.file(file.id, file.sessionId, file.messageId);
+    let text = await dw.file(file.id, file.sessionId, file.messageId);
     const mf = new MessageFile({ ...file, content: text });
     await this.repository!.createManyFiles([mf]);
     console.log(`Успешно скачено ${file.file_name} | байт ${file.file_size}`);
@@ -107,12 +107,12 @@ export class Program implements IProgram {
   }
 
   @LogSafe
-  private async FetchUser(deepseek: Deepseek, user: User, all: boolean) {
+  private async FetchUser(dw: DW, user: User, all: boolean) {
     if (!this.repository) {
       console.error("null repository");
       return;
     }
-    let fetch_page = all ? await deepseek.fetch_page_all() : (await deepseek.fetch_page()).chat_sessions;
+    let fetch_page = all ? await dw.fetch_page_all() : (await dw.fetch_page()).chat_sessions;
     let first_page = fetch_page.at(-1);
     // console.log(`Page: ${first_page?.title} ${dateStr(first_page?.updated_at)}`);
     let sessions = await this.repository.findAllSessions(user.id);
@@ -136,17 +136,17 @@ export class Program implements IProgram {
         return diff;
       });
 
-    await Promise.all(sessions_for_update.map((s) => this.user_1(s, deepseek, user)));
+    await Promise.all(sessions_for_update.map((s) => this.user_1(s, dw, user)));
   }
 
   @Safe
-  private async user_1(s: { in_session: ChatSessions; db_session: ChatSessions | undefined }, deepseek: Deepseek, user: User) {
+  private async user_1(s: { in_session: ChatSessions; db_session: ChatSessions | undefined }, dw: DW, user: User) {
     let session = s.db_session ?? s.in_session;
     console.log(
       `Обновление: ${s.db_session == null ? "новый" : `(${dateStr(s.db_session.updated_at)})->(${dateStr(s.in_session.updated_at)}) `} [${session.title}]`,
     );
 
-    let his = await deepseek.history_messages(session.id, session.version);
+    let his = await dw.history_messages(session.id, session.version);
 
     await this.repository.createMessagesBizData(user.id, his);
   }

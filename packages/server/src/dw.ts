@@ -3,7 +3,7 @@ import { getHighResTime } from "@utils/date-utils";
 import { ThrottledMethod, CreateThrottle } from "@utils/throttler-decorators";
 
 @CreateThrottle(100, 300)
-export class Deepseek {
+export class DW {
   headers: Headers;
   baseUrl: URL;
 
