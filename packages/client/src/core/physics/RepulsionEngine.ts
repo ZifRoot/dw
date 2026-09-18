@@ -1,5 +1,3 @@
-import { AppMediator } from "../AppMediator";
-import { AnimationCallback, AnimationEngine } from "../Engines/AnimationEngine";
 import { Point } from "../models/Point";
 import { PointModel } from "../models/PointModel";
 
@@ -9,50 +7,26 @@ export class RepulsionEngineConfig {
   public targetDistance = 100;
   public epsilon = 1e-6;
   public stopTemperature = 0.1;
+  public getStopTemperature(): number {
+    return this.config.stopTemperature;
+  }
 }
 
 export class RepulsionEngine {
-  private temperature = 0;
   private targetDistSq: number;
   public points: PointModel[] = [];
-  private unsubCallback: AnimationCallback | null = null;
-  private readonly unsubStartRepulsion: () => void;
 
-  constructor(
-    public mediator: AppMediator,
-    public animation: AnimationEngine,
-    public config: RepulsionEngineConfig,
-  ) {
+  constructor(public config: RepulsionEngineConfig) {
     this.targetDistSq = config.targetDistance ** 2;
-    this.unsubStartRepulsion = mediator.onStartRepulsion(() => this.start());
   }
 
-  public destroy(): void {
-    this.stop();
-    this.unsubStartRepulsion();
-  }
-
-  start() {
-    this.unsubCallback ??= this.animation.addCallback(() => this.step());
-  }
-
-  stop() {
-    if (this.unsubCallback != null) {
-      this.unsubCallback();
-      this.unsubCallback = null;
-    }
-  }
 
   public setPoints(points: PointModel[]) {
     this.points = points;
   }
 
-  private step(): void {
-    this.temperature = this.applyStep();
-    this.mediator.temperature = this.temperature;
-    if (this.temperature < this.config.stopTemperature) {
-      this.stop();
-    }
+  public step(): number {
+    return this.applyStep();
   }
 
   applyPair1(p1: PointModel, p2: PointModel) {
