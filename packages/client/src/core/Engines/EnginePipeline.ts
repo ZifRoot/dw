@@ -28,6 +28,7 @@ export class EnginePipeline {
   private destroyed = false;
   private readonly unsubscribeStart: () => void;
   private readonly unsubscribeConfig: () => void;
+  private readonly unsubscribeEnabled: () => void;
 
   constructor(
     private readonly mediator: AppMediator,
@@ -42,6 +43,11 @@ export class EnginePipeline {
       if (!entry) return;
 
       Object.assign(entry.algorithm.config, change.changes);
+    });
+
+    this.unsubscribeEnabled = this.mediator.onPipelineEngineEnabledChanged((change) => {
+      if (change.pipelineName !== this.name) return;
+      this.setEnabled(change.engineName, change.enabled);
     });
   }
 
@@ -100,6 +106,7 @@ export class EnginePipeline {
     this.stop();
     this.unsubscribeStart();
     this.unsubscribeConfig();
+    this.unsubscribeEnabled();
   }
 
   private rebuild(): void {
