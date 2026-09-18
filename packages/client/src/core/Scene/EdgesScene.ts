@@ -18,8 +18,8 @@ export class EdgesScene {
   private unsubPointsUpdated: (() => void) | null = null;
 
   constructor(
-    private svgEngine: SvgEngine,
     private mediator: AppMediator,
+    private svgEngine: SvgEngine,
     private pointGraphManager: PointGraphManager,
     groupName = "edges-scene",
   ) {
@@ -76,7 +76,7 @@ export class EdgesScene {
     if (this.unsubPointUpdated) this.unsubPointUpdated();
     if (this.unsubPointUpdating) this.unsubPointUpdating();
     if (this.unsubPointsUpdated) this.unsubPointsUpdated();
-    if (this.unsubPointsUpdating) this.unsubPointsUpdating();    
+    if (this.unsubPointsUpdating) this.unsubPointsUpdating();
     this.clear();
   }
 

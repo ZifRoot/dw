@@ -18,8 +18,8 @@ export class PointsScene {
   private unsubSizeText: () => void;
 
   constructor(
-    private svgEngine: SvgEngine,
     private mediator: AppMediator,
+    private svgEngine: SvgEngine,
     private pointGraphManager: PointGraphManager,
     groupName = "points-scene",
   ) {

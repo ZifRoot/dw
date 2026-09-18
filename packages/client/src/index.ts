@@ -44,8 +44,8 @@ function bootstrap() {
   const modelManager = new ModelManager(mediator, animationEngine, 4);
   const pointGraphManager = modelManager.getPointGraphManager();
 
-  const pointsScene = new PointsScene(svgEngine, mediator, pointGraphManager);
-  const edgesScene = new EdgesScene(svgEngine, mediator, pointGraphManager);
+  const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
+  const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
 
   const dataManager = new DataManager(mediator);
   const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);

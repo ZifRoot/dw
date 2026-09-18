@@ -251,14 +251,14 @@ export class NeighborGraph {
    */
   public getEdgesForPoint(id: string): EdgeModel[] {
     const edgeIds = this.adjacency.get(id);
-    if (!edgeIds) return [];
-
-    const result: EdgeModel[] = [];
-    for (const edgeId of edgeIds) {
-      const e = this.edgeCollection.getById(edgeId);
-      if (e) result.push(e);
-    }
-    return result;
+    return edgeIds
+      ? [
+          ...edgeIds
+            .keys()
+            .map((edgeId) => this.edgeCollection.getById(edgeId))
+            .filter((a) => a != null),
+        ]
+      : [];
   }
 
   /**
