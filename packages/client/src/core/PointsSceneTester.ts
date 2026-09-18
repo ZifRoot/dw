@@ -89,9 +89,10 @@ export class PointsSceneTester {
         .slice(0, removeCount)
         .map((point) => point.id);
 
-      const removed = new Set(ids);
-      points = points.filter((point) => !removed.has(point.id));
+      this.pointGraphManager.removePoints(ids);
     }
+
+    points = this.pointGraphManager.getPointsArray();
 
     const [updateMin, updateMax] = this.config.updateFrationRange;
     const updateCount = this.randomInt(Math.floor(points.length * updateMin), Math.ceil(points.length * updateMax));
@@ -102,10 +103,14 @@ export class PointsSceneTester {
     }
 
     const addCount = this.randomInt(0, Math.max(0, this.config.targetSize - points.length));
+    const newPoints: PointModel[] = [];
 
     for (let i = 0; i < addCount; i++) {
-      points.push(this.generateRandomPoint());
+      newPoints.push(this.generateRandomPoint());
     }
+
+    this.pointGraphManager.addPoints(newPoints);
+    points = this.pointGraphManager.getPointsArray();
 
     const edges = this.createEdges(points);
     this.pointGraphManager.update(points, edges);
