@@ -1,4 +1,5 @@
 // PointsSceneTester.ts
+import { AppMediator } from "./AppMediator";
 import { PointGraphManager } from "./collections/PointGraphManager";
 import { EdgeRef } from "./models/EdgeRef";
 import { PointModel } from "./models/PointModel";
@@ -18,8 +19,6 @@ interface TestConfig {
   verbose?: boolean;
   /** Создавать связь между каждой парой точек. */
   fullGraph?: boolean;
-  /** Имя модели для тестовых рёбер. */
-  edgeModelName?: string;
 }
 
 /**
@@ -35,10 +34,13 @@ export class PointsSceneTester {
   private timerId: number | null = null;
   private nextId = 1000;
 
+  private readonly pointGraphManager: PointGraphManager;
+
   constructor(
-    private readonly pointGraphManager: PointGraphManager,
+    private readonly mediator: AppMediator,
     config: TestConfig = {},
   ) {
+    this.pointGraphManager = new PointGraphManager(this.mediator);
     this.config = {
       updateFrationRange: config.updateFrationRange ?? [0.2, 0.7],
       removeFrationRange: config.removeFrationRange ?? [0.05, 0.2],
@@ -46,7 +48,6 @@ export class PointsSceneTester {
       intervalMs: config.intervalMs ?? 1000,
       verbose: config.verbose ?? true,
       fullGraph: config.fullGraph ?? true,
-      edgeModelName: config.edgeModelName ?? "test",
     };
   }
 
@@ -117,7 +118,7 @@ export class PointsSceneTester {
    * Создать тестовые связи между текущими точками.
    *
    * Связи передаются в PointGraphManager как EdgeRef.
-   * Сам тестер не создаёт EdgeModel и не знает, как именно
+   * Сам тестер не создаёт Edge и не знает, как именно
    * конкретный граф хранит или создаёт модели рёбер.
    */
   private createEdges(points: PointModel[]): EdgeRef[] {
@@ -130,7 +131,6 @@ export class PointsSceneTester {
         edges.push({
           sourceId: points[i].id,
           targetId: points[j].id,
-          modelName: this.config.edgeModelName,
         });
       }
     }
