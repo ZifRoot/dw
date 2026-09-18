@@ -50,6 +50,18 @@ export class PointGraphManager {
   }
 
   /**
+   * Добавить точки через менеджер графа.
+   */
+  public addPoints(points: PointModel[]): void {
+    if (points.length === 0) return;
+
+    const toInsert: PointModel[] = [];
+    const toUpdate: PointModel[] = [];
+    this.pointCollection._setPoints(points, toInsert, toUpdate);
+    this.mediator.pointsGraphUpdated();
+  }
+
+  /**
    * Удалить точки через менеджер графа.
    * Сначала удаляются все инцидентные рёбра, затем сами точки.
    */
