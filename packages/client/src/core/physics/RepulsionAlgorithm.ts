@@ -1,6 +1,6 @@
 import { AppMediator } from "../AppMediator";
 import { PointGraphManager } from "../collections/PointGraphManager";
-import { Point } from "../models/Point";
+import { PointMath } from "../models/PointMath";
 import { PointModel } from "../models/PointModel";
 import { BaseAlgorithm } from "../Engines/BaseAlgorithm";
 
@@ -31,7 +31,7 @@ export class RepulsionAlgorithm extends BaseAlgorithm {
     if (distSq >= targetDistance ** 2) return null;
 
     if (distSq < this.config.epsilon) {
-      const shift = Point.RandomSphere().scale(minDistance);
+      const shift = PointMath.RandomSphere().scale(minDistance);
       return { target1: p1.addNew(shift), target2: p2.subNew(shift) };
     }
 
@@ -73,7 +73,7 @@ export class RepulsionAlgorithm extends BaseAlgorithm {
 
     let temperature: number;
     if (distSq < this.config.epsilon) {
-      d = Point.RandomSphere().scale(minDistance);
+      d = PointMath.RandomSphere().scale(minDistance);
       temperature = stopTemperature * 2;
     } else {
       const dist = Math.sqrt(distSq);

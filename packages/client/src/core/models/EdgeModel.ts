@@ -4,7 +4,6 @@ import { Edge } from "./Edge";
 import { EdgeRef } from "./EdgeRef";
 import { PointModel } from "./PointModel";
 import { cosineDistance as CosineDistance } from "@utils/vector";
-import { th } from "zod/v4/locales/index.js";
 
 export class EdgeModel implements Edge, EdgeRef {
   public sourceId: string;

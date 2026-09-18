@@ -1,27 +1,13 @@
 // core/models/PointModel.ts
-import { Point } from "./Point";
-import { PointMath } from "./PointMath";
+import { BasePointMath } from "./BasePointMath";
 import { EmbeddingModel } from "./EmbeddingModel";
+import { Point } from "./Point";
 
 export class PointModel extends Point {
   public embeddings: Map<string, EmbeddingModel> = new Map();
 
-  constructor(
-    point: PointMath,
-    public id: string,
-    public text: string,
-    public dragged: boolean = false,
-    public selected: boolean = false,
-    public pinned: boolean = false,
-  ) {
-    super(point.x, point.y, point.z);
-    dragged??=false;
-    selected??=false;
-    pinned??=false;
-  }
-
-  get fixed(): boolean {
-    return this.dragged || this.selected || this.pinned;
+  constructor(point: BasePointMath, id: string, text: string, dragged: boolean = false, selected: boolean = false, pinned: boolean = false) {
+    super(point, id, text, dragged, selected, pinned);
   }
 
   clone(): PointModel {

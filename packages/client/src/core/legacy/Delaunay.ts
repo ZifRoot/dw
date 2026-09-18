@@ -1,4 +1,4 @@
-import { PointMath2d } from "../models/PointMath";
+import { PointMath2d } from "../models/BasePointMath";
 import { EdgeIndex } from "../models/EdgeIndex";
 
 export class Delaunay {

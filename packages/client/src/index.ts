@@ -61,7 +61,7 @@ function bootstrap() {
   createControlPanel(controlPanelDiv, mediator);
   createInfoPanel(infoPanelDiv, mediator);
 
-  dataManager.reloadTables();
+  // dataManager.reloadTables();
 }
 
 bootstrap();

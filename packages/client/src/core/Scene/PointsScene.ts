@@ -12,7 +12,7 @@ export class PointsScene {
   private d3Points: d3.Selection<SVGGElement, PointModel, SVGGElement, unknown> | null = null;
   private domMap: Map<string, SVGGElement> = new Map();
   private unsubPointsGraphUpdated: () => void;
-  private unsubSelectedPoint: () => void;
+  // private unsubSelectedPoint: () => void;
   private unsubPointChange: () => void;
   private unsubPointsUpdating: () => void;
   private unsubSizeText: () => void;
@@ -32,7 +32,7 @@ export class PointsScene {
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
     // Подписка на обновление графа точек (без передачи данных).
     this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => this.syncDomWithPoints());
-    this.unsubSelectedPoint = this.mediator.onSelectedPoint((point) => this.selectedPoint(point));
+    // this.unsubSelectedPoint = this.mediator.onSelectedPoint((point) => this.selectedPoint(point));
     this.unsubPointChange = this.mediator.onPointChange(({ pointId, changes }) => this.pointChange(pointId, changes));
     this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.pointsUpdating());
     this.unsubSizeText = this.mediator.onSizeText(() => this.updatePointStyles());
@@ -54,10 +54,6 @@ export class PointsScene {
 
   public getPoints(): PointModel[] {
     return this.points;
-  }
-
-  public selectedPoint(point: UIPoint | null) {
-    return;
   }
 
   public pointChange(pointId: string, changes: Partial<Omit<UIPoint, "id">>) {
@@ -94,7 +90,7 @@ export class PointsScene {
   public destroy(): void {
     if (this.unregisterDrag) this.unregisterDrag();
     this.unsubPointsGraphUpdated();
-    this.unsubSelectedPoint();
+    // this.unsubSelectedPoint();
     this.unsubPointChange();
     this.unsubPointsUpdating();
     this.unsubSizeText();

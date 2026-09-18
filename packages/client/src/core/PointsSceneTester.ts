@@ -2,7 +2,7 @@
 import { PointGraphManager } from "./collections/PointGraphManager";
 import { EdgeRef } from "./models/EdgeRef";
 import { PointModel } from "./models/PointModel";
-import { Point } from "./models/Point";
+import { PointMath } from "./models/PointMath";
 import { Safe } from "@utils/logger";
 
 interface TestConfig {
@@ -68,10 +68,7 @@ export class PointsSceneTester {
   private iteration(): void {
     this._iteration();
 
-    this.timerId = window.setTimeout(
-      () => this.iteration(),
-      this.config.intervalMs,
-    );
+    this.timerId = window.setTimeout(() => this.iteration(), this.config.intervalMs);
   }
 
   @Safe
@@ -79,10 +76,7 @@ export class PointsSceneTester {
     const start = performance.now();
     let points = this.pointGraphManager.getPointsArray();
 
-    const removeCount = this.randomInt(
-      0,
-      Math.max(0, points.length - this.config.targetSize),
-    );
+    const removeCount = this.randomInt(0, Math.max(0, points.length - this.config.targetSize));
 
     if (removeCount > 0) {
       const ids = [...points]
@@ -95,22 +89,14 @@ export class PointsSceneTester {
     }
 
     const [updateMin, updateMax] = this.config.updateFrationRange;
-    const updateCount = this.randomInt(
-      Math.floor(points.length * updateMin),
-      Math.ceil(points.length * updateMax),
-    );
-    const updatedPoints = [...points]
-      .shuffle()
-      .slice(0, updateCount);
+    const updateCount = this.randomInt(Math.floor(points.length * updateMin), Math.ceil(points.length * updateMax));
+    const updatedPoints = [...points].shuffle().slice(0, updateCount);
 
     for (const point of updatedPoints) {
       this.mutatePoint(point);
     }
 
-    const addCount = this.randomInt(
-      0,
-      Math.max(0, this.config.targetSize - points.length),
-    );
+    const addCount = this.randomInt(0, Math.max(0, this.config.targetSize - points.length));
 
     for (let i = 0; i < addCount; i++) {
       points.push(this.generateRandomPoint());
@@ -121,7 +107,6 @@ export class PointsSceneTester {
 
     const duration = performance.now() - start;
     const finalPoints = this.pointGraphManager.getPointsArray();
-
 
     this.log(
       `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, рёбер=${edges.length}, время=${duration.toFixed(2)}ms`,
@@ -156,26 +141,12 @@ export class PointsSceneTester {
   private generateRandomPoint(): PointModel {
     const id = `p${this.nextId++}`;
 
-    return new PointModel(
-      new Point(
-        Math.random() * 800,
-        Math.random() * 600,
-        0,
-      ),
-      id,
-      id.slice(1, 3),
-    );
+    return new PointModel(new PointMath(Math.random() * 800, Math.random() * 600, 0), id, id.slice(1, 3));
   }
 
   private mutatePoint(point: PointModel): void {
-    point.x = Math.max(
-      0,
-      Math.min(1000, point.x + (Math.random() - 0.5) * 100),
-    );
-    point.y = Math.max(
-      0,
-      Math.min(800, point.y + (Math.random() - 0.5) * 100),
-    );
+    point.x = Math.max(0, Math.min(1000, point.x + (Math.random() - 0.5) * 100));
+    point.y = Math.max(0, Math.min(800, point.y + (Math.random() - 0.5) * 100));
 
     if (Math.random() > 0.8) {
       point.text += "!";
