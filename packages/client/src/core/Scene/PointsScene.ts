@@ -3,6 +3,7 @@ import * as d3 from "d3";
 import { UIPoint } from "../models/ui-models";
 import { AppMediator } from "../AppMediator";
 import { PointModel } from "../models/PointModel";
+import { EdgeModel } from "../models/EdgeModel";
 import { PointGraphManager } from "../collections/PointGraphManager";
 
 export class PointsScene {
@@ -233,6 +234,7 @@ export class PointsScene {
 
     const neighbors = this.pointGraphManager
       .getEdgesForPoint(point.id)
+      .filter((edge): edge is EdgeModel => edge instanceof EdgeModel)
       .map((edge) => {
         const neighborId = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
         const neighbor = this.pointGraphManager.getPointById(neighborId);
