@@ -258,14 +258,14 @@ export class MediatorScene {
       if (!eventNode) continue;
 
       for (const sender of flow.senders) {
-        const senderNode = senderMap.get(`sender:${this.endpointLabel(sender)}`);
+        const senderNode = senderMap.get(`sender:${sender.name}`);
         if (senderNode) {
           links.push({ source: senderNode, target: eventNode });
         }
       }
 
       for (const receiver of flow.receivers) {
-        const receiverNode = receiverMap.get(`receiver:${this.endpointLabel(receiver)}`);
+        const receiverNode = receiverMap.get(`receiver:${receiver.name}`);
         if (receiverNode) {
           links.push({ source: eventNode, target: receiverNode });
         }
@@ -397,8 +397,15 @@ export class MediatorScene {
     const map = new Map<string, FlowEndpoint>();
 
     for (const value of values) {
-      const key = `${value.name}:${value.lines.join(",")}`;
-      if (!map.has(key)) map.set(key, value);
+      const existing = map.get(value.name);
+      if (existing) {
+        existing.lines = Array.from(new Set([...existing.lines, ...value.lines]));
+      } else {
+        map.set(value.name, {
+          name: value.name,
+          lines: [...value.lines],
+        });
+      }
     }
 
     return Array.from(map.values());
