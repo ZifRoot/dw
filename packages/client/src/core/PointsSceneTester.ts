@@ -1,206 +1,200 @@
 // PointsSceneTester.ts
-import { PointsScene } from "./Scene/PointsScene";
-import { Point } from "./models/Point";
-import { EdgesScene, Edge } from "./Scene/EdgesScene";
 import { AppMediator } from "./AppMediator";
+import { PointGraphManager } from "./collections/PointGraphManager";
+import { EdgeRef } from "./models/EdgeRef";
+import { PointModel } from "./models/PointModel";
+import { Point } from "./models/Point";
 import { Safe } from "@utils/logger";
-import { PointTable } from "./data/tables/PointTable";
 
 interface TestConfig {
-  /** Процент точек, которые будут обновлены на каждой итерации (0-100) */
+  /** Доля точек, которые перемещаются на каждой итерации (0-1). */
   updateFrationRange?: [number, number];
-  /** Количество новых точек, добавляемых на каждой итерации (случайное в диапазоне) */
+  /** Целевое количество точек. */
   targetSize?: number;
-
+  /** Доля точек, удаляемых на каждой итерации (0-1). */
   removeFrationRange?: [number, number];
-  /** Интервал между итерациями в мс */
+  /** Интервал между итерациями в мс. */
   intervalMs?: number;
-  /** Включить логирование в консоль */
+  /** Включить логирование в консоль. */
   verbose?: boolean;
-  /** Построение полного графа (все пары) */
+  /** Создавать связь между каждой парой точек. */
   fullGraph?: boolean;
+  /** Имя модели для тестовых рёбер. */
+  edgeModelName?: string;
 }
 
+/**
+ * Генерирует динамические данные для проверки Graph View.
+ *
+ * Тестер не управляет PointsScene или EdgesScene напрямую.
+ * Он является источником PointModel/EdgeRef и передаёт их
+ * в PointGraphManager, который отвечает за состояние графа
+ * и уведомляет сцены об изменениях.
+ */
 export class PointsSceneTester {
   private config: Required<TestConfig>;
-  private intervalId: number | null = null;
+  private timerId: number | null = null;
   private nextId = 1000;
 
   constructor(
-    private mediator: AppMediator,
-    private pointsScene: PointsScene,
-    private edgesScene: EdgesScene,
+    private readonly mediator: AppMediator,
+    private readonly pointGraphManager: PointGraphManager,
     config: TestConfig = {},
   ) {
-    this.pointsScene = pointsScene;
-    this.edgesScene = edgesScene;
     this.config = {
-      updateFrationRange: config.updateFrationRange ?? [20 / 100, 70 / 100],
-      removeFrationRange: config.removeFrationRange ?? [5 / 100, 20 / 100],
+      updateFrationRange: config.updateFrationRange ?? [0.2, 0.7],
+      removeFrationRange: config.removeFrationRange ?? [0.05, 0.2],
       targetSize: config.targetSize ?? 5,
       intervalMs: config.intervalMs ?? 1000,
       verbose: config.verbose ?? true,
       fullGraph: config.fullGraph ?? true,
+      edgeModelName: config.edgeModelName ?? "test",
     };
   }
 
   public start(): void {
-    if (this.intervalId !== null) return;
-    this.log("Тест запущен");
-    // this._start().catch(console.error);
+    if (this.timerId !== null) return;
 
+    this.log("Тест запущен");
     this.iteration();
   }
 
-  generatePointf(doc: PointTable): Point {
-    return {
-      id: doc.id,
-      x: doc.x ?? Math.random() * 800,
-      y: doc.y ?? Math.random() * 600,
-      text: doc.title,
-    };
-  }
-
   public stop(): void {
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-      this.log("Тест остановлен");
-    }
+    if (this.timerId === null) return;
+
+    clearTimeout(this.timerId);
+    this.timerId = null;
+    this.log("Тест остановлен");
   }
 
   private iteration(): void {
     this._iteration();
-    this.intervalId = window.setTimeout(() => {
-      requestAnimationFrame(() => this.iteration());
-    }, this.config.intervalMs);
-  }
 
-  @Safe
-  private _iteration() {
-    const start = performance.now();
-
-    let points = this.pointsScene.getPoints(); // получаем актуальные точки
-    let validation = this.pointsScene.entites.validate();
-    if (!validation.ok) {
-      console.error("❌ Ошибки после удаления:", validation.errors);
-    }
-
-    let backupCollection = this.pointsScene.entites.clone();
-    let [minP, maxP] = this.config.removeFrationRange;
-
-    // 1. Удаляем лишние точки (если пул превышает целевой размер)
-    let removeCount = this.randomInt(0, Math.max(0, points.length - this.mediator.targetSize));
-
-    const removedIds = points
-      .map((p) => p.id)
-      .shuffle()
-      .slice(0, removeCount);
-
-    this.pointsScene.removePoints(removedIds);
-
-    validation = this.pointsScene.entites.validate();
-    if (!validation.ok) {
-      console.error("❌ Ошибки после удаления:", validation.errors);
-    }
-
-    points = this.pointsScene.getPoints(); // обновляем после мутаций
-    backupCollection = this.pointsScene.entites.clone();
-
-    [minP, maxP] = this.config.updateFrationRange;
-    let updateCount = this.randomInt(points.length * minP, points.length * maxP);
-
-    const updatedPoints = [...points]
-      .shuffle()
-      .slice(0, updateCount)
-      .map((p) => this.mutatePoint(p));
-
-    // 3. Добавляем новые точки (если нужно увеличить пул)
-    let addCount = this.randomInt(0, Math.max(0, this.mediator.targetSize - points.length));
-    const newPoints = Array.from({ length: addCount }).map((_) => this.generateRandomPoint());
-
-    let uppoints = [...updatedPoints, ...newPoints].shuffle();
-
-    this.pointsScene.setPoints(uppoints); // добавление новых
-
-    validation = this.pointsScene.entites.validate();
-    if (!validation.ok) {
-      console.error("❌ Ошибки после удаления:", validation.errors);
-    }
-    // 5. Перестраиваем граф связей (полный граф) на основе нового набора точек
-    this.updateEdges();
-
-    const duration = performance.now() - start;
-    const finalPoints = this.pointsScene.getPoints();
-
-    if (this.mediator.autoZoom) this.pointsScene.fitView();
-    this.log(
-      `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, время=${duration.toFixed(2)}ms`,
+    this.timerId = window.setTimeout(
+      () => this.iteration(),
+      this.config.intervalMs,
     );
   }
 
-  /** Построить полный граф (все пары) из текущих точек */
-  private updateEdges(): void {
-    const points = this.pointsScene.getPoints();
-    if (!this.config.fullGraph) {
-      // Если не полный граф, можно построить пустой или случайный
-      this.edgesScene.setEdges([]);
-      return;
+  @Safe
+  private _iteration(): void {
+    const start = performance.now();
+    let points = this.pointGraphManager.getPointsArray();
+
+    const removeCount = this.randomInt(
+      0,
+      Math.max(0, points.length - this.config.targetSize),
+    );
+
+    if (removeCount > 0) {
+      const ids = [...points]
+        .shuffle()
+        .slice(0, removeCount)
+        .map((point) => point.id);
+
+      const removed = new Set(ids);
+      points = points.filter((point) => !removed.has(point.id));
     }
-    const edges: Edge[] = [];
-    for (let i = 0; i < points.length; i += 2) {
-      for (let j = i + 1; j < points.length; j += 2) {
+
+    const [updateMin, updateMax] = this.config.updateFrationRange;
+    const updateCount = this.randomInt(
+      0,
+      Math.min(points.length, Math.ceil(points.length * updateMax)),
+    );
+    const updatedPoints = [...points]
+      .shuffle()
+      .slice(0, updateCount);
+
+    for (const point of updatedPoints) {
+      this.mutatePoint(point);
+    }
+
+    const addCount = this.randomInt(
+      0,
+      Math.max(0, this.config.targetSize - points.length),
+    );
+
+    for (let i = 0; i < addCount; i++) {
+      points.push(this.generateRandomPoint());
+    }
+
+    const edges = this.createEdges(points);
+    this.pointGraphManager.update(points, edges);
+
+    const duration = performance.now() - start;
+    const finalPoints = this.pointGraphManager.getPointsArray();
+
+    if (this.mediator.autoZoom) {
+      this.mediator.emit(AppMediator.AUTO_ZOOM, true);
+    }
+
+    this.log(
+      `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, рёбер=${edges.length}, время=${duration.toFixed(2)}ms`,
+    );
+  }
+
+  /**
+   * Создать тестовые связи между текущими точками.
+   *
+   * Связи передаются в PointGraphManager как EdgeRef.
+   * Сам тестер не создаёт EdgeModel и не знает, как именно
+   * конкретный граф хранит или создаёт модели рёбер.
+   */
+  private createEdges(points: PointModel[]): EdgeRef[] {
+    if (!this.config.fullGraph) return [];
+
+    const edges: EdgeRef[] = [];
+
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
         edges.push({
-          id: `${points[i].id}-${points[j].id}`,
           sourceId: points[i].id,
           targetId: points[j].id,
+          modelName: this.config.edgeModelName,
         });
       }
     }
-    this.edgesScene.setEdges(edges);
-    if (this.config.verbose) {
-      console.log(`[Edges] Построено ${edges.length} рёбер`);
-    }
+
+    return edges;
   }
 
-  // ========== Вспомогательные методы ==========
-
-  private generateRandomPoint(): Point {
+  private generateRandomPoint(): PointModel {
     const id = `p${this.nextId++}`;
-    return {
+
+    return new PointModel(
+      new Point(
+        Math.random() * 800,
+        Math.random() * 600,
+        0,
+      ),
       id,
-      x: Math.random() * 800,
-      y: Math.random() * 600,
-      text: id.slice(1, 3),
-    };
+      id.slice(1, 3),
+    );
   }
 
-  private mutatePoint(point: Point): Point {
-    // Создаём новый объект с изменениями (но сохраняем id)
-    return {
-      ...point,
-      x: Math.max(0, Math.min(1000, point.x + (Math.random() - 0.5) * 100)),
-      y: Math.max(0, Math.min(800, point.y + (Math.random() - 0.5) * 100)),
-      text: point.text + (Math.random() > 0.8 ? "!" : ""),
-    };
+  private mutatePoint(point: PointModel): void {
+    point.x = Math.max(
+      0,
+      Math.min(1000, point.x + (Math.random() - 0.5) * 100),
+    );
+    point.y = Math.max(
+      0,
+      Math.min(800, point.y + (Math.random() - 0.5) * 100),
+    );
+
+    if (Math.random() > 0.8) {
+      point.text += "!";
+    }
   }
 
   private randomInt(min: number, max: number): number {
+    if (max <= min) return min;
     return Math.floor(Math.random() * (max - min) + min);
   }
 
-  private randomIndices(max: number, count: number): number[] {
-    const indices = Array.from({ length: max }, (_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
-    return indices.slice(0, count);
-  }
-
-  private log(msg: string): void {
+  private log(message: string): void {
     if (this.config.verbose) {
-      console.log(`[PointsSceneTester] ${msg}`);
+      console.log(`[PointsSceneTester] ${message}`);
     }
   }
 }
