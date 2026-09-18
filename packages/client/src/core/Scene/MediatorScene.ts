@@ -2,10 +2,15 @@ import * as d3 from "d3";
 import { AppMediator } from "../AppMediator";
 import { SvgEngine } from "../Engines/SvgEngine";
 
+interface FlowEndpoint {
+  name: string;
+  lines: number[];
+}
+
 interface EventFlow {
   event: string;
-  senders: string[];
-  receivers: string[];
+  senders: FlowEndpoint[];
+  receivers: FlowEndpoint[];
 }
 
 interface FlowNode {
@@ -38,113 +43,134 @@ export class MediatorScene {
   private readonly flows: EventFlow[] = [
     {
       event: AppMediator.PROGRESS,
-      senders: ["AppMediator"],
-      receivers: ["ControlPanel"],
+      senders: [{ name: "index.ts", lines: [68] }],
+      receivers: [{ name: "ControlPanel", lines: [29] }],
     },
     {
       event: AppMediator.TARGET_SIZE,
-      senders: ["AppMediator"],
-      receivers: ["PointsScene"],
+      senders: [
+        { name: "index.ts", lines: [67] },
+        { name: "ControlPanel", lines: [52] },
+      ],
+      receivers: [],
     },
     {
       event: AppMediator.TEMPERATURE,
-      senders: ["RepulsionEngine", "GraphEngine", "ZDampingEngine"],
-      receivers: ["ControlPanel"],
+      senders: [{ name: "BaseAlgorithm", lines: [41] }],
+      receivers: [{ name: "ControlPanel", lines: [28] }],
     },
     {
       event: AppMediator.SIZE_TEXT,
-      senders: ["AppMediator"],
-      receivers: ["PointsScene"],
+      senders: [{ name: "index.ts", lines: [69] }],
+      receivers: [
+        { name: "PointsScene", lines: [40] },
+        { name: "AdaptiveInfoContent", lines: [27] },
+      ],
     },
     {
       event: AppMediator.AUTO_ZOOM,
-      senders: ["AppMediator"],
-      receivers: ["PointsScene"],
+      senders: [{ name: "index.ts", lines: [72] }, { name: "ControlPanel", lines: [69] }],
+      receivers: [{ name: "PointsScene", lines: [41] }],
     },
     {
       event: AppMediator.SELECTED_POINT,
-      senders: ["PointsScene"],
-      receivers: ["PointsScene", "EdgesScene", "AdaptiveInfoContent"],
+      senders: [{ name: "PointsScene", lines: [131, 284] }],
+      receivers: [
+        { name: "EdgesScene", lines: [32] },
+        { name: "AdaptiveInfoContent", lines: [25] },
+      ],
     },
     {
       event: AppMediator.SELECTED_EDGE,
-      senders: ["EdgesScene"],
-      receivers: ["AdaptiveInfoContent"],
+      senders: [{ name: "EdgesScene", lines: [53] }],
+      receivers: [{ name: "AdaptiveInfoContent", lines: [26] }],
     },
     {
       event: AppMediator.POINT_CHANGE,
-      senders: ["PointInfoPanel"],
-      receivers: ["PointsScene"],
+      senders: [{ name: "PointInfoPanel", lines: [27, 33] }],
+      receivers: [{ name: "PointsScene", lines: [38] }],
     },
     {
       event: AppMediator.EDGE_UPDATE,
-      senders: ["EdgeInfoPanel"],
+      senders: [{ name: "EdgeInfoPanel", lines: [26] }],
       receivers: [],
     },
     {
       event: AppMediator.POINT_UPDATED,
-      senders: ["PointsScene"],
-      receivers: ["EdgesScene", "PointsTransformer"],
+      senders: [{ name: "PointsScene", lines: [70, 219] }],
+      receivers: [
+        { name: "EdgesScene", lines: [36] },
+        { name: "PointsTransformer", lines: [34] },
+      ],
     },
     {
       event: AppMediator.POINTS_UPDATED,
       senders: [],
-      receivers: ["PointsTransformer"],
+      receivers: [{ name: "PointsTransformer", lines: [29] }],
     },
     {
       event: AppMediator.POINTS_UPDATING,
-      senders: ["AnimationEngine"],
-      receivers: ["PointsScene", "EdgesScene"],
+      senders: [{ name: "EnginePipeline", lines: [96] }],
+      receivers: [
+        { name: "PointsScene", lines: [39] },
+        { name: "EdgesScene", lines: [34] },
+      ],
     },
     {
       event: AppMediator.POINTS_GRAPH_UPDATED,
-      senders: ["PointGraphManager"],
-      receivers: ["PointsScene", "EdgesScene"],
+      senders: [
+        { name: "ModelManager", lines: [154, 201] },
+        { name: "PointsSceneTester", lines: [121] },
+      ],
+      receivers: [
+        { name: "PointsScene", lines: [36] },
+        { name: "EdgesScene", lines: [33] },
+      ],
     },
     {
       event: AppMediator.MODEL_MANAGER_STEP,
-      senders: ["ControlPanel"],
-      receivers: ["ModelManager"],
+      senders: [{ name: "ControlPanel", lines: [63] }],
+      receivers: [{ name: "ModelManager", lines: [67] }],
     },
     {
       event: AppMediator.CLEAR_POINTS,
-      senders: ["ControlPanel"],
+      senders: [{ name: "ControlPanel", lines: [58] }],
       receivers: [],
     },
     {
       event: AppMediator.ADD_POINT,
-      senders: ["ControlPanel"],
+      senders: [{ name: "ControlPanel", lines: [57] }],
       receivers: [],
     },
     {
       event: AppMediator.START_REPULSION,
-      senders: ["ControlPanel"],
-      receivers: ["RepulsionEngine", "GraphEngine", "ZDampingEngine"],
+      senders: [{ name: "ControlPanel", lines: [59] }],
+      receivers: [{ name: "EnginePipeline", lines: [27] }],
     },
     {
       event: AppMediator.START_GRAPH,
-      senders: ["ControlPanel"],
+      senders: [{ name: "ControlPanel", lines: [60] }],
       receivers: [],
     },
     {
       event: AppMediator.RELOAD_TABLES,
-      senders: ["DataManager"],
-      receivers: [],
+      senders: [],
+      receivers: [{ name: "DataManager", lines: [26] }],
     },
     {
       event: AppMediator.SAVE_POSITIONS,
-      senders: ["ControlPanel"],
-      receivers: ["PointsTransformer"],
+      senders: [{ name: "ControlPanel", lines: [61] }],
+      receivers: [{ name: "PointsTransformer", lines: [41] }],
     },
     {
       event: AppMediator.POSITIONS_SAVED,
-      senders: ["PointsTransformer"],
-      receivers: ["ControlPanel"],
+      senders: [{ name: "PointsTransformer", lines: [129] }],
+      receivers: [{ name: "ControlPanel", lines: [32] }],
     },
     {
       event: AppMediator.POINT_UPDATING,
-      senders: ["PointsScene"],
-      receivers: ["EdgesScene"],
+      senders: [{ name: "PointsScene", lines: [209] }],
+      receivers: [{ name: "EdgesScene", lines: [37] }],
     },
   ];
 
@@ -179,20 +205,16 @@ export class MediatorScene {
     const eventColumnX = margin.left + innerWidth / 2;
     const receiverColumnX = width - margin.right;
 
-    const eventFlows = this.flows.filter(
-      (flow) => flow.senders.length > 0 && flow.receivers.length > 0,
+    const eventNodes = this.flows.map((flow) => flow.event);
+    const senderEndpoints = this.uniqueEndpoints(
+      this.flows.flatMap((flow) => flow.senders),
     );
-
-    const eventNodes = eventFlows.map((flow) => flow.event);
-    const senderNames = this.unique(
-      eventFlows.flatMap((flow) => flow.senders),
-    );
-    const receiverNames = this.unique(
-      eventFlows.flatMap((flow) => flow.receivers),
+    const receiverEndpoints = this.uniqueEndpoints(
+      this.flows.flatMap((flow) => flow.receivers),
     );
 
     const senderNodes = this.createNodes(
-      senderNames,
+      senderEndpoints,
       "sender",
       senderColumnX,
       innerHeight,
@@ -219,31 +241,31 @@ export class MediatorScene {
     });
 
     const receiverNodes = this.createNodes(
-      receiverNames,
+      receiverEndpoints,
       "receiver",
       receiverColumnX,
       innerHeight,
       margin.top,
     );
 
-    const senderMap = new Map(senderNodes.map((node) => [node.label, node]));
-    const receiverMap = new Map(receiverNodes.map((node) => [node.label, node]));
+    const senderMap = new Map(senderNodes.map((node) => [node.id, node]));
+    const receiverMap = new Map(receiverNodes.map((node) => [node.id, node]));
 
     const links: FlowLink[] = [];
 
-    for (const flow of eventFlows) {
+    for (const flow of this.flows) {
       const eventNode = eventNodeMap.get(flow.event);
       if (!eventNode) continue;
 
       for (const sender of flow.senders) {
-        const senderNode = senderMap.get(sender);
+        const senderNode = senderMap.get(`sender:${this.endpointLabel(sender)}`);
         if (senderNode) {
           links.push({ source: senderNode, target: eventNode });
         }
       }
 
       for (const receiver of flow.receivers) {
-        const receiverNode = receiverMap.get(receiver);
+        const receiverNode = receiverMap.get(`receiver:${this.endpointLabel(receiver)}`);
         if (receiverNode) {
           links.push({ source: eventNode, target: receiverNode });
         }
@@ -261,7 +283,7 @@ export class MediatorScene {
       .attr("x", width / 2)
       .attr("y", 24)
       .attr("text-anchor", "middle")
-      .text("AppMediator");
+      .text("AppMediator — актуально на коммит a715207d7cd90f8946648cc31b039c31454a59a1");
 
     this.rootGroup
       .append("text")
@@ -289,7 +311,7 @@ export class MediatorScene {
   }
 
   private createNodes(
-    names: string[],
+    endpoints: FlowEndpoint[],
     column: FlowNode["column"],
     x: number,
     height: number,
@@ -298,12 +320,12 @@ export class MediatorScene {
     const nodeHeight = 24;
     const gap = Math.max(
       6,
-      (height - names.length * nodeHeight) / Math.max(names.length - 1, 1),
+      (height - endpoints.length * nodeHeight) / Math.max(endpoints.length - 1, 1),
     );
 
-    return names.map((name, index) => ({
-      id: `${column}:${name}`,
-      label: name,
+    return endpoints.map((endpoint, index) => ({
+      id: `${column}:${endpoint.name}`,
+      label: this.endpointLabel(endpoint),
       x,
       y: top + index * (nodeHeight + gap),
       height: nodeHeight,
@@ -371,7 +393,18 @@ export class MediatorScene {
     return `M ${sourceX},${sourceY} C ${controlX},${sourceY} ${controlX},${targetY} ${targetX},${targetY}`;
   }
 
-  private unique(values: string[]): string[] {
-    return Array.from(new Set(values));
+  private uniqueEndpoints(values: FlowEndpoint[]): FlowEndpoint[] {
+    const map = new Map<string, FlowEndpoint>();
+
+    for (const value of values) {
+      const key = `${value.name}:${value.lines.join(",")}`;
+      if (!map.has(key)) map.set(key, value);
+    }
+
+    return Array.from(map.values());
+  }
+
+  private endpointLabel(endpoint: FlowEndpoint): string {
+    return `${endpoint.name} [${endpoint.lines.join(", ")}]`;
   }
 }
