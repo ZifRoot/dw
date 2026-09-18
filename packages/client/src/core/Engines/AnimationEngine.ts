@@ -1,8 +1,7 @@
 export type AnimationCallback = (deltaTime: number) => void;
 
-export interface AnimationEngineConfig {
-  frameBudgetMs?: number;
-}
+const CALIBRATION_FRAMES = 5;
+const COMPUTATION_BUDGET_RATIO = 0.8;
 
 /**
  * Планировщик фоновых работ на requestAnimationFrame.
@@ -10,19 +9,24 @@ export interface AnimationEngineConfig {
  * AnimationEngine не знает ничего о назначении зарегистрированных колбэков.
  * Он только запускает их с учётом временного бюджета кадра и распределяет
  * работу по принципу cooperative round-robin.
+ *
+ * Перед запуском планировщика двигатель измеряет реальный интервал между
+ * кадрами и использует 80% среднего интервала как бюджет вычислений.
  */
 export class AnimationEngine {
-  private readonly frameBudgetMs: number;
+  private frameBudgetMs: number | null = null;
   private rafId: number | null = null;
   private isRunning = false;
+  private isCalibrating = false;
   private nextCallbackId = 0;
   private cursor = 0;
   private lastFrameTime: number | null = null;
   private callbacks = new Map<number, AnimationCallback>();
   private order: number[] = [];
 
-  constructor(config: AnimationEngineConfig = {}) {
-    this.frameBudgetMs = Math.max(1, config.frameBudgetMs ?? 6);
+  constructor() {
+    this.isCalibrating = true;
+    this.calibrate();
   }
 
   /** Добавить один колбэк в очередь. Возвращает функцию для удаления. */
@@ -63,7 +67,7 @@ export class AnimationEngine {
   }
 
   private start(): void {
-    if (this.isRunning || this.callbacks.size === 0) return;
+    if (this.isRunning || this.isCalibrating || this.callbacks.size === 0) return;
     this.isRunning = true;
     this.lastFrameTime = null;
     this.scheduleStep();
@@ -73,9 +77,38 @@ export class AnimationEngine {
     this.rafId = requestAnimationFrame((timestamp) => this.step(timestamp));
   }
 
+  private calibrate(): void {
+    let previousTimestamp: number | null = null;
+    let totalFrameTime = 0;
+    let measuredFrames = 0;
+
+    const measure = (timestamp: number): void => {
+      if (previousTimestamp !== null) {
+        totalFrameTime += timestamp - previousTimestamp;
+        measuredFrames++;
+      }
+
+      previousTimestamp = timestamp;
+
+      if (measuredFrames < CALIBRATION_FRAMES - 1) {
+        requestAnimationFrame(measure);
+        return;
+      }
+
+      this.frameBudgetMs = Math.max(
+        1,
+        (totalFrameTime / measuredFrames) * COMPUTATION_BUDGET_RATIO,
+      );
+      this.isCalibrating = false;
+      this.start();
+    };
+
+    requestAnimationFrame(measure);
+  }
+
   /** Выполнить один кадр планировщика. */
   public step(timestamp = performance.now()): void {
-    if (!this.isRunning) return;
+    if (!this.isRunning || this.frameBudgetMs === null) return;
     this.rafId = null;
     const deltaTime = this.lastFrameTime === null ? 0 : timestamp - this.lastFrameTime;
     this.lastFrameTime = timestamp;
@@ -84,7 +117,11 @@ export class AnimationEngine {
     const callbackCount = this.order.length;
     let executed = 0;
 
-    while (this.callbacks.size > 0 && executed < callbackCount && (executed === 0 || performance.now() - frameStart < this.frameBudgetMs)) {
+    while (
+      this.callbacks.size > 0 &&
+      executed < callbackCount &&
+      (executed === 0 || performance.now() - frameStart < this.frameBudgetMs)
+    ) {
       if (this.order.length === 0) break;
       if (this.cursor >= this.order.length) this.cursor = 0;
       const id = this.order[this.cursor];
