@@ -23,7 +23,6 @@ export class EnginePipeline {
   constructor(
     private readonly mediator: AppMediator,
     private readonly animation: AnimationEngine,
-    private readonly onRedraw: AnimationCallback,
   ) {
     this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
   }
@@ -94,7 +93,7 @@ export class EnginePipeline {
     }
 
     callbacks.push((deltaTime) => {
-      this.onRedraw(deltaTime);
+      this.mediator.pointsUpdating();
       const activeEntries = this.entries.filter((entry) => entry.enabled);
       if (activeEntries.length > 0 && activeEntries.every((entry) => !entry.algorithm.isRunning)) {
         this.stop();

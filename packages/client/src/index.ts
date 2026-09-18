@@ -54,7 +54,7 @@ function bootstrap() {
   const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
   const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
 
-  const enginePipeline = new EnginePipeline(mediator, animationEngine, () => mediator.pointsUpdating());
+  const enginePipeline = new EnginePipeline(mediator, animationEngine);
 
   enginePipeline.setConfiguration([{ algorithm: repulsionAlgorithm }, { algorithm: graphAlgorithm }, { algorithm: zdampingAlgorithm }]);
 
