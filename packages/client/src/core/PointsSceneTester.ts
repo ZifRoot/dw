@@ -1,5 +1,4 @@
 // PointsSceneTester.ts
-import { AppMediator } from "./AppMediator";
 import { PointGraphManager } from "./collections/PointGraphManager";
 import { EdgeRef } from "./models/EdgeRef";
 import { PointModel } from "./models/PointModel";
@@ -37,7 +36,6 @@ export class PointsSceneTester {
   private nextId = 1000;
 
   constructor(
-    private readonly mediator: AppMediator,
     private readonly pointGraphManager: PointGraphManager,
     config: TestConfig = {},
   ) {
@@ -98,8 +96,8 @@ export class PointsSceneTester {
 
     const [updateMin, updateMax] = this.config.updateFrationRange;
     const updateCount = this.randomInt(
-      0,
-      Math.min(points.length, Math.ceil(points.length * updateMax)),
+      Math.floor(points.length * updateMin),
+      Math.ceil(points.length * updateMax),
     );
     const updatedPoints = [...points]
       .shuffle()
@@ -124,9 +122,6 @@ export class PointsSceneTester {
     const duration = performance.now() - start;
     const finalPoints = this.pointGraphManager.getPointsArray();
 
-    if (this.mediator.autoZoom) {
-      this.mediator.emit(AppMediator.AUTO_ZOOM, true);
-    }
 
     this.log(
       `Итерация: размер=${finalPoints.length}, добавлено=${addCount}, удалено=${removeCount}, обновлено=${updateCount}, рёбер=${edges.length}, время=${duration.toFixed(2)}ms`,
