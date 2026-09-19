@@ -3,8 +3,16 @@ import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
 import { BaseAlgorithm } from "./BaseAlgorithm";
 
 export interface EnginePipelineEntry {
+  /** Человекочитаемое название экземпляра алгоритма в UI. */
+  name: string;
   algorithm: BaseAlgorithm;
   enabled?: boolean;
+}
+
+export interface EnginePipelineConfigChange {
+  pipelineName: string;
+  engineName: string;
+  changes: Record<string, unknown>;
 }
 
 /**
@@ -19,12 +27,33 @@ export class EnginePipeline {
   private running = false;
   private destroyed = false;
   private readonly unsubscribeStart: () => void;
+  private readonly unsubscribeConfig: () => void;
+  private readonly unsubscribeEnabled: () => void;
 
   constructor(
     private readonly mediator: AppMediator,
     private readonly animation: AnimationEngine,
+    private readonly name: string,
   ) {
     this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
+    this.unsubscribeConfig = this.mediator.onPipelineEngineConfigChanged((change) => {
+      if (change.pipelineName !== this.name) return;
+
+      const entry = this.entries.find((item) => item.name === change.engineName);
+      if (!entry) return;
+
+      Object.assign(entry.algorithm.config, change.changes);
+    });
+
+    this.unsubscribeEnabled = this.mediator.onPipelineEngineEnabledChanged((change) => {
+      if (change.pipelineName !== this.name) return;
+      this.setEnabled(change.engineName, change.enabled);
+    });
+  }
+
+  /** Возвращает человекочитаемое название pipeline. */
+  public get pipelineName(): string {
+    return this.name;
   }
 
   /** Установить алгоритмы и их порядок. Повтор одного алгоритма разрешён. */
@@ -32,14 +61,31 @@ export class EnginePipeline {
     if (this.destroyed) return;
     this.stop();
     this.entries = entries.map((entry) => ({
+      name: entry.name,
       algorithm: entry.algorithm,
       enabled: entry.enabled ?? true,
     }));
   }
 
-  /** Включить или выключить алгоритм по позиции в pipeline. */
-  public setEnabled(index: number, enabled: boolean): void {
-    const entry = this.entries[index];
+  /**
+   * Возвращает снимок конфигурации pipeline для UI.
+   * Внутренний массив entries наружу не передаётся.
+   */
+  public getConfiguration(): ReadonlyArray<{
+    name: string;
+    enabled: boolean;
+    config: Readonly<Record<string, unknown>>;
+  }> {
+    return this.entries.map((entry) => ({
+      name: entry.name,
+      enabled: entry.enabled ?? true,
+      config: { ...entry.algorithm.config },
+    }));
+  }
+
+  /** Включить или выключить алгоритм по его имени. */
+  public setEnabled(engineName: string, enabled: boolean): void {
+    const entry = this.entries.find((item) => item.name === engineName);
     if (!entry || entry.enabled === enabled) return;
 
     entry.enabled = enabled;
@@ -75,6 +121,8 @@ export class EnginePipeline {
     this.destroyed = true;
     this.stop();
     this.unsubscribeStart();
+    this.unsubscribeConfig();
+    this.unsubscribeEnabled();
   }
 
   private rebuild(): void {

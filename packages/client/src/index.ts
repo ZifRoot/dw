@@ -103,13 +103,17 @@ function start(way: Way) {
     const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
     const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
 
-    const enginePipeline = new EnginePipeline(mediator, animationEngine);
+    const enginePipeline = new EnginePipeline(mediator, animationEngine, "Основной pipeline");
 
-    enginePipeline.setConfiguration([{ algorithm: repulsionAlgorithm }, { algorithm: graphAlgorithm }, { algorithm: zdampingAlgorithm }]);
+    enginePipeline.setConfiguration([
+      { name: "Отталкивание", algorithm: repulsionAlgorithm },
+      { name: "Связи", algorithm: graphAlgorithm },
+      { name: "Затухание по Z", algorithm: zdampingAlgorithm },
+    ]);
   }
 
   createControlPanel(controlPanelDiv, mediator);
-  createInfoPanel(infoPanelDiv, mediator);
+  createInfoPanel(infoPanelDiv, mediator, [enginePipeline]);
 }
 
 function bootstrap() {

@@ -6,6 +6,9 @@ import { PointGraphManager } from "../collections/PointGraphManager";
  * AnimationEngine.
  */
 export abstract class BaseAlgorithm {
+  /** Конфигурация алгоритма, доступная Pipeline для UI-изменений. */
+  public abstract readonly config: object;
+
   public temperature = 0;
   private running = false;
 
