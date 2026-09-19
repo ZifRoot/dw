@@ -12,7 +12,7 @@ import { ZDampingConfig, ZDapperAlgorithm } from "./core/physics/ZDapperAlgorith
 import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
 import { PointsTransformer } from "./core/data/PointsTransformer";
-import { PointsSceneTester } from "./core/PointsSceneTester";
+import { DocumentPointsScene } from "./core/DocumentPointsScene";
 import { MediatorScene } from "./core/Scene/MediatorScene";
 
 type Way = "dw" | "tester" | "mediator" | "";
@@ -39,10 +39,10 @@ function DW(mediator: AppMediator, animationEngine: AnimationEngine) {
 }
 
 function Tester(mediator: AppMediator) {
-  const pointsSceneTester = new PointsSceneTester(mediator);
-  const pointGraphManager = pointsSceneTester.getPointGraphManager();
+  const documentPointsScene = new DocumentPointsScene(mediator);
+  const pointGraphManager = documentPointsScene.getPointGraphManager();
   setTimeout(() => {
-    pointsSceneTester.start();
+    documentPointsScene.start();
   }, 1);
 
   return pointGraphManager;

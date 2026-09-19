@@ -1,4 +1,4 @@
-// PointsSceneTester.ts
+// DocumentPointsScene.ts
 import { levenshteinDistance } from "@utils/levenshtein-distance";
 import { AppMediator } from "./AppMediator";
 import { PointGraphManager } from "./collections/PointGraphManager";
@@ -7,7 +7,7 @@ import { Point } from "./models/Point";
 import { Safe } from "@utils/logger";
 import { BasePointMath } from "./models/BasePointMath";
 
-interface TestConfig {
+interface DocumentPointsSceneConfig {
   /** Интервал между повторными расчётами в мс. */
   intervalMs?: number;
   /** Включить логирование в консоль. */
@@ -16,17 +16,17 @@ interface TestConfig {
 }
 
 let nextId = 1000;
-export class PointX extends Point {
+export class DocumentPoint extends Point {
   constructor(
     point: BasePointMath,
-    public textLag: string,
+    public largeText: string,
   ) {
-    super(point, `p${nextId++}`, textLag.substring(0, 20));
+    super(point, `p${nextId++}`, largeText.substring(0, 20));
   }
 }
 
 /**
- * Генерирует тестовый граф строк на основе расстояния Левенштейна.
+ * Генерирует граф документов на основе расстояния Левенштейна.
  *
  * Для каждой пары строк вычисляется levenshteinDistance.
  * Полученное расстояние записывается непосредственно в EdgeRef.distance.
@@ -35,17 +35,15 @@ export class PointX extends Point {
  * N * (N - 1) / 2 вычислений расстояния.
  * Это O(N²) по количеству строк.
  */
-export class PointsSceneTester {
-  private config: Required<TestConfig>;
+export class DocumentPointsScene {
+  private config: Required<DocumentPointsSceneConfig>;
   private timerId: number | null = null;
 
   private readonly pointGraphManager: PointGraphManager;
 
-  private readonly testStrings: string[] = ["кот", "котик", "кошка", "собака", "собаки", "дом", "домик", "машина", "машинка", "самолёт"];
-
-  constructor(
+    constructor(
     private readonly mediator: AppMediator,
-    config: TestConfig = {},
+    config: DocumentPointsSceneConfig = {},
   ) {
     this.pointGraphManager = new PointGraphManager(this.mediator);
     this.config = {
@@ -62,7 +60,7 @@ export class PointsSceneTester {
   public start(): void {
     if (this.timerId !== null) return;
 
-    this.log("Тест Левенштейна запущен");
+    this.log("Граф документов на Левенштейне запущен");
     this.iteration();
   }
 
@@ -71,7 +69,7 @@ export class PointsSceneTester {
 
     clearTimeout(this.timerId);
     this.timerId = null;
-    this.log("Тест Левенштейна остановлен");
+    this.log("Граф документов на Левенштейне остановлен");
   }
 
   private iteration(): void {
@@ -85,11 +83,11 @@ export class PointsSceneTester {
     const start = performance.now();
 
     const resp = await fetch("http://localhost:3000/api/document/04a66bf4-1e51-4041-bca2-0bb9e798f702/md");
-    const mm: { lang: string; code: string }[] = await resp.json();
-    let codes = mm.map((m) => m.code);
-    let les = codes.map((c) => c.length).sort((a, b) => b - a);
-    const points = this.getOrCreatePoints(codes);
-    const edges = this.createEdges(points);
+    const documents: { lang: string; code: string }[] = await resp.json();
+    const texts = documents.map((document) => document.code);
+    const textLengths = texts.map((text) => text.length).sort((a, b) => b - a);
+    const points = this.createPoints(texts);
+    const edges = this.createLevenshteinEdges(points);
 
     this.pointGraphManager.update(points, edges);
     this.pointGraphManager.removeEdges(
@@ -113,13 +111,13 @@ export class PointsSceneTester {
   }
 
   /**
-   * Создать тестовые точки из фиксированного массива строк.
+   * Создать точки документов.
    */
-  private getOrCreatePoints(testStrings: string[]): PointX[] {
-    const newPoints = testStrings
+  private createPoints(texts: string[]): DocumentPoint[] {
+    const newPoints = texts
       .filter((s) => s.length > 200)
       .map((text, index) => {
-        return new PointX(
+        return new DocumentPoint(
           {
             x: 80 + (index % 5) * 180,
             y: 100 + Math.floor(index / 5) * 250,
@@ -139,14 +137,14 @@ export class PointsSceneTester {
    * Ребро не дублируется в обратном направлении, поскольку Edge
    * представляет неориентированную связь.
    */
-  private createEdges(points: PointX[]): EdgeRef[] {
+  private createLevenshteinEdges(points: DocumentPoint[]): EdgeRef[] {
     const edges: EdgeRef[] = [];
 
     for (let i = 0; i < points.length; i++) {
       for (let j = i + 1; j < points.length; j++) {
         const source = points[i];
         const target = points[j];
-        const distance = levenshteinDistance(source.textLag, target.textLag) * 2 + 90;
+        const distance = levenshteinDistance(source.largeText, target.largeText) * 2 + 90;
 
         edges.push({
           sourceId: source.id,
@@ -161,7 +159,7 @@ export class PointsSceneTester {
 
   private log(message: string): void {
     if (this.config.verbose) {
-      console.log(`[PointsSceneTester] ${message}`);
+      console.log(`[DocumentPointsScene] ${message}`);
     }
   }
 }
