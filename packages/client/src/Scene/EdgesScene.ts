@@ -1,9 +1,9 @@
-import { SvgEngine } from "../Engines/SvgEngine.ts";
+import { SvgEngine } from "@core/Engines/SvgEngine.ts";
 import * as d3 from "d3";
-import { AppMediator } from "../AppMediator.ts";
-import { UIEdge, UIPoint } from "../models/ui-models.ts";
-import { Edge } from "../models/Edge.ts";
-import { PointGraphManager } from "../collections/PointGraphManager.ts";
+import { AppMediator } from "@core/AppMediator.ts";
+import { UIEdge, UIPoint } from "@models/ui-models.ts";
+import { Edge } from "@core/models/Edge.ts";
+import { PointGraphManager } from "@core/collections/PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -85,9 +85,7 @@ export class EdgesScene {
   }
 
   private renderLines(): void {
-    const lines = this.rootGroup
-      .selectAll<SVGLineElement, Edge>("line.edge")
-      .data(this.edges, (d) => d.id);
+    const lines = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
 
     lines.exit().remove();
     const enter = lines.enter().append("line").attr("class", "edge");
@@ -99,7 +97,7 @@ export class EdgesScene {
   private updateLines(): void {
     if (!this.d3Edges) return;
     this.d3Edges
-      .style("display", (e) => e.visible ? null : "none")
+      .style("display", (e) => (e.visible ? null : "none"))
       .attr("x1", (e) => e.source.x)
       .attr("y1", (e) => e.source.y)
       .attr("x2", (e) => e.target.x)
@@ -115,5 +113,4 @@ export class EdgesScene {
   public getEdgeById(id: string): Edge | null {
     return this.pointGraphManager.getEdgeCollection().getById(id);
   }
-
 }

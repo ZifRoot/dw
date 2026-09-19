@@ -169,9 +169,7 @@ export class NeighborGraph {
     if (forward && backward) return null;
 
     if (forward || backward) {
-      console.warn(
-        `[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId}. Only one direction present.`,
-      );
+      console.warn(`[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId}. Only one direction present.`);
       return null;
     }
 

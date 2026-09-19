@@ -1,5 +1,5 @@
-import { BasePointMath } from "./BasePointMath";
-import { PointMath } from "./PointMath";
+import { BasePointMath } from "@core/models/BasePointMath";
+import { PointMath } from "@core/models/PointMath";
 
 export class Point extends PointMath {
   constructor(

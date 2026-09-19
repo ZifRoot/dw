@@ -20,7 +20,10 @@
     "baseUrl": ".",
     "paths": {
       "@utils/*": ["src/shared/utils/*"],
-      "@clients/*": ["src/clients/*"]
+      "@clients/*": ["src/clients/*"],
+      "@core/*": ["src/core/*"],
+      "@Scene/*": ["src/core/Scene/*"],
+      "@models/*": ["src/models/*"]
     }
   },
   "include": ["src"]

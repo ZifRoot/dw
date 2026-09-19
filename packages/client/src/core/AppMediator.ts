@@ -1,6 +1,6 @@
 // core/AppMediator.ts
 import { BaseMediator } from "./collections/BaseMediator";
-import { UIPoint, UIEdge } from "./models/ui-models";
+import { UIPoint, UIEdge } from "../models/ui-models";
 
 export interface EnginePipelineConfigChange {
   pipelineName: string;
@@ -131,11 +131,7 @@ export class AppMediator extends BaseMediator {
     this.emit(AppMediator.START_REPULSION);
   }
   /** Передать Pipeline изменения конфигурации движка из UI. */
-  public pipelineEngineConfigChanged(
-    pipelineName: string,
-    engineName: string,
-    changes: Record<string, unknown>,
-  ): void {
+  public pipelineEngineConfigChanged(pipelineName: string, engineName: string, changes: Record<string, unknown>): void {
     this.emit(AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED, {
       pipelineName,
       engineName,
@@ -144,11 +140,7 @@ export class AppMediator extends BaseMediator {
   }
 
   /** Передать Pipeline изменение состояния engine из UI. */
-  public pipelineEngineEnabledChanged(
-    pipelineName: string,
-    engineName: string,
-    enabled: boolean,
-  ): void {
+  public pipelineEngineEnabledChanged(pipelineName: string, engineName: string, enabled: boolean): void {
     this.emit(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, {
       pipelineName,
       engineName,
@@ -230,15 +222,11 @@ export class AppMediator extends BaseMediator {
   public onStartRepulsion(callback: () => void): () => void {
     return this.on(AppMediator.START_REPULSION, () => callback());
   }
-  public onPipelineEngineConfigChanged(
-    callback: (detail: EnginePipelineConfigChange) => void,
-  ): () => void {
+  public onPipelineEngineConfigChanged(callback: (detail: EnginePipelineConfigChange) => void): () => void {
     return this.on(AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED, callback);
   }
 
-  public onPipelineEngineEnabledChanged(
-    callback: (detail: { pipelineName: string; engineName: string; enabled: boolean }) => void,
-  ): () => void {
+  public onPipelineEngineEnabledChanged(callback: (detail: { pipelineName: string; engineName: string; enabled: boolean }) => void): () => void {
     return this.on(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, callback);
   }
 

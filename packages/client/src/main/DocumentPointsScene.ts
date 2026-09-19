@@ -1,12 +1,12 @@
 // DocumentPointsScene.ts
-import { AppMediator } from "./AppMediator";
-import { PointGraphManager } from "./collections/PointGraphManager";
-import { EdgeRef } from "./models/EdgeRef";
-import { LevenshteinEdgeModel } from "./models/LevenshteinEdgeModel";
-import { Point } from "./models/Point";
+import { AppMediator } from "@core/AppMediator";
+import { PointGraphManager } from "@core/collections/PointGraphManager";
+import { EdgeRef } from "@core/models/EdgeRef";
+import { LevenshteinEdgeModel } from "@models/LevenshteinEdgeModel";
+import { Point } from "@core/models/Point";
 import { Safe } from "@utils/logger";
-import { BasePointMath } from "./models/BasePointMath";
-import { AnimationEngine } from "./Engines/AnimationEngine";
+import { BasePointMath } from "@core/models/BasePointMath";
+import { AnimationEngine } from "@core/Engines/AnimationEngine";
 
 interface DocumentPointsSceneConfig {
   /** Включить логирование в консоль. */

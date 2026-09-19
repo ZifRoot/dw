@@ -1,11 +1,11 @@
 // core/ModelManager.ts
-import { AppMediator } from "./AppMediator";
-import { AnimationCallback, AnimationEngine } from "./Engines/AnimationEngine";
-import { EdgeModel } from "./models/EdgeModel";
-import { EdgeRef } from "./models/EdgeRef";
-import { PointModel } from "./models/PointModel";
-import { PointGraphManager } from "./collections/PointGraphManager";
-import { IEdgeFactory } from "./interfaces/IEdgeFactory";
+import { AppMediator } from "@core/AppMediator";
+import { AnimationCallback, AnimationEngine } from "@core/Engines/AnimationEngine";
+import { EdgeModel } from "@models/EdgeModel";
+import { EdgeRef } from "@core/models/EdgeRef";
+import { PointModel } from "@models/PointModel";
+import { PointGraphManager } from "@core/collections/PointGraphManager";
+import { IEdgeFactory } from "@core/interfaces/IEdgeFactory";
 import { cosineDistance } from "@utils/vector";
 
 interface ScoredCandidate {
@@ -226,7 +226,7 @@ export class ModelManager {
       return null;
     }
 
-    const modelName = edgeRef.modelName || this.activeModelName;
+    const modelName = (edgeRef as any as { modelName: string }).modelName || this.activeModelName;
     if (!modelName) {
       console.warn(`[ModelManager] No embedding model for edge: ${source.id} -> ${target.id}`);
       return null;

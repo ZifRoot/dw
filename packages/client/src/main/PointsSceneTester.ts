@@ -1,10 +1,9 @@
 // PointsSceneTester.ts
-import { AppMediator } from "./AppMediator";
-import { PointGraphManager } from "./collections/PointGraphManager";
-import { EdgeRef } from "./models/EdgeRef";
-import { PointMath } from "./models/PointMath";
+import { AppMediator } from "@core/AppMediator";
+import { PointGraphManager } from "@core/collections/PointGraphManager";
+import { EdgeRef } from "@core/models/EdgeRef";
 import { Safe } from "@utils/logger";
-import { Point } from "./models/Point";
+import { Point } from "@core/models/Point";
 
 interface TestConfig {
   /** Доля точек, которые перемещаются на каждой итерации (0-1). */

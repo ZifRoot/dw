@@ -3,8 +3,8 @@ import { createRoot } from "react-dom/client";
 import { ControlPanel } from "./Panels/ControlPanel";
 import { InfoPanel } from "./Panels/InfoPanel";
 import { AdaptiveInfoContent } from "./components/AdaptiveInfoContent";
-import { AppMediator } from "../core/AppMediator";
-import { EnginePipeline } from "../core/Engines/EnginePipeline";
+import { AppMediator } from "@core/AppMediator";
+import { EnginePipeline } from "@core/Engines/EnginePipeline";
 
 export function createControlPanel(
   container: HTMLElement,

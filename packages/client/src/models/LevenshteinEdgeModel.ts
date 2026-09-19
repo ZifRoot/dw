@@ -1,17 +1,12 @@
 import { levenshteinEdits, LevenshteinEdit } from "@utils/levenshtein-edits";
-import { Edge } from "./Edge";
-import { Point } from "./Point";
+import { Edge } from "@core/models/Edge";
+import { Point } from "@core/models/Point";
 
 export class LevenshteinEdgeModel extends Edge {
   public levenshteinDistance: number;
   public levenshteinEdits: LevenshteinEdit[];
 
-  constructor(
-    source: Point,
-    target: Point,
-    levenshteinDistance: number,
-    levenshteinEdits: LevenshteinEdit[],
-  ) {
+  constructor(source: Point, target: Point, levenshteinDistance: number, levenshteinEdits: LevenshteinEdit[]) {
     super(source, target, 100);
     this.levenshteinDistance = levenshteinDistance;
     this.levenshteinEdits = levenshteinEdits;

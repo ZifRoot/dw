@@ -1,7 +1,7 @@
-import { AppMediator } from "../AppMediator";
-import { PointGraphManager } from "../collections/PointGraphManager";
-import { Edge } from "../models/Edge";
-import { BaseAlgorithm } from "../Engines/BaseAlgorithm";
+import { AppMediator } from "@core/AppMediator";
+import { PointGraphManager } from "@core/collections/PointGraphManager";
+import { Edge } from "@core/models/Edge";
+import { BaseAlgorithm } from "@core/Engines/BaseAlgorithm";
 
 export class GraphEngineConfig {
   public strength = 0.5;

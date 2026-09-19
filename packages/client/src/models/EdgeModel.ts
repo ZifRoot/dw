@@ -1,7 +1,7 @@
 // core/models/EdgeModel.ts
 import { hashX1 } from "@utils/data-utils";
-import { Edge } from "./Edge";
-import { EdgeRef } from "./EdgeRef";
+import { Edge } from "@core/models/Edge";
+import { EdgeRef } from "@core/models/EdgeRef";
 import { PointModel } from "./PointModel";
 import { cosineDistance as CosineDistance } from "@utils/vector";
 

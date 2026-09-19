@@ -1,8 +1,8 @@
 // components/PointInfoPanel.tsx
 import React, { useState, useEffect } from "react";
-import { AppMediator } from "../../core/AppMediator";
-import { UIPoint } from "../../core/models/ui-models";
-import { DocumentPoint } from "../../core/DocumentPointsScene";
+import { AppMediator } from "@core/AppMediator";
+import { UIPoint } from "@models/ui-models";
+import { DocumentPoint } from "../../main/DocumentPointsScene";
 
 interface PointInfoPanelProps {
   point: UIPoint;

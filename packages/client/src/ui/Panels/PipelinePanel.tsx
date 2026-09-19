@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { AppMediator } from "../../core/AppMediator";
-import { EnginePipeline } from "../../core/Engines/EnginePipeline";
+import { AppMediator } from "@core/AppMediator";
+import { EnginePipeline } from "@core/Engines/EnginePipeline";
 
 interface PipelinePanelProps {
   pipelines: EnginePipeline[];
@@ -110,10 +110,7 @@ export const PipelinePanel: React.FC<PipelinePanelProps> = ({
 
         return (
           <section key={pipeline.name}>
-            <button
-              type="button"
-              onClick={() => toggleExpanded(pipeline.name)}
-            >
+            <button type="button" onClick={() => toggleExpanded(pipeline.name)}>
               {isExpanded ? "▼" : "▶"} {pipeline.name}
             </button>
 

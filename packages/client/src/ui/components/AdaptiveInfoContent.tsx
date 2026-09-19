@@ -2,10 +2,10 @@
 import React, { useEffect, useState } from "react";
 import { EdgeInfoPanel } from "../Panels/EdgeInfoPanel";
 import { PointInfoPanel } from "../Panels/PointInfoPanel";
-import { AppMediator } from "../../core/AppMediator";
-import { UIEdge, UIPoint } from "../../core/models/ui-models";
+import { AppMediator } from "@core/AppMediator";
+import { UIEdge, UIPoint } from "@models/ui-models";
 import { PipelinePanel } from "../Panels/PipelinePanel";
-import { EnginePipeline } from "../../core/Engines/EnginePipeline";
+import { EnginePipeline } from "@core/Engines/EnginePipeline";
 
 interface AdaptiveInfoContentProps {
   mediator: AppMediator;

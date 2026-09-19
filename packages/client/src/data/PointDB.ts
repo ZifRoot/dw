@@ -1,6 +1,6 @@
 // app-db.ts
-import { ITable } from "./IndexDb/ITable";
-import { Database } from "./IndexDb/Database";
+import { ITable } from "@core/data/IndexDb/ITable";
+import { Database } from "@core/data/IndexDb/Database";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
 import { PointTable } from "./tables/PointTable";
 import { EdgeTable } from "./tables/EdgeTable";

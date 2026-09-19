@@ -1,7 +1,7 @@
 // core/models/PointModel.ts
-import { BasePointMath } from "./BasePointMath";
+import { BasePointMath } from "@core/models/BasePointMath";
 import { EmbeddingModel } from "./EmbeddingModel";
-import { Point } from "./Point";
+import { Point } from "@core/models/Point";
 
 export class PointModel extends Point {
   public embeddings: Map<string, EmbeddingModel> = new Map();

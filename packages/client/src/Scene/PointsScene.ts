@@ -1,11 +1,11 @@
-import { DragElem, SvgEngine } from "../Engines/SvgEngine";
+import { DragElem, SvgEngine } from "@core/Engines/SvgEngine";
 import * as d3 from "d3";
-import { UIPoint } from "../models/ui-models";
-import { AppMediator } from "../AppMediator";
-import { Point } from "../models/Point";
-import { EdgeModel } from "../models/EdgeModel";
-import { PointGraphManager } from "../collections/PointGraphManager";
-import { PointModel } from "../models/PointModel";
+import { UIPoint } from "@models/ui-models";
+import { AppMediator } from "@core/AppMediator";
+import { Point } from "@core/models/Point";
+import { EdgeModel } from "@models/EdgeModel";
+import { PointGraphManager } from "@core/collections/PointGraphManager";
+import { PointModel } from "@models/PointModel";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;

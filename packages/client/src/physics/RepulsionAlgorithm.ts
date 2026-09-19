@@ -1,8 +1,8 @@
-import { AppMediator } from "../AppMediator";
-import { PointGraphManager } from "../collections/PointGraphManager";
-import { PointMath } from "../models/PointMath";
-import { Point } from "../models/Point";
-import { BaseAlgorithm } from "../Engines/BaseAlgorithm";
+import { AppMediator } from "@core/AppMediator";
+import { PointGraphManager } from "@core/collections/PointGraphManager";
+import { PointMath } from "@core/models/PointMath";
+import { Point } from "@core/models/Point";
+import { BaseAlgorithm } from "@core/Engines/BaseAlgorithm";
 
 export class RepulsionEngineConfig {
   public repulsionStrength = 0.2;

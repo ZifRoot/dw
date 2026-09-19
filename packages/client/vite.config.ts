@@ -42,6 +42,9 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@shared": "../shared/src",
         "@clients/*": "src/clients/*",
+        "@core/*": "src/core/*",
+        "@core/Scene/*": "src/core/Scene/*",
+        "@models/*": "src/models/*",
       },
     },
   };

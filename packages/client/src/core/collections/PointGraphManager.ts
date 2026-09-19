@@ -1,13 +1,13 @@
 // core/PointGraphManager.ts
 import { Point } from "../models/Point";
 import { Edge } from "../models/Edge";
-import { EntityCollection } from "../collections/EntityCollection";
-import { NeighborGraph } from "../collections/NeighborGraph";
+import { EntityCollection } from "./EntityCollection";
+import { NeighborGraph } from "./NeighborGraph";
 import { EdgeRef } from "../models/EdgeRef";
 import { EdgeRefs } from "../models/EdgeRefs";
 import "@utils/array-extensions";
-import { AppMediator } from "../AppMediator";
-import { IEdgeFactory } from "../interfaces/IEdgeFactory";
+import { AppMediator } from "@core/AppMediator";
+import { IEdgeFactory } from "@core/interfaces/IEdgeFactory";
 
 /**
  * PointGraphManager – инкапсулирует управление коллекцией точек и графом связей.

@@ -1,20 +1,20 @@
 import "./styles/main.scss";
-import { AppMediator } from "./core/AppMediator";
-import { PointsScene } from "./core/Scene/PointsScene";
-import { SvgEngine } from "./core/Engines/SvgEngine";
-import { EdgesScene } from "./core/Scene/EdgesScene";
+import { AppMediator } from "@core/AppMediator";
+import { PointsScene } from "./Scene/PointsScene";
+import { SvgEngine } from "@core/Engines/SvgEngine";
+import { EdgesScene } from "./Scene/EdgesScene";
 import { createControlPanel, createInfoPanel } from "./ui";
-import { RepulsionAlgorithm, RepulsionEngineConfig } from "./core/physics/RepulsionAlgorithm";
-import { AnimationEngine } from "./core/Engines/AnimationEngine";
-import { EnginePipeline } from "./core/Engines/EnginePipeline";
-import { GraphAlgorithm, GraphEngineConfig } from "./core/physics/GraphAlgorithm";
-import { ZDampingConfig, ZDapperAlgorithm } from "./core/physics/ZDapperAlgorithm";
-import { DataManager } from "./core/data/DataManager";
-import { ModelManager } from "./core/ModelManager";
-import { PointsTransformer } from "./core/data/PointsTransformer";
-import { DocumentPointsScene } from "./core/DocumentPointsScene";
-import { PointsSceneTester } from "./core/PointsSceneTester";
-import { MediatorScene } from "./core/Scene/MediatorScene";
+import { RepulsionAlgorithm, RepulsionEngineConfig } from "./physics/RepulsionAlgorithm";
+import { AnimationEngine } from "@core/Engines/AnimationEngine";
+import { EnginePipeline } from "@core/Engines/EnginePipeline";
+import { GraphAlgorithm, GraphEngineConfig } from "./physics/GraphAlgorithm";
+import { ZDampingConfig, ZDapperAlgorithm } from "./physics/ZDapperAlgorithm";
+import { DataManager } from "./data/DataManager";
+import { ModelManager } from "./main/ModelManager";
+import { PointsTransformer } from "./data/PointsTransformer";
+import { DocumentPointsScene } from "./main/DocumentPointsScene";
+import { PointsSceneTester } from "./main/PointsSceneTester";
+import { MediatorScene } from "./Scene/MediatorScene";
 
 type Way = "dw" | "tester" | "levenshtein" | "mediator" | "";
 
@@ -110,10 +110,9 @@ function start(way: Way) {
       { name: "Связи", algorithm: graphAlgorithm },
       { name: "Затухание по Z", algorithm: zdampingAlgorithm },
     ]);
+    createControlPanel(controlPanelDiv, mediator);
+    createInfoPanel(infoPanelDiv, mediator, [enginePipeline]);
   }
-
-  createControlPanel(controlPanelDiv, mediator);
-  createInfoPanel(infoPanelDiv, mediator, [enginePipeline]);
 }
 
 function bootstrap() {

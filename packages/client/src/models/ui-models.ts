@@ -1,4 +1,4 @@
-import { Point } from "./Point";
+import { Point } from "@core/models/Point";
 
 // core/ui-models.ts
 export interface UIPointNeighbor {

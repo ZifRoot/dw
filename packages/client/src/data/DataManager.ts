@@ -1,5 +1,5 @@
 import { PointDB } from "./PointDB";
-import { AppMediator } from "../AppMediator";
+import { AppMediator } from "@core/AppMediator";
 import { PointTable } from "./tables/PointTable";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
 import { EdgeTable } from "./tables/EdgeTable";
