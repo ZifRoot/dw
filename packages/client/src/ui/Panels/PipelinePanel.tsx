@@ -117,7 +117,7 @@ export const PipelinePanel: React.FC<PipelinePanelProps> = ({
             {isExpanded && (
               <div>
                 {pipeline.engines.map((engine) => (
-                  <div key={engine.name}>
+                  <div key={engine.name} className={"engine_x"}>
                     <label>
                       <input
                         type="checkbox"
@@ -136,7 +136,7 @@ export const PipelinePanel: React.FC<PipelinePanelProps> = ({
                     {engine.enabled && (
                       <div>
                         {Object.entries(engine.config).map(([key, value]) => (
-                          <label key={key}>
+                          <label key={key} className={"engine_config"}>
                             {key}
                             {typeof value === "boolean" ? (
                               <input

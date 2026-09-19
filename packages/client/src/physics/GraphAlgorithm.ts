@@ -5,7 +5,6 @@ import { BaseAlgorithm } from "@core/Engines/BaseAlgorithm";
 
 export class GraphEngineConfig {
   public strength = 0.5;
-  public targetDistance = 100 * 1.5;
   public stopTemperature = 0.1;
 }
 

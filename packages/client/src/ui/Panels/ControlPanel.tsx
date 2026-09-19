@@ -56,12 +56,12 @@ export const ControlPanel: React.FC<Props> = ({ mediator }) => {
 
   return (
     <div className={styles.panel}>
-      <button className={styles.button} onClick={() => mediator.addPoint()}>
+      {/* <button className={styles.button} onClick={() => mediator.addPoint()}>
         Добавить точку
       </button>
       <button className={styles.button} onClick={() => mediator.clearPoints()}>
         Очистить
-      </button>
+      </button> */}
       <button
         className={styles.button}
         onClick={() => mediator.startRepulsion()}

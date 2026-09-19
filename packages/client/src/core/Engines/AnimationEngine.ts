@@ -17,16 +17,14 @@ export class AnimationEngine {
   private frameBudgetMs: number | null = null;
   private rafId: number | null = null;
   private isRunning = false;
-  private isCalibrating = false;
+  private isCalibrating: "no" | "process" | "yes" = "no";
   private nextCallbackId = 0;
   private cursor = 0;
   private lastFrameTime: number | null = null;
   private callbacks = new Map<number, AnimationCallback>();
   private order: number[] = [];
 
-  constructor() {
-    this.isCalibrating = true;
-  }
+  constructor() {}
 
   /** Добавить один колбэк в очередь. Возвращает функцию для удаления. */
   public addCallback(callback: AnimationCallback): () => void {
@@ -68,10 +66,7 @@ export class AnimationEngine {
   private start(): void {
     if (this.isRunning) return;
     if (this.callbacks.size === 0) return;
-    if (!this.isCalibrating) {
-      this.calibrate();
-      return;
-    }
+    if (!this.calibrate()) return;
     this.isRunning = true;
     this.lastFrameTime = null;
     this.scheduleStep();
@@ -81,7 +76,11 @@ export class AnimationEngine {
     this.rafId = requestAnimationFrame((timestamp) => this.step(timestamp));
   }
 
-  private calibrate(): void {
+  private calibrate(): boolean {
+    if (this.isCalibrating == "yes") return true;
+    if (this.isCalibrating == "process") return false;
+    this.isCalibrating = "process";
+
     let previousTimestamp: number | null = null;
     let totalFrameTime = 0;
     let measuredFrames = 0;
@@ -102,11 +101,12 @@ export class AnimationEngine {
       }
 
       this.frameBudgetMs = Math.max(1, (totalFrameTime / measuredFrames) * COMPUTATION_BUDGET_RATIO);
-      this.isCalibrating = false;
+      this.isCalibrating = "yes";
       this.start();
     };
 
     requestAnimationFrame(measure);
+    return false;
   }
 
   /** Выполнить один кадр планировщика. */

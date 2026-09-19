@@ -1,6 +1,6 @@
 import * as d3 from "d3";
-import { AppMediator } from "../AppMediator";
-import { SvgEngine } from "../Engines/SvgEngine";
+import { AppMediator } from "@core/AppMediator";
+import { SvgEngine } from "@core/Engines/SvgEngine";
 
 interface FlowEndpoint {
   name: string;

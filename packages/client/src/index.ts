@@ -116,7 +116,7 @@ function start(way: Way) {
 }
 
 function bootstrap() {
-  start("dw");
+  start("tester");
 }
 
 bootstrap();
