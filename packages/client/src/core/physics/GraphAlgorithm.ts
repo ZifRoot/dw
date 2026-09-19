@@ -20,9 +20,13 @@ export class GraphAlgorithm extends BaseAlgorithm {
 
   public applyStep(_deltaTime: number): number {
     let maxShift = -1;
+
     for (const edge of this.pointGraphManager.getEdgesArray()) {
+      if (!edge.physics) continue;
+
       maxShift = Math.max(maxShift, this.applyPair(edge));
     }
+
     return maxShift;
   }
 
