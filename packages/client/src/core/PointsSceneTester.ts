@@ -1,16 +1,28 @@
 // PointsSceneTester.ts
+import { levenshteinDistance } from "@utils/levenshtein-distance";
 import { AppMediator } from "./AppMediator";
 import { PointGraphManager } from "./collections/PointGraphManager";
 import { EdgeRef } from "./models/EdgeRef";
 import { Point } from "./models/Point";
 import { Safe } from "@utils/logger";
-import { levenshteinDistance } from "../../../shared/src/utils/levenshtein-distance";
+import { BasePointMath } from "./models/BasePointMath";
 
 interface TestConfig {
   /** Интервал между повторными расчётами в мс. */
   intervalMs?: number;
   /** Включить логирование в консоль. */
   verbose?: boolean;
+  maxEdgeDistance?: number;
+}
+
+let nextId = 1000;
+export class PointX extends Point {
+  constructor(
+    point: BasePointMath,
+    public textLag: string,
+  ) {
+    super(point, `p${nextId++}`, textLag.substring(0, 20));
+  }
 }
 
 /**
@@ -26,22 +38,10 @@ interface TestConfig {
 export class PointsSceneTester {
   private config: Required<TestConfig>;
   private timerId: number | null = null;
-  private nextId = 1000;
 
   private readonly pointGraphManager: PointGraphManager;
 
-  private readonly testStrings: string[] = [
-    "кот",
-    "котик",
-    "кошка",
-    "собака",
-    "собаки",
-    "дом",
-    "домик",
-    "машина",
-    "машинка",
-    "самолёт",
-  ];
+  private readonly testStrings: string[] = ["кот", "котик", "кошка", "собака", "собаки", "дом", "домик", "машина", "машинка", "самолёт"];
 
   constructor(
     private readonly mediator: AppMediator,
@@ -51,6 +51,7 @@ export class PointsSceneTester {
     this.config = {
       intervalMs: config.intervalMs ?? 4000,
       verbose: config.verbose ?? true,
+      maxEdgeDistance: config.maxEdgeDistance ?? 300,
     };
   }
 
@@ -76,31 +77,36 @@ export class PointsSceneTester {
   private iteration(): void {
     this._iteration();
 
-    this.timerId = window.setTimeout(
-      () => this.iteration(),
-      this.config.intervalMs,
-    );
+    if (false) this.timerId = window.setTimeout(() => this.iteration(), this.config.intervalMs);
   }
 
   @Safe
-  private _iteration(): void {
+  private async _iteration() {
     const start = performance.now();
 
-    const points = this.getOrCreatePoints();
+    const resp = await fetch("http://localhost:3000/api/document/04a66bf4-1e51-4041-bca2-0bb9e798f702/md");
+    const mm: { lang: string; code: string }[] = await resp.json();
+    let codes = mm.map((m) => m.code);
+    let les = codes.map((c) => c.length).sort((a, b) => b - a);
+    const points = this.getOrCreatePoints(codes);
     const edges = this.createEdges(points);
 
     this.pointGraphManager.update(points, edges);
+    this.pointGraphManager.removeEdges(
+      this.pointGraphManager.getPointIds().flatMap((id) =>
+        this.pointGraphManager
+          .getEdgesForPoint(id)
+          .sort((a, b) => b.distance - a.distance)
+          .slice(0, 10),
+      ),
+    );
 
     const duration = performance.now() - start;
 
-    this.log(
-      `Граф: вершин=${points.length}, рёбер=${edges.length}, расстояний=${edges.length}, время=${duration.toFixed(2)}ms`,
-    );
+    this.log(`Граф: вершин=${points.length}, рёбер=${edges.length}, расстояний=${edges.length}, время=${duration.toFixed(2)}ms`);
 
     for (const edge of edges) {
-      this.log(
-        `  ${edge.sourceId} <-> ${edge.targetId}: distance=${edge.distance}`,
-      );
+      this.log(`  ${edge.sourceId} <-> ${edge.targetId}: distance=${edge.distance}`);
     }
 
     this.mediator.pointsGraphUpdated();
@@ -109,30 +115,21 @@ export class PointsSceneTester {
   /**
    * Создать тестовые точки из фиксированного массива строк.
    */
-  private getOrCreatePoints(): Point[] {
-    const points = this.pointGraphManager.getPointsArray();
+  private getOrCreatePoints(testStrings: string[]): PointX[] {
+    const newPoints = testStrings
+      .filter((s) => s.length > 200)
+      .map((text, index) => {
+        return new PointX(
+          {
+            x: 80 + (index % 5) * 180,
+            y: 100 + Math.floor(index / 5) * 250,
+            z: 0,
+          },
+          text,
+        );
+      });
 
-    if (points.length === this.testStrings.length) {
-      return points;
-    }
-
-    const newPoints = this.testStrings.map((text, index) => {
-      const id = `p${this.nextId++}`;
-
-      return new Point(
-        {
-          x: 80 + (index % 5) * 180,
-          y: 100 + Math.floor(index / 5) * 250,
-          z: 0,
-        },
-        id,
-        text,
-      );
-    });
-
-    this.pointGraphManager.updatePoints(newPoints);
-
-    return this.pointGraphManager.getPointsArray();
+    return newPoints;
   }
 
   /**
@@ -142,14 +139,14 @@ export class PointsSceneTester {
    * Ребро не дублируется в обратном направлении, поскольку Edge
    * представляет неориентированную связь.
    */
-  private createEdges(points: Point[]): EdgeRef[] {
+  private createEdges(points: PointX[]): EdgeRef[] {
     const edges: EdgeRef[] = [];
 
     for (let i = 0; i < points.length; i++) {
       for (let j = i + 1; j < points.length; j++) {
         const source = points[i];
         const target = points[j];
-        const distance = levenshteinDistance(source.text, target.text);
+        const distance = levenshteinDistance(source.textLag, target.textLag) * 2 + 90;
 
         edges.push({
           sourceId: source.id,

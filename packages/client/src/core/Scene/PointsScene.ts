@@ -243,13 +243,14 @@ export class PointsScene {
         return {
           id: neighbor.id,
           name: neighbor.text,
-          cosineDistance: edge instanceof EdgeModel ? edge.cosineDistance : undefined,
+          cosineDistance: edge instanceof EdgeModel ? edge.cosineDistance : edge.distance,
         };
       })
       .filter((neighbor): neighbor is NonNullable<typeof neighbor> => neighbor !== null)
       .sort((a, b) => (a.cosineDistance || 0) - (b.cosineDistance || 0));
 
     return {
+      point: point,
       id: point.id,
       x: point.x,
       y: point.y,

@@ -174,6 +174,7 @@ export class NeighborGraph {
       );
       return null;
     }
+
     const edge = this.factory.create(edgeRef);
     if (!edge) return null;
 

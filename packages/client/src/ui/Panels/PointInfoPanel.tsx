@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { AppMediator } from "../../core/AppMediator";
 import { UIPoint } from "../../core/models/ui-models";
+import { PointX } from "../../core/PointsSceneTester";
 
 interface PointInfoPanelProps {
   point: UIPoint;
@@ -52,6 +53,10 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({
         <strong>Текст:</strong>
         <input type="text" value={text} onChange={handleTextChange} />
       </div>
+      <div>
+        <MyForm text={(point?.point as PointX)?.textLag ?? "----"} />
+      </div>
+
       <div>
         <strong>X:</strong> {point.x.toFixed(2)}
       </div>
@@ -112,3 +117,30 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({
     </div>
   );
 };
+
+function MyForm({ text = "" }) {
+  const [value, setValue] = useState(text);
+
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setValue(event.target.value);
+  };
+  useEffect(() => {
+    setValue(text);
+  }, [text]); // Массив зависимостей: хук сработает каждый раз, когда text изменится
+
+  return (
+    <>
+      <label>
+        <div>Комментарий:</div>
+        <textarea
+          id="comments"
+          value={value}
+          onChange={(e) => handleChange(e)}
+          rows={5}
+          placeholder="Введите многострочный текст..."
+        />
+      </label>
+      <p>Символов: {value.length}</p>
+    </>
+  );
+}
