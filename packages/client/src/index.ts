@@ -259,7 +259,7 @@ async function start(way: Way) {
 }
 
 function bootstrap() {
-  start("tester").catch(console.error);
+  start("levenshtein").catch(console.error);
 }
 
 bootstrap();
