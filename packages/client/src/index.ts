@@ -38,11 +38,11 @@ function DW(mediator: AppMediator, animationEngine: AnimationEngine) {
   return pointGraphManager;
 }
 
-function Tester(mediator: AppMediator) {
-  const documentPointsScene = new DocumentPointsScene(mediator);
+function Tester(mediator: AppMediator, animationEngine: AnimationEngine) {
+  const documentPointsScene = new DocumentPointsScene(mediator, animationEngine);
   const pointGraphManager = documentPointsScene.getPointGraphManager();
   setTimeout(() => {
-    documentPointsScene.start();
+    void documentPointsScene.start();
   }, 1);
 
   return pointGraphManager;
@@ -51,7 +51,7 @@ function Tester(mediator: AppMediator) {
 function PointGraphManager(b: Way, mediator: AppMediator, animationEngine: AnimationEngine) {
   let X = {
     dw: (mediator: AppMediator, animationEngine: AnimationEngine) => DW(mediator, animationEngine),
-    tester: (mediator: AppMediator, animationEngine: AnimationEngine) => Tester(mediator),
+    tester: (mediator: AppMediator, animationEngine: AnimationEngine) => Tester(mediator, animationEngine),
     mediator: () => null,
     "": () => null,
   };
