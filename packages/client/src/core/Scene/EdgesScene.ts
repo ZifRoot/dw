@@ -7,7 +7,7 @@ import { PointGraphManager } from "../collections/PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private edges: Edge[] = [];
+  private readonly edges: Edge[];
   private d3Edges: d3.Selection<SVGLineElement, Edge, SVGGElement, unknown> | null = null;
 
   private unregisterSelectedPoint: () => void;
@@ -23,7 +23,7 @@ export class EdgesScene {
     private pointGraphManager: PointGraphManager,
     groupName = "edges-scene",
   ) {
-    this.syncRefs();
+    this.edges = this.pointGraphManager.getEdgesArray();
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
 
     this.rootGroup = svgEngine.createGroup(groupName);
@@ -31,7 +31,6 @@ export class EdgesScene {
 
     this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point));
     this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
-      this.syncRefs();
       this.renderLines();
     });
     this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateLines());
@@ -102,6 +101,7 @@ export class EdgesScene {
   private updateLines(): void {
     if (!this.d3Edges) return;
     this.d3Edges
+      .style("display", (e) => e.visible ? null : "none")
       .attr("x1", (e) => e.source.x)
       .attr("y1", (e) => e.source.y)
       .attr("x2", (e) => e.target.x)
@@ -118,7 +118,4 @@ export class EdgesScene {
     return this.pointGraphManager.getEdgeCollection().getById(id);
   }
 
-  private syncRefs(): void {
-    this.edges = this.pointGraphManager.getEdgesArray().filter((edge) => edge.visible);
-  }
 }
