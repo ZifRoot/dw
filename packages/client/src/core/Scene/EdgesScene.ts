@@ -30,11 +30,14 @@ export class EdgesScene {
     this.rootGroup.on("click", (e) => this.groupClick(e));
 
     this.unregisterSelectedPoint = this.mediator.onSelectedPoint((point) => this.highlightEdgesForPoint(point));
-    this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => this.renderLines());
+    this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => {
+      this.syncRefs();
+      this.renderLines();
+    });
     this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateLines());
     this.unsubPointsUpdated = this.mediator.onPointsUpdated(() => this.updateLines());
-    this.unsubPointUpdated = this.mediator.onPointUpdated((point) => this.updateLines());
-    this.unsubPointUpdating = this.mediator.onPointUpdating((point) => this.updateLines());
+    this.unsubPointUpdated = this.mediator.onPointUpdated(() => this.updateLines());
+    this.unsubPointUpdating = this.mediator.onPointUpdating(() => this.updateLines());
   }
 
   groupClick(event: any) {
@@ -48,7 +51,7 @@ export class EdgesScene {
       sourceId: edge.sourceId,
       targetId: edge.targetId,
       distance: edge.distance,
-      visible: true,
+      visible: edge.visible,
     };
     this.mediator.selectedEdge = uiEdge;
   }
@@ -76,7 +79,6 @@ export class EdgesScene {
     if (this.unsubPointUpdated) this.unsubPointUpdated();
     if (this.unsubPointUpdating) this.unsubPointUpdating();
     if (this.unsubPointsUpdated) this.unsubPointsUpdated();
-    if (this.unsubPointsUpdating) this.unsubPointsUpdating();
     this.clear();
   }
 
@@ -86,7 +88,9 @@ export class EdgesScene {
   }
 
   private renderLines(): void {
-    const lines = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
+    const lines = this.rootGroup
+      .selectAll<SVGLineElement, Edge>("line.edge")
+      .data(this.edges, (d) => d.id);
 
     lines.exit().remove();
     const enter = lines.enter().append("line").attr("class", "edge");
@@ -115,6 +119,6 @@ export class EdgesScene {
   }
 
   private syncRefs(): void {
-    this.edges = this.pointGraphManager.getEdgesArray();
+    this.edges = this.pointGraphManager.getEdgesArray().filter((edge) => edge.visible);
   }
 }
