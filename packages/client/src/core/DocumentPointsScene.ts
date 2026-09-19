@@ -6,13 +6,11 @@ import { LevenshteinEdgeModel } from "./models/LevenshteinEdgeModel";
 import { Point } from "./models/Point";
 import { Safe } from "@utils/logger";
 import { BasePointMath } from "./models/BasePointMath";
+import { AnimationEngine } from "./Engines/AnimationEngine";
 
 interface DocumentPointsSceneConfig {
-  /** Интервал между повторными расчётами в мс. */
-  intervalMs?: number;
   /** Включить логирование в консоль. */
   verbose?: boolean;
-  maxEdgeDistance?: number;
 }
 
 let nextId = 1000;
@@ -28,21 +26,21 @@ export class DocumentPoint extends Point {
 /**
  * Генерирует граф документов на основе расстояния Левенштейна.
  *
- * Для каждой пары строк вычисляется levenshteinDistance.
- * Полученное расстояние используется только специализированной моделью ребра.
- *
- * Для N строк рассматриваются все уникальные пары:
- * N * (N - 1) / 2 вычислений расстояния.
- * Это O(N²) по количеству строк.
+ * Точки создаются в start(), а изменение графа выполняется постепенно
+ * в step(), зарегистрированном в AnimationEngine.
  */
 export class DocumentPointsScene {
   private config: Required<DocumentPointsSceneConfig>;
-  private timerId: number | null = null;
-
   private readonly pointGraphManager: PointGraphManager;
+
+  private edgeRefs: EdgeRef[] = [];
+  private edgeIndex = 0;
+  private started = false;
+  private disposeAnimationStep: (() => void) | null = null;
 
   constructor(
     private readonly mediator: AppMediator,
+    private readonly animationEngine: AnimationEngine,
     config: DocumentPointsSceneConfig = {},
   ) {
     this.pointGraphManager = new PointGraphManager(this.mediator, {
@@ -55,74 +53,80 @@ export class DocumentPointsScene {
         return LevenshteinEdgeModel.fromPoints(source, target);
       },
     });
+
     this.config = {
-      intervalMs: config.intervalMs ?? 4000,
       verbose: config.verbose ?? true,
-      maxEdgeDistance: config.maxEdgeDistance ?? 300,
     };
+
+    this.disposeAnimationStep = this.animationEngine.addCallback(() => this.step());
   }
 
   public getPointGraphManager(): PointGraphManager {
     return this.pointGraphManager;
   }
 
-  public start(): void {
-    if (this.timerId !== null) return;
+  /**
+   * Загрузить документы и подготовить начальное состояние графа.
+   *
+   * Сами рёбра здесь не создаются: это позволяет не выполнять все
+   * Levenshtein-расчёты одним блокирующим вызовом.
+   */
+  @Safe
+  public async start(): Promise<void> {
+    if (this.started) return;
+
+    this.started = true;
+    const start = performance.now();
 
     this.log("Граф документов на Левенштейне запущен");
-    this.iteration();
-  }
-
-  public stop(): void {
-    if (this.timerId === null) return;
-
-    clearTimeout(this.timerId);
-    this.timerId = null;
-    this.log("Граф документов на Левенштейне остановлен");
-  }
-
-  private iteration(): void {
-    this._iteration();
-
-    if (false) this.timerId = window.setTimeout(() => this.iteration(), this.config.intervalMs);
-  }
-
-  @Safe
-  private async _iteration() {
-    const start = performance.now();
 
     const resp = await fetch("http://localhost:3000/api/document/04a66bf4-1e51-4041-bca2-0bb9e798f702/md");
     const documents: { lang: string; code: string }[] = await resp.json();
     const texts = documents.map((document) => document.code);
-    const textLengths = texts.map((text) => text.length).sort((a, b) => b - a);
     const points = this.createPoints(texts);
-    const edges = this.createLevenshteinEdges(points);
 
-    this.pointGraphManager.update(points, edges);
-    this.pointGraphManager.removeEdges(
-      this.pointGraphManager.getPointIds().flatMap((id) =>
-        this.pointGraphManager
-          .getEdgesForPoint(id)
-          .sort((a, b) => b.distance - a.distance)
-          .slice(0, 10),
-      ),
-    );
+    this.edgeRefs = this.createLevenshteinEdges(points);
+    this.edgeIndex = 0;
+
+    this.pointGraphManager.updatePoints(points);
+    this.mediator.pointsGraphUpdated();
 
     const duration = performance.now() - start;
+    this.log(`Подготовлено: вершин=${points.length}, кандидатов рёбер=${this.edgeRefs.length}, время=${duration.toFixed(2)}ms`);
+  }
 
-    this.log(`Граф: вершин=${points.length}, рёбер=${edges.length}, расстояний=${edges.length}, время=${duration.toFixed(2)}ms`);
-
-    for (const edge of edges) {
-      this.log(`  ${edge.sourceId} <-> ${edge.targetId}: distance=${edge.distance}`);
+  /**
+   * Выполнить одну модификацию графа.
+   *
+   * За один шаг создаётся не более одного ребра, поэтому тяжёлый
+   * Levenshtein-расчёт не выполняется сразу для всех пар документов.
+   */
+  public step(): void {
+    if (!this.started) return;
+    if (this.edgeIndex >= this.edgeRefs.length) {
+      this.disposeAnimationStep?.();
+      this.disposeAnimationStep = null;
+      return;
     }
 
+    const edgeRef = this.edgeRefs[this.edgeIndex++];
+    const edge = this.pointGraphManager.addEdge(edgeRef);
+
+    if (!edge) return;
+
+    this.log(`Добавлено ребро: ${edge.sourceId} <-> ${edge.targetId}, distance=${edge.distance}`);
     this.mediator.pointsGraphUpdated();
+  }
+
+  public destroy(): void {
+    this.disposeAnimationStep?.();
+    this.disposeAnimationStep = null;
   }
 
   /** Создать точки документов. */
   private createPoints(texts: string[]): DocumentPoint[] {
     return texts
-      .filter((s) => s.length > 200)
+      .filter((text) => text.length > 200)
       .map((text, index) => {
         return new DocumentPoint(
           {
@@ -138,8 +142,8 @@ export class DocumentPointsScene {
   /**
    * Создать ссылки на рёбра между всеми уникальными парами документов.
    *
-   * Сама ссылка не содержит данных конкретного алгоритма сравнения.
-   * LevenshteinEdgeModel вычисляет свои данные внутри специализированной фабрики.
+   * Здесь создаются только дешёвые EdgeRef. LevenshteinEdgeModel
+   * вычисляется позже, когда соответствующая ссылка обрабатывается step().
    */
   private createLevenshteinEdges(points: DocumentPoint[]): EdgeRef[] {
     const edges: EdgeRef[] = [];
@@ -149,7 +153,6 @@ export class DocumentPointsScene {
         edges.push({
           sourceId: points[i].id,
           targetId: points[j].id,
-          distance: 100,
         });
       }
     }
