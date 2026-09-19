@@ -7,7 +7,7 @@ import { PointGraphManager } from "../collections/PointGraphManager.ts";
 
 export class EdgesScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private edges: Edge[] = [];
+  private readonly edges: Edge[];
   private d3Edges: d3.Selection<SVGLineElement, Edge, SVGGElement, unknown> | null = null;
 
   private unregisterSelectedPoint: () => void;
@@ -23,7 +23,7 @@ export class EdgesScene {
     private pointGraphManager: PointGraphManager,
     groupName = "edges-scene",
   ) {
-    this.syncRefs();
+    this.edges = this.pointGraphManager.getEdgesArray();
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
 
     this.rootGroup = svgEngine.createGroup(groupName);
@@ -33,8 +33,8 @@ export class EdgesScene {
     this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => this.renderLines());
     this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.updateLines());
     this.unsubPointsUpdated = this.mediator.onPointsUpdated(() => this.updateLines());
-    this.unsubPointUpdated = this.mediator.onPointUpdated((point) => this.updateLines());
-    this.unsubPointUpdating = this.mediator.onPointUpdating((point) => this.updateLines());
+    this.unsubPointUpdated = this.mediator.onPointUpdated(() => this.updateLines());
+    this.unsubPointUpdating = this.mediator.onPointUpdating(() => this.updateLines());
   }
 
   groupClick(event: any) {
@@ -48,7 +48,7 @@ export class EdgesScene {
       sourceId: edge.sourceId,
       targetId: edge.targetId,
       distance: edge.distance,
-      visible: true,
+      visible: edge.visible,
     };
     this.mediator.selectedEdge = uiEdge;
   }
@@ -76,7 +76,6 @@ export class EdgesScene {
     if (this.unsubPointUpdated) this.unsubPointUpdated();
     if (this.unsubPointUpdating) this.unsubPointUpdating();
     if (this.unsubPointsUpdated) this.unsubPointsUpdated();
-    if (this.unsubPointsUpdating) this.unsubPointsUpdating();
     this.clear();
   }
 
@@ -86,7 +85,9 @@ export class EdgesScene {
   }
 
   private renderLines(): void {
-    const lines = this.rootGroup.selectAll<SVGLineElement, Edge>("line.edge").data(this.edges, (d) => d.id);
+    const lines = this.rootGroup
+      .selectAll<SVGLineElement, Edge>("line.edge")
+      .data(this.edges, (d) => d.id);
 
     lines.exit().remove();
     const enter = lines.enter().append("line").attr("class", "edge");
@@ -98,6 +99,7 @@ export class EdgesScene {
   private updateLines(): void {
     if (!this.d3Edges) return;
     this.d3Edges
+      .style("display", (e) => e.visible ? null : "none")
       .attr("x1", (e) => e.source.x)
       .attr("y1", (e) => e.source.y)
       .attr("x2", (e) => e.target.x)
@@ -114,7 +116,4 @@ export class EdgesScene {
     return this.pointGraphManager.getEdgeCollection().getById(id);
   }
 
-  private syncRefs(): void {
-    this.edges = this.pointGraphManager.getEdgesArray();
-  }
 }

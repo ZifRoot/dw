@@ -11,6 +11,8 @@ export class Edge {
     public target: Point,
     public distance: number = 100,
     public color: string = "#231fe6",
+    public visible: boolean = true,
+    public physics: boolean = true,
   ) {
     this.sourceId = source.id;
     this.targetId = target.id;
