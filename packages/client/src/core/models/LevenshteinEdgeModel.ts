@@ -1,6 +1,5 @@
-import { LevenshteinEdit } from "@utils/levenshtein-edits";
+import { levenshteinEdits, LevenshteinEdit } from "@utils/levenshtein-edits";
 import { Edge } from "./Edge";
-import { EdgeRef } from "./EdgeRef";
 import { Point } from "./Point";
 
 export class LevenshteinEdgeModel extends Edge {
@@ -18,12 +17,16 @@ export class LevenshteinEdgeModel extends Edge {
     this.levenshteinEdits = levenshteinEdits;
   }
 
-  static fromRef(source: Point, target: Point, edgeRef: EdgeRef): LevenshteinEdgeModel {
-    return new LevenshteinEdgeModel(
-      source,
-      target,
-      edgeRef.levenshteinDistance ?? 0,
-      edgeRef.levenshteinEdits ?? [],
-    );
+  static fromPoints(source: Point, target: Point): LevenshteinEdgeModel {
+    const sourceText = (source as { largeText?: string }).largeText;
+    const targetText = (target as { largeText?: string }).largeText;
+
+    if (sourceText === undefined || targetText === undefined) {
+      throw new Error("LevenshteinEdgeModel requires points with largeText.");
+    }
+
+    const edits = levenshteinEdits(sourceText, targetText);
+
+    return new LevenshteinEdgeModel(source, target, edits.length, edits);
   }
 }

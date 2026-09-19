@@ -87,7 +87,7 @@ export class NeighborGraph {
 
   // ───────────────────── private helpers ─────────────────────
   /**
-   * Есть ли среди рёбер, инцидентных `fromId`, ребро в `toId` с данным `modelName`.
+   * Есть ли среди рёбер, инцидентных `fromId`, ребро в `toId`.
    * Направление в модели не учитывается — граф неориентированный.
    */
   private hasDirection(fromId: string, toId: string): boolean {
@@ -161,7 +161,7 @@ export class NeighborGraph {
    * и в adjacency под обоими концами.
    */
   public addEdge(edgeRef: EdgeRef): Edge | null {
-    const { sourceId, targetId, modelName } = edgeRef;
+    const { sourceId, targetId } = edgeRef;
 
     if (edgeRef.sourceId === edgeRef.targetId) return null;
     const { forward, backward } = this.checkBothDirections(edgeRef);
@@ -170,7 +170,7 @@ export class NeighborGraph {
 
     if (forward || backward) {
       console.warn(
-        `[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId} ` + `for model "${modelName}". Only one direction present.`,
+        `[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId}. Only one direction present.`,
       );
       return null;
     }

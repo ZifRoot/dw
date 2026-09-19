@@ -1,5 +1,4 @@
 // DocumentPointsScene.ts
-import { levenshteinEdits } from "@utils/levenshtein-edits";
 import { AppMediator } from "./AppMediator";
 import { PointGraphManager } from "./collections/PointGraphManager";
 import { EdgeRef } from "./models/EdgeRef";
@@ -30,7 +29,7 @@ export class DocumentPoint extends Point {
  * Генерирует граф документов на основе расстояния Левенштейна.
  *
  * Для каждой пары строк вычисляется levenshteinDistance.
- * Полученное расстояние записывается непосредственно в EdgeRef.distance.
+ * Полученное расстояние используется только специализированной моделью ребра.
  *
  * Для N строк рассматриваются все уникальные пары:
  * N * (N - 1) / 2 вычислений расстояния.
@@ -42,7 +41,7 @@ export class DocumentPointsScene {
 
   private readonly pointGraphManager: PointGraphManager;
 
-    constructor(
+  constructor(
     private readonly mediator: AppMediator,
     config: DocumentPointsSceneConfig = {},
   ) {
@@ -53,7 +52,7 @@ export class DocumentPointsScene {
 
         if (!source || !target) return null;
 
-        return LevenshteinEdgeModel.fromRef(source, target, edgeRef);
+        return LevenshteinEdgeModel.fromPoints(source, target);
       },
     });
     this.config = {
@@ -120,11 +119,9 @@ export class DocumentPointsScene {
     this.mediator.pointsGraphUpdated();
   }
 
-  /**
-   * Создать точки документов.
-   */
+  /** Создать точки документов. */
   private createPoints(texts: string[]): DocumentPoint[] {
-    const newPoints = texts
+    return texts
       .filter((s) => s.length > 200)
       .map((text, index) => {
         return new DocumentPoint(
@@ -136,32 +133,23 @@ export class DocumentPointsScene {
           text,
         );
       });
-
-    return newPoints;
   }
 
   /**
-   * Создать граф по расстоянию Левенштейна.
+   * Создать ссылки на рёбра между всеми уникальными парами документов.
    *
-   * Расстояние вычисляется для каждой уникальной пары точек.
-   * Ребро не дублируется в обратном направлении, поскольку Edge
-   * представляет неориентированную связь.
+   * Сама ссылка не содержит данных конкретного алгоритма сравнения.
+   * LevenshteinEdgeModel вычисляет свои данные внутри специализированной фабрики.
    */
   private createLevenshteinEdges(points: DocumentPoint[]): EdgeRef[] {
     const edges: EdgeRef[] = [];
 
     for (let i = 0; i < points.length; i++) {
       for (let j = i + 1; j < points.length; j++) {
-        const source = points[i];
-        const target = points[j];
-        const edits = levenshteinEdits(source.largeText, target.largeText);
-
         edges.push({
-          sourceId: source.id,
-          targetId: target.id,
+          sourceId: points[i].id,
+          targetId: points[j].id,
           distance: 100,
-          levenshteinDistance: edits.length,
-          levenshteinEdits: edits,
         });
       }
     }
