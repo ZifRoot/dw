@@ -1,4 +1,4 @@
-import "./styles/canvas/main.scss";
+import "./styles/main.scss";
 import { AppMediator } from "./core/AppMediator";
 import { PointsScene } from "./core/Scene/PointsScene";
 import { SvgEngine } from "./core/Engines/SvgEngine";
@@ -13,6 +13,9 @@ import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
 import { PointsTransformer } from "./core/data/PointsTransformer";
 import { PointsSceneTester } from "./core/PointsSceneTester";
+import { MediatorScene } from "./core/Scene/MediatorScene";
+
+type Way = "dw" | "tester" | "mediator" | "";
 
 function creatediv(id: string, parent: Node) {
   let div = document.getElementById(id);
@@ -45,15 +48,17 @@ function Tester(mediator: AppMediator) {
   return pointGraphManager;
 }
 
-function PointGraphManager(b: "dw" | "tester", mediator: AppMediator, animationEngine: AnimationEngine) {
+function PointGraphManager(b: Way, mediator: AppMediator, animationEngine: AnimationEngine) {
   let X = {
     dw: (mediator: AppMediator, animationEngine: AnimationEngine) => DW(mediator, animationEngine),
     tester: (mediator: AppMediator, animationEngine: AnimationEngine) => Tester(mediator),
+    mediator: () => null,
+    "": () => null,
   };
 
   return X[b](mediator, animationEngine);
 }
-function bootstrap() {
+function start(way: Way) {
   const app = creatediv("app", document.body);
   const controlPanelDiv = creatediv("control-panel", app);
   const mainArea = creatediv("main-area", app);
@@ -71,20 +76,32 @@ function bootstrap() {
 
   const svgEngine = new SvgEngine(canvasDiv);
   const animationEngine = new AnimationEngine();
-  const pointGraphManager = PointGraphManager("dw", mediator, animationEngine);
-  const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
-  const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
 
-  const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
-  const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
-  const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
+  const pointGraphManager = PointGraphManager(way, mediator, animationEngine);
 
-  const enginePipeline = new EnginePipeline(mediator, animationEngine);
+  if (way === "mediator") {
+    const mediatorScene = new MediatorScene(mediator, svgEngine);
+  }
 
-  enginePipeline.setConfiguration([{ algorithm: repulsionAlgorithm }, { algorithm: graphAlgorithm }, { algorithm: zdampingAlgorithm }]);
+  if (pointGraphManager) {
+    const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
+    const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
+
+    const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
+    const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
+    const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
+
+    const enginePipeline = new EnginePipeline(mediator, animationEngine);
+
+    enginePipeline.setConfiguration([{ algorithm: repulsionAlgorithm }, { algorithm: graphAlgorithm }, { algorithm: zdampingAlgorithm }]);
+  }
 
   createControlPanel(controlPanelDiv, mediator);
   createInfoPanel(infoPanelDiv, mediator);
+}
+
+function bootstrap() {
+  start("dw");
 }
 
 bootstrap();

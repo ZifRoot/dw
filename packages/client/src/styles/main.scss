@@ -1,5 +1,7 @@
 // Импорт партиала с точками
-@use "point";
+@use "canvas/point";
+@use "canvas/mediator-scene";
+
 html,
 body {
   margin: 0;
