@@ -1,8 +1,9 @@
 // DocumentPointsScene.ts
-import { levenshteinDistance } from "@utils/levenshtein-distance";
+import { levenshteinEdits } from "@utils/levenshtein-edits";
 import { AppMediator } from "./AppMediator";
 import { PointGraphManager } from "./collections/PointGraphManager";
 import { EdgeRef } from "./models/EdgeRef";
+import { LevenshteinEdgeModel } from "./models/LevenshteinEdgeModel";
 import { Point } from "./models/Point";
 import { Safe } from "@utils/logger";
 import { BasePointMath } from "./models/BasePointMath";
@@ -45,7 +46,16 @@ export class DocumentPointsScene {
     private readonly mediator: AppMediator,
     config: DocumentPointsSceneConfig = {},
   ) {
-    this.pointGraphManager = new PointGraphManager(this.mediator);
+    this.pointGraphManager = new PointGraphManager(this.mediator, {
+      create: (edgeRef) => {
+        const source = this.pointGraphManager.getPointById(edgeRef.sourceId);
+        const target = this.pointGraphManager.getPointById(edgeRef.targetId);
+
+        if (!source || !target) return null;
+
+        return LevenshteinEdgeModel.fromRef(source, target, edgeRef);
+      },
+    });
     this.config = {
       intervalMs: config.intervalMs ?? 4000,
       verbose: config.verbose ?? true,
@@ -144,12 +154,14 @@ export class DocumentPointsScene {
       for (let j = i + 1; j < points.length; j++) {
         const source = points[i];
         const target = points[j];
-        const distance = levenshteinDistance(source.largeText, target.largeText) * 2 + 90;
+        const edits = levenshteinEdits(source.largeText, target.largeText);
 
         edges.push({
           sourceId: source.id,
           targetId: target.id,
-          distance,
+          distance: 100,
+          levenshteinDistance: edits.length,
+          levenshteinEdits: edits,
         });
       }
     }
