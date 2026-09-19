@@ -12,10 +12,11 @@ import { ZDampingConfig, ZDapperAlgorithm } from "./core/physics/ZDapperAlgorith
 import { DataManager } from "./core/data/DataManager";
 import { ModelManager } from "./core/ModelManager";
 import { PointsTransformer } from "./core/data/PointsTransformer";
+import { DocumentPointsScene } from "./core/DocumentPointsScene";
 import { PointsSceneTester } from "./core/PointsSceneTester";
 import { MediatorScene } from "./core/Scene/MediatorScene";
 
-type Way = "dw" | "tester" | "mediator" | "";
+type Way = "dw" | "tester" | "levenshtein" | "mediator" | "";
 
 function creatediv(id: string, parent: Node) {
   let div = document.getElementById(id);
@@ -48,10 +49,21 @@ function Tester(mediator: AppMediator) {
   return pointGraphManager;
 }
 
+function Levenshtein(mediator: AppMediator, animationEngine: AnimationEngine) {
+  const documentPointsScene = new DocumentPointsScene(mediator, animationEngine);
+  const pointGraphManager = documentPointsScene.getPointGraphManager();
+  setTimeout(() => {
+    void documentPointsScene.start();
+  }, 1);
+
+  return pointGraphManager;
+}
+
 function PointGraphManager(b: Way, mediator: AppMediator, animationEngine: AnimationEngine) {
   let X = {
     dw: (mediator: AppMediator, animationEngine: AnimationEngine) => DW(mediator, animationEngine),
     tester: (mediator: AppMediator, animationEngine: AnimationEngine) => Tester(mediator),
+    levenshtein: (mediator: AppMediator, animationEngine: AnimationEngine) => Levenshtein(mediator, animationEngine),
     mediator: () => null,
     "": () => null,
   };

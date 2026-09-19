@@ -1,3 +1,5 @@
+import { Point } from "./Point";
+
 // core/ui-models.ts
 export interface UIPointNeighbor {
   id: string;
@@ -15,6 +17,7 @@ export interface UIPoint {
   selected: boolean;
   neighbors?: UIPointNeighbor[];
   embeddingModelNames?: string[];
+  point: Point;
 }
 
 export interface UIEdge {
