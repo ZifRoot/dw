@@ -57,8 +57,6 @@ export class DocumentPointsScene {
     this.config = {
       verbose: config.verbose ?? true,
     };
-
-    this.disposeAnimationStep = this.animationEngine.addCallback(() => this.step());
   }
 
   public getPointGraphManager(): PointGraphManager {
@@ -93,6 +91,7 @@ export class DocumentPointsScene {
 
     const duration = performance.now() - start;
     this.log(`Подготовлено: вершин=${points.length}, кандидатов рёбер=${this.edgeRefs.length}, время=${duration.toFixed(2)}ms`);
+    this.disposeAnimationStep = this.animationEngine.addCallback(() => this.step());
   }
 
   /**
