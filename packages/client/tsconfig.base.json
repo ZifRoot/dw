@@ -22,7 +22,7 @@
       "@utils/*": ["src/shared/utils/*"],
       "@clients/*": ["src/clients/*"],
       "@core/*": ["src/core/*"],
-      "@Domain/*": ["src/Domain/*"],
+      "@domain/*": ["src/Domain/*"],
       "@Scene/*": ["src/core/Scene/*"],
       "@models/*": ["src/models/*"],
       "@ui/*": ["src/ui/*"]

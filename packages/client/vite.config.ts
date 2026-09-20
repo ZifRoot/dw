@@ -43,7 +43,7 @@ export default defineConfig(({ mode }) => {
         "@shared": "../shared/src",
         "@clients/*": "src/clients/*",
         "@core/*": "src/core/*",
-        "@Domain/*": "src/Domain/*",
+        "@domain/*": "src/Domain/*",
         "@core/Scene/*": "src/core/Scene/*",
         "@models/*": "src/models/*",
         "@ui/*": "src/ui/*",
