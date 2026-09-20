@@ -91,10 +91,10 @@ The main extension mechanism is a generic point interaction event.
 
 Examples:
 
-    PointClicked(Point)
-    PointSelected(Point)
-    PointDeselected(Point)
-    PointDoubleClicked(Point)
+    PointClicked(Point) ❌
+    PointSelected(Point) ✅
+    PointDeselected(Point) ⚠️ PointSelected(null) ✅
+    PointDoubleClicked(Point) ❌
 
 The event carries the base Point.
 
