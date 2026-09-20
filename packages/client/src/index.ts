@@ -72,7 +72,6 @@ function start(way: Way) {
   const infoPanelDiv = creatediv("info-panel", mainArea);
 
   const mediator = new AppMediator();
-  mediator.temperature = 100;
   mediator.targetSize = 500;
   mediator.progress = 0;
   mediator.sizeText = 16;
