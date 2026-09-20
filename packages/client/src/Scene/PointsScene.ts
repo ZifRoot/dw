@@ -92,6 +92,7 @@ export class PointsScene {
     selection.exit<Point>().each((d) => this.domMap.delete(d.id)).remove();
 
     const enter = selection.enter().append("g").attr("class", "point-group");
+    const thisMap = this.domMap;
     enter.append("circle").attr("class", "point");
     enter.append("text").attr("class", "point-label").attr("dy", "0.35em");
 
