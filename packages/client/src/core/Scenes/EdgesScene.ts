@@ -1,7 +1,7 @@
 import { SvgEngine } from "@core/Engines/SvgEngine.ts";
 import * as d3 from "d3";
 import { AppMediator } from "@core/AppMediator.ts";
-import { UIEdge, UIPoint } from "@models/ui-models.ts";
+import { UIEdge } from "@ui/dto/EdgeDto";
 import { Edge } from "@core/models/Edge.ts";
 import { PointGraphManager } from "@core/collections/PointGraphManager.ts";
 
@@ -54,7 +54,7 @@ export class EdgesScene {
   }
 
   // Подсветка рёбер, инцидентных данной точке (или снятие подсветки).
-  private highlightEdgesForPoint(point: UIPoint | null): void {
+  private highlightEdgesForPoint(point: { id: string } | null): void {
     const pointId = point?.id ?? null;
     if (!this.d3Edges) return;
     if (!pointId) {

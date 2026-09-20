@@ -1,6 +1,10 @@
 // core/AppMediator.ts
 import { BaseMediator } from "./collections/BaseMediator";
-import { UIPoint, UIPointChange, UIEdge } from "../models/ui-models";
+import type { UISelectedPoint } from "@ui/dto/PointDto";
+import type { UIEdge } from "@ui/dto/EdgeDto";
+import type { Point } from "./models/Point";
+
+export type PointChange = Partial<Omit<UISelectedPoint, "id">>;
 
 export interface EnginePipelineConfigChange {
   pipelineName: string;
@@ -13,9 +17,10 @@ export interface AppEventMap {
   [AppMediator.TARGET_SIZE]: number;
   [AppMediator.TEMPERATURE]: number;
   [AppMediator.AUTO_ZOOM]: boolean;
-  [AppMediator.SELECTED_POINT]: UIPoint | null;
+  [AppMediator.SELECTED_POINT]: UISelectedPoint | null;
+  [AppMediator.POINT_SELECTED]: Point | null;
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
-  [AppMediator.POINT_CHANGE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
+  [AppMediator.POINT_CHANGE]: { pointId: string; changes: PointChange };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
   [AppMediator.POINT_UPDATED]: { pointId: string };
   [AppMediator.POINTS_UPDATED]: undefined;
@@ -37,6 +42,7 @@ export class AppMediator extends BaseMediator {
   static AUTO_ZOOM = "auto-zoom";
   static SELECTED_POINT = "selected-point";
   static SELECTED_EDGE = "selected-edge";
+  static POINT_SELECTED = "point-selected";
   static POINT_CHANGE = "point-update";
   static POINT_UPDATED = "point-updated";
   static EDGE_UPDATE = "edge-update";
@@ -84,10 +90,10 @@ export class AppMediator extends BaseMediator {
     this.set(AppMediator.AUTO_ZOOM, value);
   }
 
-  public get selectedPoint(): UIPoint | null {
+  public get selectedPoint(): UISelectedPoint | null {
     return this.get(AppMediator.SELECTED_POINT) ?? null;
   }
-  public set selectedPoint(value: UIPoint | null) {
+  public set selectedPoint(value: UISelectedPoint | null) {
     this.set(AppMediator.SELECTED_POINT, value);
   }
 
@@ -109,11 +115,15 @@ export class AppMediator extends BaseMediator {
    * Уведомить UI о текущем выборе.
    * Само состояние выбора хранится в PointModel и не дублируется в медиаторе.
    */
-  public selectPoint(value: UIPoint | null): void {
+  public pointSelected(value: Point | null): void {
+    this.emit(AppMediator.POINT_SELECTED, value);
+  }
+
+  public selectPoint(value: UISelectedPoint | null): void {
     this.emit(AppMediator.SELECTED_POINT, value);
   }
 
-  public pointChange(pointId: string, changes: Partial<Omit<UIPoint, "id">>): void {
+  public pointChange(pointId: string, changes: PointChange): void {
     this.emit(AppMediator.POINT_CHANGE, { pointId, changes });
   }
 
@@ -201,8 +211,11 @@ export class AppMediator extends BaseMediator {
   public onAutoZoom(callback: (value: boolean) => void): () => void {
     return this.on(AppMediator.AUTO_ZOOM, callback);
   }
-  public onSelectedPoint(callback: (point: UIPoint | null) => void): () => void {
+  public onSelectedPoint(callback: (point: UISelectedPoint | null) => void): () => void {
     return this.on(AppMediator.SELECTED_POINT, callback);
+  }
+  public onPointSelected(callback: (point: Point | null) => void): () => void {
+    return this.on(AppMediator.POINT_SELECTED, callback);
   }
   public onSelectedEdge(callback: (edge: UIEdge | null) => void): () => void {
     return this.on(AppMediator.SELECTED_EDGE, callback);
@@ -254,7 +267,7 @@ export class AppMediator extends BaseMediator {
   public onPointsUpdated(callback: () => void): () => void {
     return this.on(AppMediator.POINTS_UPDATED, callback);
   }
-  public onPointChange(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void {
+  public onPointChange(callback: (detail: { pointId: string; changes: PointChange }) => void): () => void {
     return this.on(AppMediator.POINT_CHANGE, callback);
   }
   public onPointUpdated(callback: (detail: { pointId: string }) => void): () => void {

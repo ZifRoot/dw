@@ -2,25 +2,14 @@
 import { AppMediator } from "@core/AppMediator";
 import { PointGraphManager } from "@core/collections/PointGraphManager";
 import { EdgeRef } from "@core/models/EdgeRef";
-import { LevenshteinEdgeModel } from "@models/LevenshteinEdgeModel";
-import { Point } from "@core/models/Point";
+import { LevenshteinEdgeModel } from "@domain/Levenshtein/LevenshteinEdgeModel";
+import { DocumentPoint } from "@domain/Levenshtein/DocumentPoint";
 import { Safe } from "@utils/logger";
-import { BasePointMath } from "@core/models/BasePointMath";
 import { AnimationEngine } from "@core/Engines/AnimationEngine";
 
 interface DocumentPointsSceneConfig {
   /** Включить логирование в консоль. */
   verbose?: boolean;
-}
-
-let nextId = 1000;
-export class DocumentPoint extends Point {
-  constructor(
-    point: BasePointMath,
-    public largeText: string,
-  ) {
-    super(point, `p${nextId++}`, largeText.substring(0, 20));
-  }
 }
 
 /**
@@ -29,9 +18,10 @@ export class DocumentPoint extends Point {
  * Точки создаются в start(), а изменение графа выполняется постепенно
  * в step(), зарегистрированном в AnimationEngine.
  */
-export class DocumentPointsScene {
+export class LevenshteinManager {
   private config: Required<DocumentPointsSceneConfig>;
   private readonly pointGraphManager: PointGraphManager;
+  private readonly unsubPointSelected: () => void;
 
   private edgeRefs: EdgeRef[] = [];
   private edgeIndex = 0;
@@ -54,9 +44,11 @@ export class DocumentPointsScene {
       },
     });
 
-    this.config = {
-      verbose: config.verbose ?? true,
-    };
+    this.config = { verbose: config.verbose ?? true };
+    this.unsubPointSelected = this.mediator.onPointSelected((point) => {
+      if (point === null) this.mediator.selectPoint(null);
+      else if (point instanceof DocumentPoint) this.mediator.selectPoint(this.toUiPoint(point));
+    });
   }
 
   public getPointGraphManager(): PointGraphManager {
@@ -120,6 +112,18 @@ export class DocumentPointsScene {
   public destroy(): void {
     this.disposeAnimationStep?.();
     this.disposeAnimationStep = null;
+    this.unsubPointSelected();
+  }
+
+  private toUiPoint(point: DocumentPoint) {
+    const neighbors = this.pointGraphManager.getEdgesForPoint(point.id).map((edge) => {
+      const id = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
+      const neighbor = this.pointGraphManager.getPointById(id);
+      return neighbor ? { id: neighbor.id, name: neighbor.text, distance: edge.distance } : null;
+    }).filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a,b) => a.distance - b.distance);
+    return { kind: "document" as const, id: point.id, x: point.x, y: point.y, z: point.z,
+      text: point.text, pinned: point.pinned, selected: point.selected, neighbors, largeText: point.largeText };
   }
 
   /** Создать точки документов. */
@@ -161,7 +165,7 @@ export class DocumentPointsScene {
 
   private log(message: string): void {
     if (this.config.verbose) {
-      console.log(`[DocumentPointsScene] ${message}`);
+      console.log(`[LevenshteinManager] ${message}`);
     }
   }
 }

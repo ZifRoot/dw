@@ -1,8 +1,6 @@
 import "./styles/main.scss";
 import { AppMediator } from "@core/AppMediator";
-import { PointsScene } from "./Scene/PointsScene";
 import { SvgEngine } from "@core/Engines/SvgEngine";
-import { EdgesScene } from "./Scene/EdgesScene";
 import { createControlPanel, createInfoPanel } from "./ui";
 import { RepulsionAlgorithm, RepulsionEngineConfig } from "./physics/RepulsionAlgorithm";
 import { AnimationEngine } from "@core/Engines/AnimationEngine";
@@ -10,11 +8,13 @@ import { EnginePipeline } from "@core/Engines/EnginePipeline";
 import { GraphAlgorithm, GraphEngineConfig } from "./physics/GraphAlgorithm";
 import { ZDampingConfig, ZDapperAlgorithm } from "./physics/ZDapperAlgorithm";
 import { DataManager } from "./data/DataManager";
-import { ModelManager } from "./main/ModelManager";
+import { ModelManager } from "./Domain/Embedding/ModelManager";
 import { PointsTransformer } from "./data/PointsTransformer";
-import { DocumentPointsScene } from "./main/DocumentPointsScene";
+import { LevenshteinManager } from "./Domain/Levenshtein/LevenshteinManager";
 import { PointsSceneTester } from "./main/PointsSceneTester";
-import { MediatorScene } from "./Scene/MediatorScene";
+import { MediatorScene } from "@core/Scenes/MediatorScene";
+import { PointsScene } from "@core/Scenes/PointsScene";
+import { EdgesScene } from "@core/Scenes/EdgesScene";
 
 type Way = "dw" | "tester" | "levenshtein" | "mediator" | "";
 
@@ -32,9 +32,7 @@ function DW(mediator: AppMediator, animationEngine: AnimationEngine) {
   const pointGraphManager = modelManager.getPointGraphManager();
   const dataManager = new DataManager(mediator);
   const pointsTransformer = new PointsTransformer(mediator, dataManager, pointGraphManager);
-  setTimeout(() => {
-    dataManager.reloadTables();
-  }, 1);
+  setTimeout(() => dataManager.reloadTables(), 1);
 
   return pointGraphManager;
 }
@@ -42,19 +40,15 @@ function DW(mediator: AppMediator, animationEngine: AnimationEngine) {
 function Tester(mediator: AppMediator) {
   const pointsSceneTester = new PointsSceneTester(mediator);
   const pointGraphManager = pointsSceneTester.getPointGraphManager();
-  setTimeout(() => {
-    pointsSceneTester.start();
-  }, 1);
+  setTimeout(() => pointsSceneTester.start(), 1);
 
   return pointGraphManager;
 }
 
 function Levenshtein(mediator: AppMediator, animationEngine: AnimationEngine) {
-  const documentPointsScene = new DocumentPointsScene(mediator, animationEngine);
+  const documentPointsScene = new LevenshteinManager(mediator, animationEngine);
   const pointGraphManager = documentPointsScene.getPointGraphManager();
-  setTimeout(() => {
-    void documentPointsScene.start();
-  }, 1);
+  setTimeout(() => void documentPointsScene.start(), 1);
 
   return pointGraphManager;
 }
