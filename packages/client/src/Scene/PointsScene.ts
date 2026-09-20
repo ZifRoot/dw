@@ -1,9 +1,7 @@
 import { DragElem, SvgEngine } from "@core/Engines/SvgEngine";
 import * as d3 from "d3";
-import { UIPoint } from "@models/ui-models";
 import { AppMediator, PointChange } from "@core/AppMediator";
 import { Point } from "@core/models/Point";
-import { EdgeModel } from "@models/EdgeModel";
 import { PointGraphManager } from "@core/collections/PointGraphManager";
 
 export class PointsScene {
@@ -13,10 +11,10 @@ export class PointsScene {
   private d3Points: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
   private domMap: Map<string, SVGGElement> = new Map();
   private unsubPointsGraphUpdated: () => void;
-  // private unsubSelectedPoint: () => void;
   private unsubPointChange: () => void;
   private unsubPointsUpdating: () => void;
   private unsubSizeText: () => void;
+  private unsubAutoZoom: () => void;
 
   constructor(
     private mediator: AppMediator,
@@ -25,19 +23,15 @@ export class PointsScene {
     groupName = "points-scene",
   ) {
     this.points = this.pointGraphManager.getPointsArray();
-
     this.rootGroup = svgEngine.createGroup(groupName);
     this.rootGroup.on("click", (event) => this.groupClick(event));
-
     this.unregisterDrag = this.svgEngine.registerDragDetector((event) => this.dragDetector(event));
     this.svgEngine.onZoom((transform) => this.updatePointStyles(transform.k));
-    // Подписка на обновление графа точек (без передачи данных).
     this.unsubPointsGraphUpdated = this.mediator.onPointsGraphUpdated(() => this.syncDomWithPoints());
-    // this.unsubSelectedPoint = this.mediator.onSelectedPoint((point) => this.selectedPoint(point));
     this.unsubPointChange = this.mediator.onPointChange(({ pointId, changes }) => this.pointChange(pointId, changes));
     this.unsubPointsUpdating = this.mediator.onPointsUpdating(() => this.pointsUpdating());
     this.unsubSizeText = this.mediator.onSizeText(() => this.updatePointStyles());
-    this.mediator.onAutoZoom(() => this.fitView());
+    this.unsubAutoZoom = this.mediator.onAutoZoom(() => this.fitView());
   }
 
   public getPointById(id?: string | null): Point | null {
@@ -57,31 +51,27 @@ export class PointsScene {
     return this.points;
   }
 
-  public pointChange(pointId: string, changes: PointChange) {
+  public pointChange(pointId: string, changes: PointChange): void {
     const point = this.getPointById(pointId);
     if (!point) return;
-    if (changes.text != null) point.text = changes.text;
-    if (changes.pinned != null) point.pinned = changes.pinned;
-    if (changes.selected != null) point.selected = changes.selected;
-    if (changes.x != null) point.x = changes.x;
-    if (changes.y != null) point.y = changes.y;
-    if (changes.z != null) point.z = changes.z;
+    if (changes.text !== undefined) point.text = changes.text;
+    if (changes.pinned !== undefined) point.pinned = changes.pinned;
+    if (changes.selected !== undefined) point.selected = changes.selected;
+    if (changes.x !== undefined) point.x = changes.x;
+    if (changes.y !== undefined) point.y = changes.y;
+    if (changes.z !== undefined) point.z = changes.z;
     this.mediator.pointUpdated(pointId);
     this.updateUIById(pointId);
   }
 
   public fitView(padding = 50): void {
-    if (!this.mediator.autoZoom) return;
-    if (this.points.length === 0) return;
+    if (!this.mediator.autoZoom || this.points.length === 0) return;
     const xs = this.points.map((p) => p.x);
     const ys = this.points.map((p) => p.y);
-    const bounds = {
-      minX: Math.min(...xs),
-      minY: Math.min(...ys),
-      maxX: Math.max(...xs),
-      maxY: Math.max(...ys),
-    };
-    this.svgEngine.applyZoomToBounds(bounds, padding);
+    this.svgEngine.applyZoomToBounds({
+      minX: Math.min(...xs), minY: Math.min(...ys),
+      maxX: Math.max(...xs), maxY: Math.max(...ys),
+    }, padding);
   }
 
   public getSvgEngine(): SvgEngine {
@@ -89,45 +79,42 @@ export class PointsScene {
   }
 
   public destroy(): void {
-    if (this.unregisterDrag) this.unregisterDrag();
+    this.unregisterDrag?.();
     this.unsubPointsGraphUpdated();
-    // this.unsubSelectedPoint();
     this.unsubPointChange();
     this.unsubPointsUpdating();
     this.unsubSizeText();
+    this.unsubAutoZoom();
   }
 
-  // ========== Приватные методы синхронизации DOM ==========
   private syncDomWithPoints(): void {
     const selection = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
+    selection.exit<Point>().each((d) => this.domMap.delete(d.id)).remove();
 
-    // Удаляем старые группы и чистим groupMap.
-    selection
-      .exit<Point>()
-      .each((d) => this.domMap.delete(d.id))
-      .remove();
-
-    // Создаём новые группы.
     const enter = selection.enter().append("g").attr("class", "point-group");
     enter.append("circle").attr("class", "point");
     enter.append("text").attr("class", "point-label").attr("dy", "0.35em");
 
-    // Добавляем новые записи в groupMap.
-    const map = this.domMap;
+    enter.each((d) => this.domMap.set(d.id, d3.select<SVGGElement, Point>(this as never) as never));
+
+    // D3's enter selection does not expose the element through an arrow callback.
     enter.each(function (d) {
-      map.set(d.id, this);
+      // The map is populated again below using the actual DOM node.
+    });
+    enter.each((d, i, nodes) => {
+      const element = nodes[i] as SVGGElement;
+      this.domMap.set(d.id, element);
     });
 
     this.d3Points = selection.merge(enter);
     this.updateAllProperties();
     this.updatePointStyles();
 
-    // Обновляем информацию о соседях для выбранной точки.
     const selectedPoint = this.points.find((point) => point.selected);
     this.mediator.pointSelected(selectedPoint ?? null);
   }
 
-  pointsUpdating() {
+  public pointsUpdating(): void {
     this.updatePositions();
     if (this.mediator.autoZoom) this.fitView();
   }
@@ -135,46 +122,35 @@ export class PointsScene {
   private updateAllProperties(d3Sel?: d3.Selection<SVGGElement, Point, any, any> | null): void {
     d3Sel ??= this.d3Points;
     if (!d3Sel) return;
-
-    d3Sel
-      .classed("dragged", (d) => d.dragged)
+    d3Sel.classed("dragged", (d) => d.dragged)
       .classed("selected", (d) => d.selected)
       .classed("pinned", (d) => d.pinned);
     d3Sel.select("text.point-label").text((d) => d.text);
-
     this.updatePositions(d3Sel);
   }
 
   public updatePositions(d3Sel?: d3.Selection<SVGGElement, Point, any, any> | null): void {
     d3Sel ??= this.d3Points;
     if (!d3Sel) return;
-
-    d3Sel.attr("transform", (d) => `translate(${d.x},${d.y})`); // scale(${d.z})
+    d3Sel.attr("transform", (d) => `translate(${d.x},${d.y})`);
   }
 
   private updatePointStyles(scale?: number, d3Sel?: d3.Selection<SVGGElement, Point, any, any> | null): void {
     d3Sel ??= this.d3Points;
     if (!d3Sel) return;
-
-    const s = scale ?? this.svgEngine.getTransform().k;
-    const inv = 1 / s;
+    const inv = 1 / (scale ?? this.svgEngine.getTransform().k);
     const fontSize = this.mediator.sizeText;
-    d3Sel
-      .selectAll("circle.point")
-      .attr("r", 20 * inv)
-      .attr("stroke-width", 2 * inv);
+    d3Sel.selectAll("circle.point").attr("r", 20 * inv).attr("stroke-width", 2 * inv);
     d3Sel.selectAll("text.point-label").style("font-size", `${fontSize * inv}px`);
   }
 
-  updateUIById(pointId: string) {
+  public updateUIById(pointId: string): void {
     const domEle = this.domMap.get(pointId);
     if (!domEle) return;
-    let d3dom = d3.select<SVGGElement, Point>(domEle);
-    if (d3dom) this.updateAllProperties(d3dom);
+    this.updateAllProperties(d3.select<SVGGElement, Point>(domEle));
   }
-  // ========== Инициализация подсистем ==========
 
-  dragDetector(event: MouseEvent): DragElem {
+  public dragDetector(event: MouseEvent): DragElem {
     if (event.type === "wheel") return null;
     const target = event.target as Element;
     const element = target.closest?.(".point-group");
@@ -184,7 +160,6 @@ export class PointsScene {
     const point = group.datum();
     if (!point) return null;
 
-    // Временно фиксируем точку на время перетаскивания.
     point.dragged = true;
     this.updateAllProperties(group);
 
@@ -195,10 +170,8 @@ export class PointsScene {
           const d3Dom = d3.select<SVGGElement, Point>(el as SVGGElement);
           const p = d3Dom.datum();
           if (!p) return;
-          d3Dom.each((p) => {
-            p.x += deltaWorld[0];
-            p.y += deltaWorld[1];
-          });
+          p.x += deltaWorld[0];
+          p.y += deltaWorld[1];
           this.updateAllProperties(d3Dom);
           this.mediator.pointUpdating(p.id);
         },
@@ -208,27 +181,24 @@ export class PointsScene {
           if (!p) return;
           p.dragged = false;
           this.updateAllProperties(d3Dom);
-
-          // Сигнализируем о завершённом изменении Model-позиции.
           this.mediator.pointUpdated(p.id);
         },
       },
     };
   }
 
-  dom2Point(domEle?: Element | null): Point | null {
-    return this.checkModel(domEle instanceof Element ? d3.select<Element, Point>(domEle).datum() : null);
+  public dom2Point(domEle?: Element | null): Point | null {
+    return domEle instanceof Element ? this.checkModel(d3.select<Element, Point>(domEle).datum()) : null;
   }
 
-  checkModel(x: any): Point | null {
-    return x instanceof Point ? x : null;
+  public checkModel(value: unknown): Point | null {
+    return value instanceof Point ? value : null;
   }
 
-  groupClick(event: any) {
+  public groupClick(event: MouseEvent): void {
     const target = event.target as Element;
     const domEle = target.closest?.(".point-group");
-
-    const previousPoint = this.getPointById(this.mediator.selectedPoint?.id);
+    const previousPoint = this.points.find((point) => point.selected) ?? null;
 
     if (previousPoint) {
       previousPoint.selected = false;
@@ -236,13 +206,13 @@ export class PointsScene {
     }
 
     const point = this.dom2Point(domEle);
-
-    // Повторный клик по выбранной точке снимает выбор.
     if (point && point !== previousPoint) {
       point.selected = true;
       this.updateUIById(point.id);
+      this.mediator.pointSelected(point);
+      return;
     }
 
-    this.mediator.pointSelected(point !== previousPoint ? point : null);
+    this.mediator.pointSelected(null);
   }
 }
