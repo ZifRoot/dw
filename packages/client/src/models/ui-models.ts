@@ -1,6 +1,5 @@
-import { Point } from "@core/models/Point";
+// UI DTOs. These types form the boundary between domain objects and React UI.
 
-// core/ui-models.ts
 export interface UIPointNeighbor {
   id: string;
   name: string;
@@ -13,12 +12,16 @@ export interface UIPoint {
   y: number;
   z: number;
   text: string;
+  largeText?: string;
   pinned: boolean;
   selected: boolean;
   neighbors?: UIPointNeighbor[];
   embeddingModelNames?: string[];
-  point: Point;
 }
+
+export type UIPointChange = Partial<
+  Pick<UIPoint, "text" | "largeText" | "x" | "y" | "z" | "pinned" | "selected">
+>;
 
 export interface UIEdge {
   id: string;
