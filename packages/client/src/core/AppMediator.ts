@@ -4,7 +4,7 @@ import type { UISelectedPoint } from "@ui/dto/PointDto";
 import type { UIEdge } from "@ui/dto/EdgeDto";
 import type { Point } from "./models/Point";
 
-export type PointChange = Partial<Omit<UIPoint, "id">>;
+export type PointChange = Partial<Omit<UISelectedPoint, "id">>;
 
 export interface EnginePipelineConfigChange {
   pipelineName: string;
@@ -20,7 +20,7 @@ export interface AppEventMap {
   [AppMediator.SELECTED_POINT]: UISelectedPoint | null;
   [AppMediator.POINT_SELECTED]: Point | null;
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
-  [AppMediator.POINT_CHANGE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
+  [AppMediator.POINT_CHANGE]: { pointId: string; changes: PointChange };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
   [AppMediator.POINT_UPDATED]: { pointId: string };
   [AppMediator.POINTS_UPDATED]: undefined;
