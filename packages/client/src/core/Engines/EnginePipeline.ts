@@ -42,6 +42,7 @@ export class EnginePipeline {
   private readonly skipFrames = new Map<BaseAlgorithm, number>();
   private readonly temperatureCoagulator: EventCoagulator<number>;
   private temperatureAggregation: EnginePipelineTemperatureAggregation = "maximum";
+  private lastPointsUpdatedAt = 0;
 
   private readonly unsubscribeStart: () => void;
   private readonly unsubscribeConfig: () => void;
@@ -159,6 +160,7 @@ export class EnginePipeline {
     }
 
     this.running = true;
+    this.lastPointsUpdatedAt = 0;
     this.startCheckpointTimer();
     this.rebuild();
   }
@@ -293,19 +295,13 @@ export class EnginePipeline {
     this.temperatureCoagulator.push(temperature);
   }
 
-  /**
-   * Запустить периодические checkpoints.
-   *
-   * Points Updated не чаще одного раза в заданный интервал публикуется
-   * для длительных расчётов, чтобы внешние потребители могли сохранять
-   * промежуточное состояние.
-   */
+  /** Запустить периодические checkpoints. */
   private startCheckpointTimer(): void {
     this.stopCheckpointTimer();
 
     this.checkpointTimer = setInterval(() => {
       if (!this.running) return;
-      this.mediator.pointsUpdated();
+      this.emitPointsUpdated();
     }, POINTS_UPDATED_INTERVAL_MS);
   }
 
@@ -316,6 +312,15 @@ export class EnginePipeline {
     this.checkpointTimer = null;
   }
 
+  /** Публиковать Points Updated не чаще одного раза за checkpoint interval. */
+  private emitPointsUpdated(): void {
+    const now = Date.now();
+    if (now - this.lastPointsUpdatedAt < POINTS_UPDATED_INTERVAL_MS) return;
+
+    this.lastPointsUpdatedAt = now;
+    this.mediator.pointsUpdated();
+  }
+
   /** Завершить один фактический цикл физического расчёта. */
   private finishRun(): void {
     if (!this.running) return;
@@ -324,7 +329,7 @@ export class EnginePipeline {
     this.temperatureCoagulator.flush();
     this.running = false;
     this.stopCheckpointTimer();
-    this.mediator.pointsUpdated();
+    this.emitPointsUpdated();
     this.disposeCallbacks?.();
     this.disposeCallbacks = null;
   }
