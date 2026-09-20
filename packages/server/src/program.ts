@@ -16,10 +16,14 @@ import { SingleExecution } from "@utils/single-runner";
 import { dateStr } from "@utils/date-utils";
 import { LogSafe, Safe } from "@utils/logger";
 import { EmbedderLmStudio } from "./EmbedderLmStudio";
+import { AsyncPool } from "@utils/async-pool";
+
+const FILE_DOWNLOAD_CONCURRENCY = 4;
 
 export class Program implements IProgram {
   repository!: IRepository;
   embedder!: EmbedderLmStudio;
+  private readonly fileDownloadPool = new AsyncPool(FILE_DOWNLOAD_CONCURRENCY);
 
   async start() {
     await this.RepositoryAsync();
@@ -91,9 +95,7 @@ export class Program implements IProgram {
 
     console.log(`Файлов для скачевания ${files.length} будет скачено ${files.length}`);
 
-    let filesAs = files.map((file) => this.file_1(dw, file));
-
-    await Promise.all(filesAs);
+    await this.fileDownloadPool.run(files, (file) => this.file_1(dw, file));
   }
 
   @Safe
