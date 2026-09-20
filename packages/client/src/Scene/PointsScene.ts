@@ -233,6 +233,11 @@ export class PointsScene {
   model2UI(point?: Point | null): UIPoint | null {
     if (!point) return null;
 
+    const largeText =
+      "largeText" in point && typeof point.largeText === "string"
+        ? point.largeText
+        : undefined;
+
     const neighbors = this.pointGraphManager
       .getEdgesForPoint(point.id)
       .map((edge) => {
@@ -250,12 +255,12 @@ export class PointsScene {
       .sort((a, b) => (a.cosineDistance || 0) - (b.cosineDistance || 0));
 
     return {
-      point: point,
       id: point.id,
       x: point.x,
       y: point.y,
       z: point.z,
       text: point.text,
+      largeText,
       pinned: point.pinned,
       selected: point.selected,
       neighbors,

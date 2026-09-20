@@ -100,6 +100,24 @@ React
 
 View DTO — не domain object, случайно переданный UI. Это объект, специально подготовленный для отображения. Он может быть очень похож на исходный объект и содержать практически те же данные, но это другой тип и другая граница ответственности.
 
+Например, `UIPoint` **не должен содержать поле `point: Point`** или другую ссылку на domain object. Если UI нужен дополнительный текст документа, координаты или сведения о соседях, эти данные проецируются в DTO как обычные значения:
+
+```ts
+interface UIPoint {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  text: string;
+  largeText?: string;
+  pinned: boolean;
+  selected: boolean;
+  neighbors?: UIPointNeighbor[];
+}
+```
+
+React получает только этот snapshot и не может через него добраться до `Point`, `PointGraphManager` или других runtime-объектов.
+
 ## 6. PipelineViewState
 
 `PipelineViewState` — именно объект представления Pipeline, а не внутреннее состояние domain object, отданное React.

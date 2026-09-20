@@ -1,6 +1,6 @@
 // core/AppMediator.ts
 import { BaseMediator } from "./collections/BaseMediator";
-import { UIPoint, UIEdge } from "../models/ui-models";
+import { UIPoint, UIPointChange, UIEdge } from "../models/ui-models";
 
 export interface EnginePipelineConfigChange {
   pipelineName: string;

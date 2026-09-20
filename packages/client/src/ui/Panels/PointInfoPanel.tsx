@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import { AppMediator } from "@core/AppMediator";
 import { UIPoint } from "@models/ui-models";
-import { DocumentPoint } from "../../main/DocumentPointsScene";
 
 interface PointInfoPanelProps {
   point: UIPoint;
@@ -54,7 +53,7 @@ export const PointInfoPanel: React.FC<PointInfoPanelProps> = ({
         <input type="text" value={text} onChange={handleTextChange} />
       </div>
       <div>
-        <MyForm text={(point?.point as DocumentPoint)?.largeText ?? "----"} />
+        <MyForm text={point.largeText ?? "----"} />
       </div>
 
       <div>
