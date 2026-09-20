@@ -20,6 +20,7 @@
     "baseUrl": ".",
     "paths": {
       "@utils/*": ["src/shared/utils/*"],
+      "@shared/*": ["../shared/src/*"],
       "@clients/*": ["src/clients/*"],
       "@core/*": ["src/core/*"],
       "@domain/*": ["src/Domain/*"],
