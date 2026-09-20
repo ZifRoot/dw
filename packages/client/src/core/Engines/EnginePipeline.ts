@@ -200,6 +200,7 @@ export class EnginePipeline {
     this.disposeCallbacks = null;
 
     const callbacks: AnimationCallback[] = [];
+    let didExecutePhysics = false;
 
     for (const entry of this.entries) {
       if (!entry.enabled) continue;
@@ -214,6 +215,7 @@ export class EnginePipeline {
         }
 
         entry.algorithm.step(deltaTime);
+        didExecutePhysics = true;
         this.skipFrames.set(
           entry.algorithm,
           this.calculateSkipFrames(entry.algorithm),
@@ -228,6 +230,8 @@ export class EnginePipeline {
     }
 
     callbacks.push(() => {
+      if (!didExecutePhysics) return;
+
       this.publishTemperature();
       this.mediator.pointsUpdating();
 
@@ -238,6 +242,8 @@ export class EnginePipeline {
       ) {
         this.finishRun();
       }
+
+      didExecutePhysics = false;
     });
 
     this.disposeCallbacks = this.animation.addCallbacks(callbacks);
