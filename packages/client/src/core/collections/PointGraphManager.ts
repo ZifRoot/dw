@@ -173,26 +173,6 @@ export class PointGraphManager {
   }
 
   /**
-   * Полностью заменить набор рёбер, не меняя точки.
-   *
-   * В текущей реализации initFromRefs() уже имеет именно эту семантику.
-   *
-   * Будущие варианты имени:
-   * - replaceEdges
-   * - setEdges
-   * - resetEdges
-   * - loadEdges
-   * - replaceGraphEdges
-   *
-   * Предпочтительный вариант: replaceEdges.
-   *
-   * TODO: initFromRefs() не удалять до отдельного переименования.
-   */
-  public replaceEdges(refs: EdgeRefs): void {
-    this.initFromRefs(refs);
-  }
-
-  /**
    * Добавить несколько рёбер из EdgeRef.
    *
    * Все рёбра создаются через IEdgeFactory. PGM не знает, являются ли
