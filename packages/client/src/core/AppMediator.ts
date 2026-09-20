@@ -12,10 +12,11 @@ export interface EnginePipelineConfigChange {
   changes: Record<string, unknown>;
 }
 
-export interface AppEventMap {
+export type AppEventMap = {
   [AppMediator.PROGRESS]: number;
   [AppMediator.TARGET_SIZE]: number;
   [AppMediator.TEMPERATURE]: number;
+  [AppMediator.SIZE_TEXT]: number;
   [AppMediator.AUTO_ZOOM]: boolean;
   [AppMediator.SELECTED_POINT]: UISelectedPoint | null;
   [AppMediator.POINT_SELECTED]: Point | null;
@@ -23,6 +24,7 @@ export interface AppEventMap {
   [AppMediator.POINT_CHANGE]: { pointId: string; changes: PointChange };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
   [AppMediator.POINT_UPDATED]: { pointId: string };
+  [AppMediator.POINT_UPDATING]: { pointId: string };
   [AppMediator.POINTS_UPDATED]: undefined;
   [AppMediator.POINTS_UPDATING]: undefined;
   [AppMediator.POINTS_GRAPH_UPDATED]: undefined;
@@ -30,37 +32,45 @@ export interface AppEventMap {
   [AppMediator.CLEAR_POINTS]: undefined;
   [AppMediator.ADD_POINT]: undefined;
   [AppMediator.START_REPULSION]: undefined;
+  [AppMediator.START_GRAPH]: undefined;
+  [AppMediator.RELOAD_TABLES]: undefined;
+  [AppMediator.SAVE_POSITIONS]: undefined;
+  [AppMediator.POSITIONS_SAVED]: undefined;
   [AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED]: EnginePipelineConfigChange;
-  [AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED]: { pipelineName: string; engineName: string; enabled: boolean };
-}
+  [AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED]: {
+    pipelineName: string;
+    engineName: string;
+    enabled: boolean;
+  };
+};
 
-export class AppMediator extends BaseMediator {
-  static PROGRESS = "progress";
-  static TARGET_SIZE = "target-size";
-  static TEMPERATURE = "temperature";
-  static SIZE_TEXT = "size-text";
-  static AUTO_ZOOM = "auto-zoom";
-  static SELECTED_POINT = "selected-point";
-  static SELECTED_EDGE = "selected-edge";
-  static POINT_SELECTED = "point-selected";
-  static POINT_CHANGE = "point-update";
-  static POINT_UPDATED = "point-updated";
-  static EDGE_UPDATE = "edge-update";
+export class AppMediator extends BaseMediator<AppEventMap> {
+  static PROGRESS = "progress" as const;
+  static TARGET_SIZE = "target-size" as const;
+  static TEMPERATURE = "temperature" as const;
+  static SIZE_TEXT = "size-text" as const;
+  static AUTO_ZOOM = "auto-zoom" as const;
+  static SELECTED_POINT = "selected-point" as const;
+  static SELECTED_EDGE = "selected-edge" as const;
+  static POINT_SELECTED = "point-selected" as const;
+  static POINT_CHANGE = "point-update" as const;
+  static POINT_UPDATED = "point-updated" as const;
+  static EDGE_UPDATE = "edge-update" as const;
 
-  static CLEAR_POINTS = "clear-points";
-  static ADD_POINT = "add-point";
-  static START_REPULSION = "start-repulsion";
-  static START_GRAPH = "start-graph";
-  static RELOAD_TABLES = "reload-tables";
-  static POINTS_UPDATING = "points-updating";
-  static POINTS_UPDATED = "points-updated";
-  static POINTS_GRAPH_UPDATED = "points-graph-updated";
-  static MODEL_MANAGER_STEP = "model-manager-step";
-  static SAVE_POSITIONS = "save-positions";
-  static POSITIONS_SAVED = "positions-saved";
-  static POINT_UPDATING = "point-updating";
-  static PIPELINE_ENGINE_CONFIG_CHANGED = "pipeline-engine-config-changed";
-  static PIPELINE_ENGINE_ENABLED_CHANGED = "pipeline-engine-enabled-changed";
+  static CLEAR_POINTS = "clear-points" as const;
+  static ADD_POINT = "add-point" as const;
+  static START_REPULSION = "start-repulsion" as const;
+  static START_GRAPH = "start-graph" as const;
+  static RELOAD_TABLES = "reload-tables" as const;
+  static POINTS_UPDATING = "points-updating" as const;
+  static POINTS_UPDATED = "points-updated" as const;
+  static POINTS_GRAPH_UPDATED = "points-graph-updated" as const;
+  static MODEL_MANAGER_STEP = "model-manager-step" as const;
+  static SAVE_POSITIONS = "save-positions" as const;
+  static POSITIONS_SAVED = "positions-saved" as const;
+  static POINT_UPDATING = "point-updating" as const;
+  static PIPELINE_ENGINE_CONFIG_CHANGED = "pipeline-engine-config-changed" as const;
+  static PIPELINE_ENGINE_ENABLED_CHANGED = "pipeline-engine-enabled-changed" as const;
 
   public get progress(): number {
     return this.get(AppMediator.PROGRESS) ?? 0;
