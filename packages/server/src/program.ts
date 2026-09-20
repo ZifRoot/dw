@@ -95,7 +95,9 @@ export class Program implements IProgram {
 
     console.log(`Файлов для скачевания ${files.length} будет скачено ${files.length}`);
 
-    await this.fileDownloadPool.run(files, (file) => this.file_1(dw, file));
+    await this.fileDownloadPool.run(
+      files.map((file) => () => this.file_1(dw, file)),
+    );
   }
 
   @Safe
