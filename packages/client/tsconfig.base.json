@@ -22,8 +22,10 @@
       "@utils/*": ["src/shared/utils/*"],
       "@clients/*": ["src/clients/*"],
       "@core/*": ["src/core/*"],
+      "@Domain/*": ["src/Domain/*"],
       "@Scene/*": ["src/core/Scene/*"],
-      "@models/*": ["src/models/*"]
+      "@models/*": ["src/models/*"],
+      "@ui/*": ["src/ui/*"]
     }
   },
   "include": ["src"]
