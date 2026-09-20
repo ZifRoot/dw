@@ -18,7 +18,7 @@ export class RepulsionAlgorithm extends BaseAlgorithm {
     pointGraphManager: PointGraphManager,
     public readonly config: RepulsionEngineConfig,
   ) {
-    super(mediator, pointGraphManager, config.stopTemperature);
+    super(mediator, pointGraphManager);
   }
 
   public applyPair1(p1: Point, p2: Point) {
