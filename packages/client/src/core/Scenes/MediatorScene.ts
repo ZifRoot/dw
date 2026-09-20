@@ -283,7 +283,7 @@ export class MediatorScene {
       .attr("x", width / 2)
       .attr("y", 24)
       .attr("text-anchor", "middle")
-      .text("AppMediator — актуально на коммит 58158128cc49b62414e193d631ca3566fb0e03a9");
+      .text("AppMediator — актуально на коммит ee369ab9edbc7e9820b5afebf0d7b712e52ca5ce");
 
     this.rootGroup
       .append("text")
