@@ -174,11 +174,11 @@ React UI
 
 ---
 
-## 8. Throttler
+## 8. EventCoagulator
 
 Температура должна вычисляться на каждом выполненном physics pass, даже если UI получает её реже.
 
-Throttler можно применять **после** вычисления температуры:
+EventCoagulator можно применять **после** вычисления температуры:
 
 ```text
 Physics step
@@ -189,12 +189,12 @@ Pipeline aggregation
     ↓
 Points Updating
     ↓
-Throttler
+EventCoagulator
     ↓
 UI temperature update
 ```
 
-Throttler не должен тормозить сам physics pass и не должен менять критерии scheduling.
+EventCoagulator не должен тормозить сам physics pass и не должен менять критерии scheduling.
 
 Причина:
 
@@ -299,7 +299,7 @@ React
 - [ ] Разделить user `enabled` и runtime scheduling state.
 - [ ] Определить `Points Updating` как завершение Pipeline pass.
 - [ ] Передавать агрегированную Pipeline temperature в UI через View DTO / Mediator.
-- [ ] Использовать существующий `Throttler` для ограничения частоты UI temperature updates, не влияя на physics scheduling.
+- [ ] Использовать существующий `EventCoagulator` для ограничения частоты UI temperature updates, не влияя на physics scheduling.
 - [ ] Обеспечить финальную передачу актуальной температуры после стабилизации.
 - [ ] Реализовать `Points Updated` при полной стабилизации.
 - [ ] Реализовать периодические `Points Updated` checkpoints с configurable interval.
