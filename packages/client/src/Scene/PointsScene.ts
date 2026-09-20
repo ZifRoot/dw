@@ -7,6 +7,7 @@ import { PointGraphManager } from "@core/collections/PointGraphManager";
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
   private points: Point[] = [];
+  private selectedPoint: Point | null = null;
   private unregisterDrag: (() => void) | null = null;
   private d3Points: d3.Selection<SVGGElement, Point, SVGGElement, unknown> | null = null;
   private domMap: Map<string, SVGGElement> = new Map();
@@ -23,6 +24,7 @@ export class PointsScene {
     groupName = "points-scene",
   ) {
     this.points = this.pointGraphManager.getPointsArray();
+    this.selectedPoint = this.points.find((point) => point.selected) ?? null;
     this.rootGroup = svgEngine.createGroup(groupName);
     this.rootGroup.on("click", (event) => this.groupClick(event));
     this.unregisterDrag = this.svgEngine.registerDragDetector((event) => this.dragDetector(event));
@@ -56,7 +58,13 @@ export class PointsScene {
     if (!point) return;
     if (changes.text !== undefined) point.text = changes.text;
     if (changes.pinned !== undefined) point.pinned = changes.pinned;
-    if (changes.selected !== undefined) point.selected = changes.selected;
+    if (changes.selected !== undefined) {
+      if (changes.selected) {
+        this.setSelectedPoint(point);
+      } else if (this.selectedPoint === point) {
+        this.setSelectedPoint(null);
+      }
+    }
     if (changes.x !== undefined) point.x = changes.x;
     if (changes.y !== undefined) point.y = changes.y;
     if (changes.z !== undefined) point.z = changes.z;
@@ -106,8 +114,11 @@ export class PointsScene {
     this.updateAllProperties();
     this.updatePointStyles();
 
-    const selectedPoint = this.points.find((point) => point.selected);
-    this.mediator.pointSelected(selectedPoint ?? null);
+    if (this.selectedPoint && this.getPointById(this.selectedPoint.id) !== this.selectedPoint) {
+      this.selectedPoint = null;
+    }
+
+    this.mediator.pointSelected(this.selectedPoint);
   }
 
   public pointsUpdating(): void {
@@ -194,21 +205,36 @@ export class PointsScene {
   public groupClick(event: MouseEvent): void {
     const target = event.target as Element;
     const domEle = target.closest?.(".point-group");
-    const previousPoint = this.points.find((point) => point.selected) ?? null;
-
-    if (previousPoint) {
-      previousPoint.selected = false;
-      this.updateUIById(previousPoint.id);
-    }
-
+    const previousPoint = this.selectedPoint;
     const point = this.dom2Point(domEle);
+
     if (point && point !== previousPoint) {
-      point.selected = true;
+      this.setSelectedPoint(point);
+      if (previousPoint) this.updateUIById(previousPoint.id);
       this.updateUIById(point.id);
       this.mediator.pointSelected(point);
       return;
     }
 
+    if (previousPoint) {
+      this.setSelectedPoint(null);
+      this.updateUIById(previousPoint.id);
+    }
+
     this.mediator.pointSelected(null);
+  }
+
+  private setSelectedPoint(point: Point | null): void {
+    if (this.selectedPoint === point) return;
+
+    if (this.selectedPoint) {
+      this.selectedPoint.selected = false;
+    }
+
+    this.selectedPoint = point;
+
+    if (this.selectedPoint) {
+      this.selectedPoint.selected = true;
+    }
   }
 }
