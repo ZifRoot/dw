@@ -99,3 +99,28 @@ export function Safe(target: any, propertyKey: string, descriptor: PropertyDescr
   // Просто оборачиваем оригинальный метод через соответствующую утилиту
   descriptor.value = _safe(originalMethod);
 }
+
+/**
+ * Аналог LogSafe, но с кастомным label.
+ * Логирует старт / финиш / ошибку. При ошибке ГЛОТАЕТ и возвращает null.
+ *
+ * @param label Метка для логов. Если не задана — берётся имя метода.
+ */
+export function LogSafeName(label?: string) {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor): void {
+    descriptor.value = createLoggedMethodRunner(descriptor.value, label ?? propertyKey, false, true);
+  };
+}
+
+/**
+ * Аналог LogParam, но с кастомным label.
+ * Логирует старт / финиш / ошибку + сериализованные аргументы.
+ * При ошибке ПРОБРАСЫВАЕТ исключение дальше.
+ *
+ * @param label Метка для логов. Если не задана — берётся имя метода.
+ */
+export function LogParamName(label?: string) {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor): void {
+    descriptor.value = createLoggedMethodRunner(descriptor.value, label ?? propertyKey, true, false);
+  };
+}
