@@ -10,7 +10,7 @@ export class BaseMediator<TEventMap extends Record<string, unknown>> extends Eve
     const old = this.state.get(key);
     if (old === value) return;
     this.state.set(key, value);
-    this.emit(key, value);
+    this.dispatchEvent(new CustomEvent(String(key), { detail: value }));
   }
 
   public get<K extends keyof TEventMap>(key: K): TEventMap[K] | undefined {
