@@ -4,12 +4,12 @@ import { DataManager } from "./DataManager";
 import { PointTable } from "./tables/PointTable";
 import { EmbeddingTable } from "./tables/EmbeddingTable";
 import { EdgeTable } from "./tables/EdgeTable";
-import { PointModel } from "@models/PointModel";
-import { EmbeddingModel } from "@models/EmbeddingModel";
+import { PointModel } from "@domain/Embedding/PointModel";
+import { EmbeddingModel } from "@domain/Embedding/EmbeddingModel";
 import { EdgeRefs } from "@core/models/EdgeRefs";
 import { PointGraphManager } from "@core/collections/PointGraphManager";
 import { Edge } from "@core/models/Edge";
-import { EdgeModel } from "@models/EdgeModel";
+import { EdgeModel } from "@domain/Embedding/EdgeModel";
 import { Point } from "@core/models/Point";
 
 export class PointsTransformer {

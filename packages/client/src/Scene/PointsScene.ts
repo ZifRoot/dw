@@ -1,11 +1,10 @@
 import { DragElem, SvgEngine } from "@core/Engines/SvgEngine";
 import * as d3 from "d3";
 import { UIPoint } from "@models/ui-models";
-import { AppMediator } from "@core/AppMediator";
+import { AppMediator, PointChange } from "@core/AppMediator";
 import { Point } from "@core/models/Point";
 import { EdgeModel } from "@models/EdgeModel";
 import { PointGraphManager } from "@core/collections/PointGraphManager";
-import { PointModel } from "@models/PointModel";
 
 export class PointsScene {
   private rootGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -58,7 +57,7 @@ export class PointsScene {
     return this.points;
   }
 
-  public pointChange(pointId: string, changes: Partial<Omit<UIPoint, "id">>) {
+  public pointChange(pointId: string, changes: PointChange) {
     const point = this.getPointById(pointId);
     if (!point) return;
     if (changes.text != null) point.text = changes.text;
@@ -124,13 +123,8 @@ export class PointsScene {
     this.updatePointStyles();
 
     // Обновляем информацию о соседях для выбранной точки.
-    const selectedPointId = this.mediator.selectedPoint?.id;
-    if (selectedPointId) {
-      const selectedPoint = this.pointGraphManager.getPointById(selectedPointId);
-      if (selectedPoint) {
-        this.mediator.selectedPoint = this.model2UI(selectedPoint);
-      }
-    }
+    const selectedPoint = this.points.find((point) => point.selected);
+    this.mediator.pointSelected(selectedPoint ?? null);
   }
 
   pointsUpdating() {
@@ -230,44 +224,6 @@ export class PointsScene {
     return x instanceof Point ? x : null;
   }
 
-  model2UI(point?: Point | null): UIPoint | null {
-    if (!point) return null;
-
-    const largeText =
-      "largeText" in point && typeof point.largeText === "string"
-        ? point.largeText
-        : undefined;
-
-    const neighbors = this.pointGraphManager
-      .getEdgesForPoint(point.id)
-      .map((edge) => {
-        const neighborId = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
-        const neighbor = this.pointGraphManager.getPointById(neighborId);
-        if (!neighbor) return null;
-
-        return {
-          id: neighbor.id,
-          name: neighbor.text,
-          cosineDistance: edge instanceof EdgeModel ? edge.cosineDistance : edge.distance,
-        };
-      })
-      .filter((neighbor): neighbor is NonNullable<typeof neighbor> => neighbor !== null)
-      .sort((a, b) => (a.cosineDistance || 0) - (b.cosineDistance || 0));
-
-    return {
-      id: point.id,
-      x: point.x,
-      y: point.y,
-      z: point.z,
-      text: point.text,
-      largeText,
-      pinned: point.pinned,
-      selected: point.selected,
-      neighbors,
-      embeddingModelNames: point instanceof PointModel ? Array.from(point.embeddings.values()).map((embedding) => embedding.modelName) : undefined,
-    };
-  }
-
   groupClick(event: any) {
     const target = event.target as Element;
     const domEle = target.closest?.(".point-group");
@@ -287,6 +243,6 @@ export class PointsScene {
       this.updateUIById(point.id);
     }
 
-    this.mediator.selectedPoint = point !== previousPoint ? this.model2UI(point) : null;
+    this.mediator.pointSelected(point !== previousPoint ? point : null);
   }
 }

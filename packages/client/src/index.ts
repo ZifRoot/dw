@@ -10,9 +10,9 @@ import { EnginePipeline } from "@core/Engines/EnginePipeline";
 import { GraphAlgorithm, GraphEngineConfig } from "./physics/GraphAlgorithm";
 import { ZDampingConfig, ZDapperAlgorithm } from "./physics/ZDapperAlgorithm";
 import { DataManager } from "./data/DataManager";
-import { ModelManager } from "./main/ModelManager";
+import { ModelManager } from "./Domain/Embedding/ModelManager";
 import { PointsTransformer } from "./data/PointsTransformer";
-import { DocumentPointsScene } from "./main/DocumentPointsScene";
+import { LevenshteinManager } from "./Domain/Levenshtein/LevenshteinManager";
 import { PointsSceneTester } from "./main/PointsSceneTester";
 import { MediatorScene } from "./Scene/MediatorScene";
 
@@ -50,7 +50,7 @@ function Tester(mediator: AppMediator) {
 }
 
 function Levenshtein(mediator: AppMediator, animationEngine: AnimationEngine) {
-  const documentPointsScene = new DocumentPointsScene(mediator, animationEngine);
+  const documentPointsScene = new LevenshteinManager(mediator, animationEngine);
   const pointGraphManager = documentPointsScene.getPointGraphManager();
   setTimeout(() => {
     void documentPointsScene.start();

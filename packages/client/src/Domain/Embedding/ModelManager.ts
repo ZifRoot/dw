@@ -1,9 +1,9 @@
 // core/ModelManager.ts
 import { AppMediator } from "@core/AppMediator";
 import { AnimationCallback, AnimationEngine } from "@core/Engines/AnimationEngine";
-import { EdgeModel } from "@models/EdgeModel";
+import { EdgeModel } from "@domain/Embedding/EdgeModel";
 import { EdgeRef } from "@core/models/EdgeRef";
-import { PointModel } from "@models/PointModel";
+import { PointModel } from "@domain/Embedding/PointModel";
 import { PointGraphManager } from "@core/collections/PointGraphManager";
 import { IEdgeFactory } from "@core/interfaces/IEdgeFactory";
 import { cosineDistance } from "@utils/vector";
@@ -46,6 +46,7 @@ export class ModelManager {
   private destroyed = false;
 
   private readonly unsubStep: () => void;
+  private readonly unsubPointSelected: () => void;
 
   constructor(
     private readonly mediator: AppMediator,
@@ -66,6 +67,13 @@ export class ModelManager {
 
     this.unsubStep = this.mediator.onModelManagerStep(() => {
       this.toggleOptimization();
+    });
+    this.unsubPointSelected = this.mediator.onPointSelected((point) => {
+      if (point === null) {
+        this.mediator.selectPoint(null);
+      } else if (point instanceof PointModel) {
+        this.mediator.selectPoint(this.toUiPoint(point));
+      }
     });
   }
 
@@ -114,6 +122,7 @@ export class ModelManager {
     this.destroyed = true;
     this.stopOptimization();
     this.unsubStep();
+    this.unsubPointSelected();
   }
 
   /**
@@ -211,6 +220,23 @@ export class ModelManager {
     }
 
     this.iterationChanged = false;
+  }
+
+  private toUiPoint(point: PointModel) {
+    const neighbors = this.pointGraphManager.getEdgesForPoint(point.id).map((edge) => {
+      const neighborId = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
+      const neighbor = this.pointGraphManager.getPointById(neighborId);
+      if (!neighbor) return null;
+      return { id: neighbor.id, name: neighbor.text, cosineDistance: edge instanceof EdgeModel ? edge.cosineDistance : edge.distance };
+    }).filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a,b) => (a.cosineDistance ?? 0) - (b.cosineDistance ?? 0));
+
+    return {
+      kind: "embedding" as const,
+      id: point.id, x: point.x, y: point.y, z: point.z, text: point.text,
+      pinned: point.pinned, selected: point.selected, neighbors,
+      embeddingModelNames: Array.from(point.embeddings.values()).map((e) => e.modelName),
+    };
   }
 
   /**
