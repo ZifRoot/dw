@@ -15,7 +15,7 @@ export interface AppEventMap {
   [AppMediator.AUTO_ZOOM]: boolean;
   [AppMediator.SELECTED_POINT]: UIPoint | null;
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
-  [AppMediator.POINT_CHANGE]: { pointId: string; changes: UIPointChange };
+  [AppMediator.POINT_CHANGE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
   [AppMediator.POINT_UPDATED]: { pointId: string };
   [AppMediator.POINTS_UPDATED]: undefined;
