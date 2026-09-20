@@ -95,15 +95,10 @@ export class PointsScene {
     enter.append("circle").attr("class", "point");
     enter.append("text").attr("class", "point-label").attr("dy", "0.35em");
 
-    enter.each((d) => this.domMap.set(d.id, d3.select<SVGGElement, Point>(this as never) as never));
-
-    // D3's enter selection does not expose the element through an arrow callback.
     enter.each(function (d) {
-      // The map is populated again below using the actual DOM node.
-    });
-    enter.each((d, i, nodes) => {
-      const element = nodes[i] as SVGGElement;
-      this.domMap.set(d.id, element);
+      const element = this as SVGGElement;
+      // Store the actual SVG group so point updates do not depend on domain types.
+      thisMap.set(d.id, element);
     });
 
     this.d3Points = selection.merge(enter);
