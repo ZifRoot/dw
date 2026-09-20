@@ -20,7 +20,7 @@ export interface UIPoint {
 }
 
 export type UIPointChange = Partial<
-  Pick<UIPoint, "text" | "largeText" | "x" | "y" | "z" | "pinned" | "selected">
+  Pick<UIPoint, "text" | "x" | "y" | "z" | "pinned" | "selected">
 >;
 
 export interface UIEdge {
