@@ -1,6 +1,6 @@
 // core/AppMediator.ts
 import { BaseMediator } from "./collections/BaseMediator";
-import { UIPoint, UIEdge } from "../models/ui-models";
+import { UIPoint, UIPointChange, UIEdge } from "../models/ui-models";
 
 export interface EnginePipelineConfigChange {
   pipelineName: string;
@@ -15,7 +15,7 @@ export interface AppEventMap {
   [AppMediator.AUTO_ZOOM]: boolean;
   [AppMediator.SELECTED_POINT]: UIPoint | null;
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
-  [AppMediator.POINT_CHANGE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
+  [AppMediator.POINT_CHANGE]: { pointId: string; changes: UIPointChange };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
   [AppMediator.POINT_UPDATED]: { pointId: string };
   [AppMediator.POINTS_UPDATED]: undefined;
