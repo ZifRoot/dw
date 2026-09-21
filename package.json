@@ -18,7 +18,7 @@
     "packages/server"
   ],
   "scripts": {
-    "link:shared": "bash ./link-shared.sh",
+    "link:shared": "bash ./scripts/link-shared.sh",
     "generate:all": "npm run generate:dew && npm run generate:embedder",
     "generate:dew": "cd generators\\dew && generate.cmd",
     "generate:embedder": "cd generators\\embedder && generate.cmd",
