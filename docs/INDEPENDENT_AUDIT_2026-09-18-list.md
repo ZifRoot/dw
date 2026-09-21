@@ -2,7 +2,7 @@ AUD-001 - исправлен
 
 AUD-002, AUD-003 - packages\client\docs\logger-singleRunner.md
 
-AUD-004 - 🎯???
+AUD-004 - исправлен
 
 AUD-005 - исправлен
 
@@ -18,7 +18,7 @@ AUD-010 - исправлен
 
 AUD-011 - packages\client\docs\logger-singleRunner.md
 
-AUD-012 - 🔍???
+AUD-012 - исправлен
 
 AUD-013 - сделано намерено
 
@@ -28,7 +28,7 @@ AUD-015 - исправлен
 
 AUD-016 - сделано намерено
 
-AUD-017 - 🔍???
+AUD-017 - исправлен
 
 AUD-018 - в каждом + и - , как устаканится выберу один
 
