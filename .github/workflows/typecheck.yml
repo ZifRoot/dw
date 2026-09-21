@@ -21,5 +21,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Link shared sources
+        run: npm run link:shared
+
       - name: Typecheck
         run: npm run typecheck
