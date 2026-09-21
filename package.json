@@ -39,7 +39,12 @@
     "db:studio": "npm --workspace server run db:studio",
     "docker:up": "npm --workspace server run docker:up",
     "docker:down": "npm --workspace server run docker:down",
-    "clean": "rm -rf packages/client/src/api packages/server/src/api packages/client/dist packages/server/dist"
+    "clean": "rm -rf packages/client/src/api packages/server/src/api packages/client/dist packages/server/dist",
+    "run:release:server": "npm --workspace server run run:release",
+    "run:release:client": "npm --workspace client run run:release",
+    "preview:client": "npm --workspace client run preview",
+    "typecheck-file:client": "npm --workspace client run typecheck-file",
+    "format:client": "npm --workspace client run format"
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.7.0",
