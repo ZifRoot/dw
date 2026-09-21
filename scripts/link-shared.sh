@@ -1,6 +1,6 @@
-#!/bin/bash
+#####!/bin/bash
 
-ROOT="$(pwd)"
+ROOT="/storage/emulated/0/Documents/dev/dw"
 SHARED_SRC="$ROOT/packages/shared/src"
 
 echo "Creating symlinks for shared sources..."
