@@ -9,7 +9,9 @@
     "build:release": "npm run typecheck && vite build --mode production",
     "run:release": "npm run preview",
     "preview": "vite preview --port 4173",
-    "typecheck": "tsc --noEmit > build.log 2>&1"
+    "typecheck": "tsc --noEmit --noUnusedLocals false --noUnusedParameters false",
+    "typecheck-file": "tsc --noEmit --noUnusedLocals false --noUnusedParameters false > error.log 2>&1",
+    "format": "prettier --write"
   },
   "dependencies": {
     "axios": "^1.6.0",

@@ -16,8 +16,7 @@
     "paths": {
       "@embedder": ["src/clients/embedder/axios"],
       "@utils/*": ["src/shared/utils/*"],
-      "@models/*": ["src/db/models/*"],
-      "@shared/*": ["../shared/src/*"]
+      "@models/*": ["src/db/models/*"]
     }
   },
   "include": ["src/**/*"]

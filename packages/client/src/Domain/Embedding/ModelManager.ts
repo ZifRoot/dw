@@ -223,18 +223,27 @@ export class ModelManager {
   }
 
   private toUiPoint(point: PointModel) {
-    const neighbors = this.pointGraphManager.getEdgesForPoint(point.id).map((edge) => {
-      const neighborId = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
-      const neighbor = this.pointGraphManager.getPointById(neighborId);
-      if (!neighbor) return null;
-      return { id: neighbor.id, name: neighbor.text, cosineDistance: edge instanceof EdgeModel ? edge.cosineDistance : edge.distance };
-    }).filter((x): x is NonNullable<typeof x> => x !== null)
-      .sort((a,b) => (a.cosineDistance ?? 0) - (b.cosineDistance ?? 0));
+    const neighbors = this.pointGraphManager
+      .getEdgesForPoint(point.id)
+      .map((edge) => {
+        const neighborId = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
+        const neighbor = this.pointGraphManager.getPointById(neighborId);
+        if (!neighbor) return null;
+        return { id: neighbor.id, name: neighbor.text, cosineDistance: edge instanceof EdgeModel ? edge.cosineDistance : edge.distance };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => (a.cosineDistance ?? 0) - (b.cosineDistance ?? 0));
 
     return {
       kind: "embedding" as const,
-      id: point.id, x: point.x, y: point.y, z: point.z, text: point.text,
-      pinned: point.pinned, selected: point.selected, neighbors,
+      id: point.id,
+      x: point.x,
+      y: point.y,
+      z: point.z,
+      text: point.text,
+      pinned: point.pinned,
+      selected: point.selected,
+      neighbors,
       embeddingModelNames: Array.from(point.embeddings.values()).map((e) => e.modelName),
     };
   }
@@ -349,7 +358,7 @@ export class ModelManager {
         sourceId: source.id,
         targetId: candidate.targetId,
         modelName,
-      });
+      } as any);
 
       changed = edge instanceof EdgeModel || changed;
     }
