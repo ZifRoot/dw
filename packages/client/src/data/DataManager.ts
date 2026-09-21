@@ -16,7 +16,7 @@ export class DataManager {
   private unsubReload: () => void;
   private pointsTransformer: PointsTransformer | null = null;
 
-  lowDate = new Date(2000, 1, 1, 1, 1, 1, 1);
+  private readonly initialEmbeddingDate = new Date(2000, 1, 1, 1, 1, 1, 1);
 
   constructor(private mediator: AppMediator) {
     const config = new fetch.Configuration({ basePath: "/api" });
@@ -60,10 +60,46 @@ export class DataManager {
     const serverDocs = await this.documentsApi.documentsGet();
     await this.syncPointsWithServer(serverDocs);
 
-    const embeddings = await this.embeddingsApi.embeddingsQueryGet({ updateat: this.lowDate });
+    const embeddingUpdatedAt = await this.getEmbeddingUpdatedAt();
+    const embeddings = await this.embeddingsApi.embeddingsQueryGet({ updateat: embeddingUpdatedAt });
     await this.syncEmbeddingsWithServer(embeddings);
 
+    const maxUpdatedAt = this.getMaxUpdatedAt(embeddings);
+    if (maxUpdatedAt !== undefined) {
+      await this.db.settings.put({
+        key: "embeddings.updatedAt",
+        value: maxUpdatedAt.toISOString(),
+      });
+    }
+
     await this.loadLocalDataAndEmit();
+  }
+
+  private async getEmbeddingUpdatedAt(): Promise<Date> {
+    const setting = await this.db.settings.get("embeddings.updatedAt");
+    if (!setting) {
+      return this.initialEmbeddingDate;
+    }
+
+    const value = toDate(setting.value);
+    if (!value) {
+      return this.initialEmbeddingDate;
+    }
+
+    return value;
+  }
+
+  private getMaxUpdatedAt(embeddings: fetch.EmbeddingsSessionIdGet200ResponseInner[]): Date | undefined {
+    let maxUpdatedAt: Date | undefined;
+
+    for (const embedding of embeddings) {
+      const updatedAt = toDate(embedding.createdAt);
+      if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
+        maxUpdatedAt = updatedAt;
+      }
+    }
+
+    return maxUpdatedAt;
   }
 
   private async fetchAllEmbeddings(documents: fetch.DocumentsGet200ResponseInner[]): Promise<fetch.EmbeddingsSessionIdGet200ResponseInner[]> {
