@@ -1,37 +1,41 @@
 #!/bin/bash
+set -e
 
-ROOT="$(pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SHARED_SRC="$ROOT/packages/shared/src"
 
 echo "Creating symlinks for shared sources..."
 
-# ----- Server -----
-SERVER_LINK="$ROOT/packages/server/src/shared"
-if [ -L "$SERVER_LINK" ] || [ -d "$SERVER_LINK" ]; then
-    rm -f "$SERVER_LINK"
-fi
-ln -sf "$SHARED_SRC" "$SERVER_LINK"
-if [ $? -ne 0 ]; then
-    echo "[ERROR] Failed to create symlink for server"
+if [ ! -d "$SHARED_SRC" ]; then
+    echo "[ERROR] Shared source folder not found: $SHARED_SRC"
     exit 1
 fi
-echo "[OK] Server symlink created"
 
-# ----- Client (если существует) -----
-if [ -d "$ROOT/packages/client/src" ]; then
-    CLIENT_LINK="$ROOT/packages/client/src/shared"
-    if [ -L "$CLIENT_LINK" ] || [ -d "$CLIENT_LINK" ]; then
-        rm -f "$CLIENT_LINK"
+create_symlink() {
+    local link_path="$1"
+    local link_name="$2"
+
+    if [ -e "$link_path" ] || [ -L "$link_path" ]; then
+        if [ ! -L "$link_path" ]; then
+            echo "[ERROR] Refusing to replace non-symlink path: $link_path"
+            exit 1
+        fi
+
+        rm "$link_path"
     fi
-    ln -sf "$SHARED_SRC" "$CLIENT_LINK"
-    if [ $? -ne 0 ]; then
-        echo "[ERROR] Failed to create symlink for client"
+
+    ln -s "$SHARED_SRC" "$link_path"
+
+    if [ ! -L "$link_path" ]; then
+        echo "[ERROR] Failed to create symlink for $link_name"
         exit 1
     fi
-    echo "[OK] Client symlink created"
-else
-    echo "[SKIP] Client folder not found, skipping client symlink"
-fi
+
+    echo "[OK] $link_name symlink created"
+}
+
+create_symlink "$ROOT/packages/server/src/shared" "Server"
+create_symlink "$ROOT/packages/client/src/shared" "Client"
 
 echo "All symlinks created successfully."
-exit 0
