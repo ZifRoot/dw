@@ -1,4 +1,4 @@
-import { EventCoagulator } from "@shared/utils/event-coagulator";
+import { EventCoagulator } from "@utils/event-coagulator";
 import { AppMediator } from "../AppMediator";
 import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
 import { BaseAlgorithm } from "./BaseAlgorithm";
