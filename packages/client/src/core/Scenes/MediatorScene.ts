@@ -56,7 +56,7 @@ export class MediatorScene {
     },
     {
       event: AppMediator.TEMPERATURE,
-      senders: [{ name: "BaseAlgorithm", lines: [41] }],
+      senders: [{ name: "EnginePipeline", lines: [60] }],
       receivers: [{ name: "ControlPanel", lines: [28] }],
     },
     {
@@ -105,7 +105,7 @@ export class MediatorScene {
     },
     {
       event: AppMediator.POINTS_UPDATED,
-      senders: [],
+      senders: [{ name: "EnginePipeline", lines: [327] }],
       receivers: [{ name: "PointsTransformer", lines: [29] }],
     },
     {
@@ -283,7 +283,7 @@ export class MediatorScene {
       .attr("x", width / 2)
       .attr("y", 24)
       .attr("text-anchor", "middle")
-      .text("AppMediator — актуально на коммит a715207d7cd90f8946648cc31b039c31454a59a1");
+      .text("AppMediator — актуально на коммит 58158128cc49b62414e193d631ca3566fb0e03a9");
 
     this.rootGroup
       .append("text")

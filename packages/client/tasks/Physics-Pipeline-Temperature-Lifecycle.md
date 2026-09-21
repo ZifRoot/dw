@@ -290,23 +290,23 @@ React
 
 ## 12. Что необходимо реализовать
 
-- [ ] Убрать модель единой глобальной `mediator.temperature` как источника температуры physics.
-- [ ] Зафиксировать передачу температуры от каждой physics в Pipeline как результат её `step()`.
-- [ ] Сохранить индивидуальные температуры physics внутри Pipeline для scheduling.
-- [ ] Реализовать агрегирование температур Pipeline: maximum / average.
-- [ ] Определить и реализовать формулу `temperature → skipFrames`.
-- [ ] Ограничить максимальный runtime skip ориентиром около 30 кадров.
-- [ ] Разделить user `enabled` и runtime scheduling state.
-- [ ] Определить `Points Updating` как завершение Pipeline pass.
-- [ ] Передавать агрегированную Pipeline temperature в UI через View DTO / Mediator.
-- [ ] Использовать существующий `EventCoagulator` для ограничения частоты UI temperature updates, не влияя на physics scheduling.
-- [ ] Обеспечить финальную передачу актуальной температуры после стабилизации.
-- [ ] Реализовать `Points Updated` при полной стабилизации.
-- [ ] Реализовать периодические `Points Updated` checkpoints с configurable interval.
-- [ ] Не связывать `Points Updated` с `AnimationEngine.stop()`.
-- [ ] Добавить/обновить тесты lifecycle: start → passes → runtime skips → stabilization → final `Points Updated`.
-- [ ] Проверить отсутствие дублирования финального и периодического `Points Updated`.
-- [ ] Актуализировать `MediatorScene` после изменения contract/events.
+- [x] Убрать публикацию температуры из `BaseAlgorithm` в `mediator.temperature`.
+- [x] Зафиксировать передачу температуры от каждой physics в Pipeline как результат её `step()`.
+- [x] Сохранить индивидуальные температуры physics внутри Pipeline для scheduling.
+- [x] Реализовать агрегирование температур Pipeline: maximum / average; по умолчанию `maximum`.
+- [x] Реализовать инвертированную формулу `temperature → skipFrames`.
+- [x] Ограничить максимальный runtime skip 30 кадрами.
+- [x] Разделить user `enabled` и runtime scheduling state.
+- [x] Определить `Points Updating` как завершение Pipeline pass, в котором реально выполнялась physics.
+- [x] Передавать агрегированную Pipeline temperature в UI через Mediator.
+- [x] Использовать существующий `EventCoagulator` с интервалом 100 мс для UI temperature updates.
+- [x] Обеспечить финальную передачу актуальной температуры через `flush()`.
+- [x] Реализовать `Points Updated` при полной стабилизации.
+- [x] Реализовать периодические `Points Updated` checkpoints каждые 5 секунд.
+- [x] Не связывать `Points Updated` с `AnimationEngine.stop()`.
+- [ ] Добавить/обновить автоматические тесты lifecycle: client пока не содержит test runner; тестовый runner нужно подключить отдельно.
+- [x] Коалесцировать периодический и финальный `Points Updated` в одном 5-секундном окне.
+- [x] Актуализировать `MediatorScene` для нового источника `TEMPERATURE` и `POINTS_UPDATED`.
 
 ---
 
@@ -314,9 +314,15 @@ React
 
 Следующие решения намеренно оставлены отдельными задачами:
 
-1. точная формула преобразования температуры в `skipFrames`;
-2. окончательный выбор aggregation mode по умолчанию (maximum или average);
-3. точный interval для UI temperature throttling;
-4. точный interval периодического `Points Updated` checkpoint;
-5. политика первого checkpoint после старта;
-6. точная форма `PipelineViewState` и temperature DTO.
+1. Автоматические тесты lifecycle требуют подключения/создания test runner в client.
+2. Точная форма `PipelineViewState` и temperature DTO остаётся отдельной UI-задачей.
+
+### Зафиксированные параметры реализации
+
+- aggregation по умолчанию: `maximum`;
+- UI temperature EventCoagulator: 100 мс;
+- периодический `Points Updated`: 5 секунд;
+- максимальный runtime skip: 30 кадров;
+- skip применяется в диапазоне `stopTemperature .. 2 * stopTemperature`;
+- чем ближе temperature к `stopTemperature`, тем больше skipFrames;
+- при temperature выше `2 * stopTemperature` physics выполняется каждый кадр.

@@ -14,7 +14,7 @@ export class ZDapperAlgorithm extends BaseAlgorithm {
     pointGraphManager: PointGraphManager,
     public readonly config: ZDampingConfig,
   ) {
-    super(mediator, pointGraphManager, config.stopTemperature);
+    super(mediator, pointGraphManager);
   }
 
   public applyStep(_deltaTime: number): number {

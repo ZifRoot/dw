@@ -14,7 +14,7 @@ export class GraphAlgorithm extends BaseAlgorithm {
     pointGraphManager: PointGraphManager,
     public readonly config: GraphEngineConfig,
   ) {
-    super(mediator, pointGraphManager, config.stopTemperature);
+    super(mediator, pointGraphManager);
   }
 
   public applyStep(_deltaTime: number): number {
