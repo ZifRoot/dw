@@ -1,0 +1,10 @@
+{
+    "PROJECT_NAME": "dw",
+    "SOURCE_DIRECTORY": "packages/shared/src",
+    "TEST_DIRECTORY": "tests/unit/shared",
+    "INVENTORY_DOCUMENT": "docs/tasks/AUD-019/AUD-019-02-Shared-Test-Inventory.md",
+    "PLAN_DOCUMENT": "docs/tasks/AUD-019/AUD-02-Test-Plan.md",
+    "TEST_RUNNER": "Jest",
+    "LANGUAGE": "TypeScript",
+    "PROCESS_OWNER": "Development Team"
+}
