@@ -33,6 +33,7 @@
     "typecheck:server": "npm --workspace server run typecheck",
     "typecheck:client": "npm --workspace client run typecheck",
     "typecheck": "npm run typecheck:client && npm run typecheck:server",
+    "test:shared:utils": "tsx --test packages/shared/src/utils/*.test.ts",
     "db:generate": "npm --workspace server run db:generate",
     "db:migrate": "npm --workspace server run db:migrate",
     "db:push": "npm --workspace server run db:push",
