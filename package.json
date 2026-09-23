@@ -47,6 +47,7 @@
     "preview:client": "npm --workspace client run preview",
     "typecheck-file:client": "npm --workspace client run typecheck-file",
     "format:client": "npm --workspace client run format",
+    "typecheck:shared:tests": "tsc -p packages/shared/tsconfig.test.json",
     "test:client:animation-engine": "tsx --test packages/client/src/core/Engines/AnimationEngine.test.ts"
   },
   "devDependencies": {
