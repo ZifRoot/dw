@@ -1,6 +1,6 @@
 AUD-001 - исправлен 
 
-AUD-002, AUD-003 - packages\client\docs\logger-singleRunner.md
+AUD-002, AUD-003 - docs\logger-singleRunner.md
 
 AUD-004 - исправлен
 
@@ -16,7 +16,7 @@ AUD-009 - не обсуждается
 
 AUD-010 - исправлен
 
-AUD-011 - packages\client\docs\logger-singleRunner.md
+AUD-011 - docs\logger-singleRunner.md
 
 AUD-012 - исправлен
 
@@ -32,6 +32,6 @@ AUD-017 - исправлен
 
 AUD-018 - в каждом + и - , как устаканится выберу один
 
-AUD-019 - 🎯задача
+AUD-019 - tast\AUD-019
 
-AUD-020 - 🎯задача
+AUD-020 - исправлен
