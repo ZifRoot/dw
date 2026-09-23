@@ -30,5 +30,8 @@ jobs:
       - name: Shared utils tests Fast
         run: npm run test:shared:utils:fast
 
+      - name: Typecheck shared tests
+        run: npm run typecheck:shared:tests
+
       - name: Shared utils tests
         run: npm run test:shared:utils
