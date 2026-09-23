@@ -26,3 +26,6 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Shared utils tests
+        run: npm run test:shared:utils
