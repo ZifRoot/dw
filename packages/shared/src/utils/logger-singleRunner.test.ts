@@ -68,7 +68,7 @@ test("Safe semantics: error is logged and converted to null", async () => {
 
   assert.equal(result, null);
   assert.equal(errors.length, 1);
-  assert.equal(errors[0], [expected]);
+  assert.deepEqual(errors[0], [expected]);
 });
 
 test("Safe operation can be used per item in a batch", async () => {
@@ -88,7 +88,7 @@ test("Safe operation can be used per item in a batch", async () => {
 
   assert.deepEqual(result, [10, null, 30]);
   assert.equal(errors.length, 1);
-  assert.equal(errors[0], [expected]);
+  assert.deepEqual(errors[0], [expected]);
 });
 
 test("SingleRunner retry mode clears a failed run and starts the next run", async () => {
