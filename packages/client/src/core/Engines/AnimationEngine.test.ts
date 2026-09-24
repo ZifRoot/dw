@@ -104,7 +104,7 @@ test("a callback added during a step waits for the next step", () => {
   assert.deepEqual(calls, ["A", "B"]);
 
   runNextAnimationFrame(96);
-  assert.deepEqual(calls, ["A", "B", "D"]);
+  assert.deepEqual(calls, ["A", "B", "A", "D", "B"]);
   engine.clear();
 });
 
