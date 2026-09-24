@@ -1,5 +1,10 @@
 export type AnimationCallback = (deltaTime: number) => void;
 
+interface CallbackGroup {
+  order: number[];
+  cursor: number;
+}
+
 const CALIBRATION_FRAMES = 5;
 const COMPUTATION_BUDGET_RATIO = 0.8;
 
@@ -8,7 +13,7 @@ const COMPUTATION_BUDGET_RATIO = 0.8;
  *
  * AnimationEngine не знает ничего о назначении зарегистрированных колбэков.
  * Он только запускает их с учётом временного бюджета кадра и распределяет
- * работу по принципу cooperative round-robin.
+ * работу по независимым последовательностям (группам).
  *
  * Перед запуском планировщика двигатель измеряет реальный интервал между
  * кадрами и использует 80% среднего интервала как бюджет вычислений.
@@ -19,48 +24,115 @@ export class AnimationEngine {
   private isRunning = false;
   private isCalibrating: "no" | "process" | "yes" = "no";
   private nextCallbackId = 0;
-  private cursor = 0;
+  private nextGroupId = 0;
+  private groupCursor = 0;
   private lastFrameTime: number | null = null;
   private callbacks = new Map<number, AnimationCallback>();
-  private order: number[] = [];
+  private groups = new Map<number, CallbackGroup>();
+  private groupOrder: number[] = [];
 
   constructor() {}
 
-  /** Добавить один колбэк в очередь. Возвращает функцию для удаления. */
+  /**
+   * Добавить один callback как отдельную последовательную группу.
+   * Возвращает disposer, удаляющий именно эту регистрацию.
+   */
   public addCallback(callback: AnimationCallback): () => void {
-    const id = this.nextCallbackId++;
-    this.callbacks.set(id, callback);
-    this.order.push(id);
-    this.start();
-    return () => this.removeCallbackById(id);
+    return this.addCallbacks([callback]);
   }
 
-  /** Добавить группу колбэков и получить один disposer для всей группы. */
+  /**
+   * Добавить последовательную группу callback'ов.
+   *
+   * Callback'и внутри группы выполняются в зарегистрированном порядке.
+   * Разные группы планируются независимо.
+   */
   public addCallbacks(callbacks: AnimationCallback[]): () => void {
-    const disposers = callbacks.map((callback) => this.addCallback(callback));
+    if (callbacks.length === 0) return () => {};
+
+    const groupId = this.nextGroupId++;
+    const order: number[] = [];
+
+    for (const callback of callbacks) {
+      const id = this.nextCallbackId++;
+      this.callbacks.set(id, callback);
+      order.push(id);
+    }
+
+    this.groups.set(groupId, {
+      order,
+      cursor: 0,
+    });
+    this.groupOrder.push(groupId);
+
+    this.start();
+
     let disposed = false;
     return () => {
       if (disposed) return;
       disposed = true;
-      for (const dispose of disposers) dispose();
+      this.removeGroup(groupId);
     };
   }
 
-  /** Удалить колбэк напрямую. */
+  /** Удалить первую регистрацию указанного callback. */
   public removeCallback(callback: AnimationCallback): void {
-    const entry = this.order.find((id) => this.callbacks.get(id) === callback);
-    if (entry !== undefined) this.removeCallbackById(entry);
+    for (const groupId of this.groupOrder) {
+      const group = this.groups.get(groupId);
+      if (!group) continue;
+
+      const callbackId = group.order.find(
+        (id) => this.callbacks.get(id) === callback,
+      );
+
+      if (callbackId !== undefined) {
+        this.removeCallbackById(callbackId);
+        return;
+      }
+    }
   }
 
   private removeCallbackById(id: number): void {
     if (!this.callbacks.delete(id)) return;
-    const index = this.order.indexOf(id);
-    if (index >= 0) {
-      this.order.splice(index, 1);
-      if (index < this.cursor) this.cursor--;
-      if (this.cursor >= this.order.length) this.cursor = 0;
+
+    for (const [groupId, group] of this.groups) {
+      const index = group.order.indexOf(id);
+      if (index < 0) continue;
+
+      group.order.splice(index, 1);
+      if (index < group.cursor) group.cursor--;
+
+      if (group.order.length === 0) {
+        this.removeGroup(groupId);
+      } else if (group.cursor >= group.order.length) {
+        group.cursor = 0;
+      }
+
+      return;
     }
-    if (this.callbacks.size === 0) this.stop();
+  }
+
+  private removeGroup(groupId: number): void {
+    const group = this.groups.get(groupId);
+    if (!group) return;
+
+    for (const id of group.order) {
+      this.callbacks.delete(id);
+    }
+
+    this.groups.delete(groupId);
+
+    const index = this.groupOrder.indexOf(groupId);
+    if (index >= 0) {
+      this.groupOrder.splice(index, 1);
+      if (index < this.groupCursor) this.groupCursor--;
+
+      if (this.groupCursor >= this.groupOrder.length) {
+        this.groupCursor = 0;
+      }
+    }
+
+    if (this.groups.size === 0) this.stop();
   }
 
   private start(): void {
@@ -84,12 +156,10 @@ export class AnimationEngine {
     let previousTimestamp: number | null = null;
     let totalFrameTime = 0;
     let measuredFrames = 0;
-    let frames: number[] = [];
 
     const measure = (timestamp: number): void => {
       if (previousTimestamp !== null) {
         totalFrameTime += timestamp - previousTimestamp;
-        frames.push(timestamp - previousTimestamp);
         measuredFrames++;
       }
 
@@ -100,7 +170,10 @@ export class AnimationEngine {
         return;
       }
 
-      this.frameBudgetMs = Math.max(1, (totalFrameTime / measuredFrames) * COMPUTATION_BUDGET_RATIO);
+      this.frameBudgetMs = Math.max(
+        1,
+        (totalFrameTime / measuredFrames) * COMPUTATION_BUDGET_RATIO,
+      );
       this.isCalibrating = "yes";
       this.start();
     };
@@ -109,30 +182,104 @@ export class AnimationEngine {
     return false;
   }
 
-  /** Выполнить один кадр планировщика. */
+  /**
+   * Выполнить один кадр планировщика.
+   *
+   * В начале кадра фиксируется список существующих групп и количество
+   * callback-позиций в каждой группе. Поэтому новые группы и новые callback'и
+   * не получают слот в уже начатом проходе.
+   */
   public step(timestamp = performance.now()): void {
     if (!this.isRunning || this.frameBudgetMs === null) return;
     this.rafId = null;
-    const deltaTime = this.lastFrameTime === null ? 0 : timestamp - this.lastFrameTime;
+
+    const deltaTime =
+      this.lastFrameTime === null ? 0 : timestamp - this.lastFrameTime;
     this.lastFrameTime = timestamp;
 
     const frameStart = performance.now();
-    const callbackCount = this.order.length;
-    let executed = 0;
+    const groupIds = this.getGroupIdsFromCursor();
+    const remaining = new Map<number, number>();
 
-    while (this.callbacks.size > 0 && executed < callbackCount && (executed === 0 || performance.now() - frameStart < this.frameBudgetMs)) {
-      if (!this.isRunning) return;
-      if (this.order.length === 0) break;
-      if (this.cursor >= this.order.length) this.cursor = 0;
-      const id = this.order[this.cursor];
-      this.cursor = (this.cursor + 1) % this.order.length;
-      const callback = this.callbacks.get(id);
-      if (!callback) continue;
-      callback(deltaTime);
-      executed++;
+    for (const groupId of groupIds) {
+      const group = this.groups.get(groupId);
+      if (group) remaining.set(groupId, group.order.length);
     }
 
-    if (this.isRunning && this.callbacks.size > 0) this.scheduleStep();
+    let executedCallbacks = 0;
+
+    while (
+      this.groups.size > 0 &&
+      this.hasRemainingCallbacks(groupIds, remaining) &&
+      (executedCallbacks === 0 ||
+        performance.now() - frameStart < this.frameBudgetMs)
+    ) {
+      let executed = false;
+
+      for (const groupId of groupIds) {
+        const remainingCallbacks = remaining.get(groupId) ?? 0;
+        if (remainingCallbacks <= 0) continue;
+
+        remaining.set(groupId, remainingCallbacks - 1);
+
+        const group = this.groups.get(groupId);
+        if (!group || group.order.length === 0) continue;
+
+        if (group.cursor >= group.order.length) group.cursor = 0;
+
+        const callbackId = group.order[group.cursor];
+        group.cursor = (group.cursor + 1) % group.order.length;
+
+        const callback = this.callbacks.get(callbackId);
+        if (!callback) continue;
+
+        this.moveGroupCursorAfter(groupId);
+        callback(deltaTime);
+        executed = true;
+        executedCallbacks++;
+
+        if (
+          !this.isRunning ||
+          this.groups.size === 0 ||
+          performance.now() - frameStart >= this.frameBudgetMs
+        ) {
+          break;
+        }
+      }
+
+      if (!executed) break;
+    }
+
+    if (this.isRunning && this.callbacks.size > 0) {
+      this.scheduleStep();
+    }
+  }
+
+  private getGroupIdsFromCursor(): number[] {
+    const groupIds: number[] = [];
+    const count = this.groupOrder.length;
+
+    for (let offset = 0; offset < count; offset++) {
+      groupIds.push(
+        this.groupOrder[(this.groupCursor + offset) % count],
+      );
+    }
+
+    return groupIds;
+  }
+
+  private hasRemainingCallbacks(
+    groupIds: number[],
+    remaining: Map<number, number>,
+  ): boolean {
+    return groupIds.some((groupId) => (remaining.get(groupId) ?? 0) > 0);
+  }
+
+  private moveGroupCursorAfter(groupId: number): void {
+    const index = this.groupOrder.indexOf(groupId);
+    if (index < 0 || this.groupOrder.length === 0) return;
+
+    this.groupCursor = (index + 1) % this.groupOrder.length;
   }
 
   public stop(): void {
@@ -146,8 +293,9 @@ export class AnimationEngine {
 
   public clear(): void {
     this.callbacks.clear();
-    this.order.length = 0;
-    this.cursor = 0;
+    this.groups.clear();
+    this.groupOrder.length = 0;
+    this.groupCursor = 0;
     this.stop();
   }
 }
