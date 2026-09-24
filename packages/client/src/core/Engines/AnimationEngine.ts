@@ -21,6 +21,7 @@ const COMPUTATION_BUDGET_RATIO = 0.8;
 export class AnimationEngine {
   private frameBudgetMs: number | null = null;
   private rafId: number | null = null;
+  private calibrationRafId: number | null = null;
   private isRunning = false;
   private isCalibrating: "no" | "process" | "yes" = "no";
   private nextCallbackId = 0;
@@ -158,6 +159,10 @@ export class AnimationEngine {
     let measuredFrames = 0;
 
     const measure = (timestamp: number): void => {
+      this.calibrationRafId = null;
+
+      if (this.isCalibrating !== "process") return;
+
       if (previousTimestamp !== null) {
         totalFrameTime += timestamp - previousTimestamp;
         measuredFrames++;
@@ -166,7 +171,7 @@ export class AnimationEngine {
       previousTimestamp = timestamp;
 
       if (measuredFrames < CALIBRATION_FRAMES - 1) {
-        requestAnimationFrame(measure);
+        this.calibrationRafId = requestAnimationFrame(measure);
         return;
       }
 
@@ -178,7 +183,7 @@ export class AnimationEngine {
       this.start();
     };
 
-    requestAnimationFrame(measure);
+    this.calibrationRafId = requestAnimationFrame(measure);
     return false;
   }
 
@@ -234,7 +239,7 @@ export class AnimationEngine {
         if (!callback) continue;
 
         this.moveGroupCursorAfter(groupId);
-        callback(deltaTime);
+        this.executeSafely(callback, deltaTime);
         executed = true;
         executedCallbacks++;
 
@@ -282,13 +287,28 @@ export class AnimationEngine {
     this.groupCursor = (index + 1) % this.groupOrder.length;
   }
 
+  private executeSafely(callback: AnimationCallback, deltaTime: number): void {
+    try {
+      callback(deltaTime);
+    } catch (error) {
+      console.error("AnimationEngine callback failed", error);
+    }
+  }
+
   public stop(): void {
+    if (this.calibrationRafId !== null) {
+      cancelAnimationFrame(this.calibrationRafId);
+      this.calibrationRafId = null;
+    }
+
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
     this.isRunning = false;
     this.lastFrameTime = null;
+    this.frameBudgetMs = null;
+    this.isCalibrating = "no";
   }
 
   public clear(): void {
