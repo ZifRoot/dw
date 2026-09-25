@@ -462,7 +462,7 @@ export class AnimationEngine {
     if (!this.groups.has(group.node.groupId)) return true;
 
     group.lastCompletedAt = performance.now();
-    this.startedGroups.enqueue(group.node);
+    this.groupsQueue.enqueueStarted(group.node);
 
     return true;
   }
