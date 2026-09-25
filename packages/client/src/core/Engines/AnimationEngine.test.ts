@@ -443,3 +443,146 @@ test("generator factory source can be interrupted by another group", () => {
 
   engine.clear();
 });
+
+
+test("a direct generator is scheduled as a non-atomic group", () => {
+  const calls: string[] = [];
+  const engine = createRunningEngine([]);
+
+  function* source(): AnimationGenerator {
+    yield () => calls.push("A1");
+    yield () => calls.push("A2");
+  }
+
+  engine.addGenerator(source());
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.deepEqual(calls.slice(0, 2), ["A1", "A2"]);
+  engine.clear();
+});
+
+test("a completed direct generator removes its group", () => {
+  const calls: string[] = [];
+  const engine = createRunningEngine([]);
+
+  function* source(): AnimationGenerator {
+    yield () => calls.push("A");
+  }
+
+  engine.addGenerator(source());
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+  performanceTime = 96;
+  runNextAnimationFrame(96);
+
+  assert.deepEqual(calls, ["A"]);
+  engine.clear();
+});
+
+test("generator callbacks participate in common group scheduling", () => {
+  const calls: string[] = [];
+  const engine = createRunningEngine([]);
+
+  function* source(): AnimationGenerator {
+    yield () => {
+      calls.push("A1");
+      performanceTime += 20;
+    };
+    yield () => {
+      calls.push("A2");
+      performanceTime += 20;
+    };
+  }
+
+  engine.addGenerator(source());
+  engine.addCallback(() => {
+    calls.push("B1");
+    performanceTime += 20;
+  });
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.deepEqual(calls, ["A1"]);
+
+  performanceTime = 120;
+  runNextAnimationFrame(120);
+
+  assert.deepEqual(calls.slice(1, 3), ["B1", "A2"]);
+  engine.clear();
+});
+
+test("generator factory creates one generator per frame", () => {
+  const calls: string[] = [];
+  let factoryCalls = 0;
+  const engine = createRunningEngine([]);
+
+  function createSource(): AnimationGenerator {
+    factoryCalls++;
+
+    return (function* (): AnimationGenerator {
+      yield () => {
+        calls.push(`A${factoryCalls}`);
+        performanceTime += 20;
+      };
+      yield () => {
+        calls.push(`B${factoryCalls}`);
+        performanceTime += 20;
+      };
+    })();
+  }
+
+  engine.addGeneratorFactory(createSource);
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.equal(factoryCalls, 1);
+  assert.deepEqual(calls, ["A1"]);
+
+  performanceTime = 120;
+  runNextAnimationFrame(120);
+
+  assert.equal(factoryCalls, 1);
+  assert.deepEqual(calls, ["A1", "B1"]);
+
+  performanceTime = 160;
+  runNextAnimationFrame(160);
+
+  assert.equal(factoryCalls, 2);
+  assert.deepEqual(calls, ["A1", "B1", "A2"]);
+  engine.clear();
+});
+
+test("generator factory waits for the next frame after exhaustion", () => {
+  const calls: string[] = [];
+  let factoryCalls = 0;
+  const engine = createRunningEngine([]);
+
+  engine.addGeneratorFactory(() => {
+    factoryCalls++;
+
+    return (function* (): AnimationGenerator {
+      yield () => {
+        calls.push(`A${factoryCalls}`);
+        performanceTime += 20;
+      };
+    })();
+  });
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.equal(factoryCalls, 1);
+  assert.deepEqual(calls, ["A1"]);
+
+  performanceTime = 120;
+  runNextAnimationFrame(120);
+
+  assert.equal(factoryCalls, 2);
+  assert.deepEqual(calls, ["A1", "A2"]);
+  engine.clear();
+});
