@@ -1,5 +1,58 @@
 export type AnimationCallback = (deltaTime: number) => void;
 
+/** Источник callback'ов для одной группы AnimationEngine. */
+export interface AnimationGenerator extends Iterator<AnimationCallback> {}
+
+/** Фабрика, создающая источник callback'ов для группы. */
+export type AnimationGeneratorFactory = () => AnimationGenerator;
+
+interface CallbackSequence extends AnimationGenerator {
+  remove(callback: AnimationCallback): boolean;
+  isEmpty(): boolean;
+}
+
+class ArrayCallbackSequence implements CallbackSequence {
+  private cursor = 0;
+
+  public constructor(private readonly callbacks: AnimationCallback[]) {}
+
+  public next(): IteratorResult<AnimationCallback> {
+    if (this.callbacks.length === 0) {
+      return { done: true, value: undefined };
+    }
+
+    if (this.cursor >= this.callbacks.length) {
+      this.cursor = 0;
+    }
+
+    const callback = this.callbacks[this.cursor];
+    this.cursor = (this.cursor + 1) % this.callbacks.length;
+
+    return { done: false, value: callback };
+  }
+
+  public remove(callback: AnimationCallback): boolean {
+    const index = this.callbacks.indexOf(callback);
+    if (index < 0) return false;
+
+    this.callbacks.splice(index, 1);
+
+    if (index < this.cursor) {
+      this.cursor--;
+    }
+
+    if (this.cursor >= this.callbacks.length) {
+      this.cursor = 0;
+    }
+
+    return true;
+  }
+
+  public isEmpty(): boolean {
+    return this.callbacks.length === 0;
+  }
+}
+
 interface GroupQueueNode {
   groupId: number;
   previous: GroupQueueNode | null;
@@ -10,9 +63,16 @@ interface GroupQueueNode {
 class GroupQueue {
   private head: GroupQueueNode | null = null;
   private tail: GroupQueueNode | null = null;
+  private count = 0;
+
+  public get size(): number {
+    return this.count;
+  }
 
   public enqueue(node: GroupQueueNode): void {
-    if (node.queue !== null) throw new Error("Group queue node is already queued");
+    if (node.queue !== null) {
+      throw new Error("Group queue node is already queued");
+    }
 
     node.previous = this.tail;
     node.next = null;
@@ -22,11 +82,13 @@ class GroupQueue {
     else this.tail.next = node;
 
     this.tail = node;
+    this.count++;
   }
 
   public dequeue(): GroupQueueNode | null {
     const node = this.head;
     if (node === null) return null;
+
     this.remove(node);
     return node;
   }
@@ -47,6 +109,7 @@ class GroupQueue {
     node.previous = null;
     node.next = null;
     node.queue = null;
+    this.count--;
   }
 
   public clear(): void {
@@ -62,12 +125,14 @@ class GroupQueue {
 
     this.head = null;
     this.tail = null;
+    this.count = 0;
   }
 }
 
 interface CallbackGroup {
-  callbacks: number[];
-  cursor: number;
+  sequence: CallbackSequence | null;
+  generator: AnimationGenerator | null;
+  generatorFactory: AnimationGeneratorFactory | null;
   lastCompletedAt: number | null;
   node: GroupQueueNode;
   eligibleStep: number;
@@ -84,7 +149,6 @@ export class AnimationEngine {
   private isCalibrating: "no" | "process" | "yes" = "no";
   private isStepping = false;
   private currentStep = 0;
-  private nextCallbackId = 0;
   private nextGroupId = 0;
   private lastFrameTime: number | null = null;
   private groups = new Map<number, CallbackGroup>();
@@ -102,18 +166,48 @@ export class AnimationEngine {
   public addCallbacks(callbacks: AnimationCallback[]): () => void {
     if (callbacks.length === 0) return () => {};
 
-    const groupId = this.nextGroupId++;
-    const callbackIds: number[] = [];
+    return this.addGroup({
+      sequence: new ArrayCallbackSequence([...callbacks]),
+      generator: null,
+      generatorFactory: null,
+    });
+  }
 
-    for (const callback of callbacks) {
-      const id = this.nextCallbackId++;
-      this.callbacks.set(id, callback);
-      callbackIds.push(id);
-    }
+  /** Добавить существующий Generator как отдельную группу. */
+  public addGenerator(generator: AnimationGenerator): () => void {
+    return this.addGroup({
+      sequence: null,
+      generator,
+      generatorFactory: null,
+    });
+  }
+
+  /**
+   * Добавить фабрику Generator.
+   *
+   * Новый Generator создаётся при первом обращении группы в каждом кадре.
+   * После завершения Generator группа остаётся зарегистрированной и
+   * продолжает работу со следующим Generator в следующем кадре.
+   */
+  public addGeneratorFactory(factory: AnimationGeneratorFactory): () => void {
+    return this.addGroup({
+      sequence: null,
+      generator: null,
+      generatorFactory: factory,
+    });
+  }
+
+  private addGroup(source: {
+    sequence: CallbackSequence | null;
+    generator: AnimationGenerator | null;
+    generatorFactory: AnimationGeneratorFactory | null;
+  }): () => void {
+    const groupId = this.nextGroupId++;
 
     const group: CallbackGroup = {
-      callbacks: callbackIds,
-      cursor: 0,
+      sequence: source.sequence,
+      generator: source.generator,
+      generatorFactory: source.generatorFactory,
       lastCompletedAt: null,
       node: {
         groupId,
@@ -138,30 +232,13 @@ export class AnimationEngine {
 
   /** Удалить первую регистрацию указанного callback. */
   public removeCallback(callback: AnimationCallback): void {
-    for (const group of this.groups.values()) {
-      const callbackId = group.callbacks.find(
-        (id) => this.callbacks.get(id) === callback,
-      );
-
-      if (callbackId !== undefined) {
-        this.removeCallbackById(callbackId);
-        return;
-      }
-    }
-  }
-
-  private removeCallbackById(id: number): void {
-    if (!this.callbacks.delete(id)) return;
-
     for (const [groupId, group] of this.groups) {
-      const index = group.callbacks.indexOf(id);
-      if (index < 0) continue;
+      if (group.sequence === null) continue;
+      if (!group.sequence.remove(callback)) continue;
 
-      group.callbacks.splice(index, 1);
-      if (index < group.cursor) group.cursor--;
-
-      if (group.callbacks.length === 0) this.removeGroup(groupId);
-      else if (group.cursor >= group.callbacks.length) group.cursor = 0;
+      if (group.sequence.isEmpty()) {
+        this.removeGroup(groupId);
+      }
 
       return;
     }
@@ -174,17 +251,13 @@ export class AnimationEngine {
     this.pendingGroups.remove(group.node);
     this.startedGroups.remove(group.node);
 
-    for (const callbackId of group.callbacks) {
-      this.callbacks.delete(callbackId);
-    }
-
     this.groups.delete(groupId);
 
     if (this.groups.size === 0) this.stop();
   }
 
   private start(): void {
-    if (this.isRunning || this.callbacks.size === 0) return;
+    if (this.isRunning || this.groups.size === 0) return;
     if (!this.calibrate()) return;
 
     this.isRunning = true;
@@ -261,7 +334,10 @@ export class AnimationEngine {
         const group = this.takeNextGroup();
         if (group === null) break;
 
-        this.executeGroupCallback(group);
+        if (!this.executeGroupCallback(group)) {
+          continue;
+        }
+
         executedCallbacks++;
       }
     } finally {
@@ -270,7 +346,7 @@ export class AnimationEngine {
 
     this.lastFrameTime = timestamp;
 
-    if (this.isRunning && this.callbacks.size > 0) {
+    if (this.isRunning && this.groups.size > 0) {
       this.scheduleStep();
     }
   }
@@ -287,27 +363,38 @@ export class AnimationEngine {
       return this.groups.get(pendingNode.groupId) ?? null;
     }
 
-    const startedNode = this.startedGroups.dequeue();
-    if (startedNode === null) return null;
+    const startedGroupsToInspect = this.startedGroups.size;
 
-    return this.groups.get(startedNode.groupId) ?? null;
-  }
+    for (let index = 0; index < startedGroupsToInspect; index++) {
+      const startedNode = this.startedGroups.dequeue();
+      if (startedNode === null) return null;
 
-  private executeGroupCallback(group: CallbackGroup): void {
-    if (group.callbacks.length === 0) {
-      this.removeGroup(group.node.groupId);
-      return;
+      const group = this.groups.get(startedNode.groupId);
+      if (group === undefined) continue;
+
+      if (group.eligibleStep <= this.currentStep) {
+        return group;
+      }
+
+      this.startedGroups.enqueue(startedNode);
     }
 
-    if (group.cursor >= group.callbacks.length) group.cursor = 0;
+    return null;
+  }
 
-    const callbackId = group.callbacks[group.cursor];
-    group.cursor = (group.cursor + 1) % group.callbacks.length;
+  private executeGroupCallback(group: CallbackGroup): boolean {
+    const next = this.getNextCallback(group);
 
-    const callback = this.callbacks.get(callbackId);
-    if (callback === undefined) {
-      this.removeCallbackById(callbackId);
-      return;
+    if (next.done) {
+      if (group.generatorFactory === null) {
+        this.removeGroup(group.node.groupId);
+      } else {
+        group.generator = null;
+        group.eligibleStep = this.currentStep + 1;
+        this.startedGroups.enqueue(group.node);
+      }
+
+      return false;
     }
 
     const startedAt = performance.now();
@@ -316,12 +403,52 @@ export class AnimationEngine {
         ? 0
         : Math.max(0, startedAt - group.lastCompletedAt);
 
-    this.executeSafely(callback, deltaTime);
+    this.executeSafely(next.value, deltaTime);
 
-    if (!this.groups.has(group.node.groupId)) return;
+    if (!this.groups.has(group.node.groupId)) return true;
 
     group.lastCompletedAt = performance.now();
     this.startedGroups.enqueue(group.node);
+
+    return true;
+  }
+
+  private getNextCallback(
+    group: CallbackGroup,
+  ): IteratorResult<AnimationCallback> {
+    if (group.sequence !== null) {
+      return group.sequence.next();
+    }
+
+    if (group.generator === null) {
+      if (group.generatorFactory === null) {
+        throw new Error("Animation group has no callback source");
+      }
+
+      try {
+        group.generator = group.generatorFactory();
+      } catch (error) {
+        console.error("AnimationEngine generator factory failed", error);
+        this.removeGroup(group.node.groupId);
+        return { done: true, value: undefined };
+      }
+    }
+
+    try {
+      return group.generator.next();
+    } catch (error) {
+      console.error("AnimationEngine generator failed", error);
+
+      if (group.generatorFactory === null) {
+        this.removeGroup(group.node.groupId);
+      } else {
+        group.generator = null;
+        group.eligibleStep = this.currentStep + 1;
+        this.startedGroups.enqueue(group.node);
+      }
+
+      return { done: true, value: undefined };
+    }
   }
 
   private executeSafely(callback: AnimationCallback, deltaTime: number): void {
@@ -351,7 +478,6 @@ export class AnimationEngine {
   }
 
   public clear(): void {
-    this.callbacks.clear();
     this.groups.clear();
     this.pendingGroups.clear();
     this.startedGroups.clear();
