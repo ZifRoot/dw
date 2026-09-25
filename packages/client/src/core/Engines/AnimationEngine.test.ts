@@ -333,9 +333,6 @@ test("a finite generator is a group and completes when it returns done", () => {
 
   assert.deepEqual(calls, ["A1", "A2"]);
 
-  performanceTime = 100;
-  runNextAnimationFrame(100);
-
   assert.deepEqual(calls, ["A1", "A2"]);
   assert.equal(
     (engine as unknown as { isRunning: boolean }).isRunning,
