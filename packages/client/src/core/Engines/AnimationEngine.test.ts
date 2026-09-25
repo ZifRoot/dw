@@ -1,6 +1,10 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
+import {
+  AnimationCallback,
+  AnimationEngine,
+  AnimationGenerator,
+} from "./AnimationEngine";
 
 type RafCallback = (timestamp: number) => void;
 
@@ -300,6 +304,145 @@ test("stop resets calibration and the next start recalibrates", () => {
     (engine as unknown as { isCalibrating: string }).isCalibrating,
     "yes",
   );
+
+  engine.clear();
+});
+
+
+test("a finite generator is a group and completes when it returns done", () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  const generator: AnimationGenerator = (function* () {
+    yield () => {
+      calls.push("A1");
+      performanceTime += 4;
+    };
+    yield () => {
+      calls.push("A2");
+      performanceTime += 4;
+    };
+  })();
+
+  const engine = new AnimationEngine();
+  engine.addGenerator(generator);
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.deepEqual(calls, ["A1", "A2"]);
+
+  performanceTime = 100;
+  runNextAnimationFrame(100);
+
+  assert.deepEqual(calls, ["A1", "A2"]);
+  assert.equal(
+    (engine as unknown as { isRunning: boolean }).isRunning,
+    false,
+  );
+});
+
+test("generator callbacks participate in common group scheduling", () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  const generatorA: AnimationGenerator = (function* () {
+    yield () => {
+      calls.push("A1");
+      performanceTime += 4;
+    };
+    yield () => {
+      calls.push("A2");
+      performanceTime += 4;
+    };
+  })();
+  const generatorB: AnimationGenerator = (function* () {
+    yield () => {
+      calls.push("B1");
+      performanceTime += 4;
+    };
+  })();
+
+  const engine = new AnimationEngine();
+  engine.addGenerator(generatorA);
+  engine.addGenerator(generatorB);
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.deepEqual(calls, ["A1", "B1", "A2"]);
+
+  engine.clear();
+});
+
+test("generator factory creates one generator per frame after the previous generator ends", () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let factoryCalls = 0;
+
+  const engine = new AnimationEngine();
+  engine.addGeneratorFactory(function* () {
+    factoryCalls++;
+
+    yield () => {
+      calls.push("A1");
+      performanceTime += 4;
+    };
+    yield () => {
+      calls.push("A2");
+      performanceTime += 4;
+    };
+  });
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.equal(factoryCalls, 1);
+  assert.deepEqual(calls, ["A1", "A2"]);
+
+  performanceTime = 100;
+  runNextAnimationFrame(100);
+
+  assert.equal(factoryCalls, 2);
+  assert.deepEqual(calls, ["A1", "A2", "A1", "A2"]);
+
+  engine.clear();
+});
+
+test("generator factory source can be interrupted by another group", () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  const engine = new AnimationEngine();
+
+  engine.addGeneratorFactory(function* () {
+    yield () => {
+      calls.push("A1");
+      performanceTime += 4;
+    };
+    yield () => {
+      calls.push("A2");
+      performanceTime += 4;
+    };
+  });
+
+  engine.addGenerator((function* () {
+    yield () => {
+      calls.push("B1");
+      performanceTime += 4;
+    };
+  })());
+
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.deepEqual(calls, ["A1", "B1", "A2"]);
 
   engine.clear();
 });
