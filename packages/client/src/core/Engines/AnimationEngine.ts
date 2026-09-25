@@ -87,7 +87,6 @@ export class AnimationEngine {
   private nextCallbackId = 0;
   private nextGroupId = 0;
   private lastFrameTime: number | null = null;
-  private callbacks = new Map<number, AnimationCallback>();
   private groups = new Map<number, CallbackGroup>();
   private pendingGroups = new GroupQueue();
   private startedGroups = new GroupQueue();
