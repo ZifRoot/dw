@@ -308,20 +308,13 @@ test("stop resets calibration and the next start recalibrates", () => {
   engine.clear();
 });
 
-
-test("a finite generator is a group and completes when it returns done", () => {
+test("a direct generator is a group and ends when it returns done", () => {
   installAnimationFrameMock();
 
   const calls: string[] = [];
   const generator: AnimationGenerator = (function* () {
-    yield () => {
-      calls.push("A1");
-      performanceTime += 4;
-    };
-    yield () => {
-      calls.push("A2");
-      performanceTime += 4;
-    };
+    yield () => calls.push("A1");
+    yield () => calls.push("A2");
   })();
 
   const engine = new AnimationEngine();
@@ -330,8 +323,6 @@ test("a finite generator is a group and completes when it returns done", () => {
 
   performanceTime = 80;
   runNextAnimationFrame(80);
-
-  assert.deepEqual(calls, ["A1", "A2"]);
 
   assert.deepEqual(calls, ["A1", "A2"]);
   assert.equal(
@@ -370,28 +361,29 @@ test("generator callbacks participate in common group scheduling", () => {
   runNextAnimationFrame(80);
 
   assert.deepEqual(calls, ["A1", "B1", "A2"]);
-
   engine.clear();
 });
 
-test("generator factory creates one generator per frame after the previous generator ends", () => {
+test("generator can continue in the next frame without recreating it", () => {
   installAnimationFrameMock();
 
   const calls: string[] = [];
   let factoryCalls = 0;
 
   const engine = new AnimationEngine();
-  engine.addGeneratorFactory(function* () {
+  engine.addGeneratorFactory(() => {
     factoryCalls++;
 
-    yield () => {
-      calls.push("A1");
-      performanceTime += 4;
-    };
-    yield () => {
-      calls.push("A2");
-      performanceTime += 4;
-    };
+    return (function* (): AnimationGenerator {
+      yield () => {
+        calls.push("A1");
+        performanceTime += 10;
+      };
+      yield () => {
+        calls.push("A2");
+        performanceTime += 10;
+      };
+    })();
   });
   runCalibration();
 
@@ -399,35 +391,68 @@ test("generator factory creates one generator per frame after the previous gener
   runNextAnimationFrame(80);
 
   assert.equal(factoryCalls, 1);
+  assert.deepEqual(calls, ["A1"]);
+
+  performanceTime = 100;
+  runNextAnimationFrame(100);
+
+  assert.equal(factoryCalls, 1);
   assert.deepEqual(calls, ["A1", "A2"]);
+
+  engine.clear();
+});
+
+test("generator factory creates a new generator on the next frame after exhaustion", () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let factoryCalls = 0;
+
+  const engine = new AnimationEngine();
+  engine.addGeneratorFactory(() => {
+    factoryCalls++;
+
+    return (function* (): AnimationGenerator {
+      yield () => calls.push(`A${factoryCalls}`);
+    })();
+  });
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.equal(factoryCalls, 1);
+  assert.deepEqual(calls, ["A1"]);
 
   performanceTime = 100;
   runNextAnimationFrame(100);
 
   assert.equal(factoryCalls, 2);
-  assert.deepEqual(calls, ["A1", "A2", "A1", "A2"]);
+  assert.deepEqual(calls, ["A1", "A2"]);
 
   engine.clear();
 });
 
-test("generator factory source can be interrupted by another group", () => {
+test("generator factory callbacks are interleaved with other groups", () => {
   installAnimationFrameMock();
 
   const calls: string[] = [];
   const engine = new AnimationEngine();
 
-  engine.addGeneratorFactory(function* () {
-    yield () => {
-      calls.push("A1");
-      performanceTime += 4;
-    };
-    yield () => {
-      calls.push("A2");
-      performanceTime += 4;
-    };
+  engine.addGeneratorFactory(() => {
+    return (function* (): AnimationGenerator {
+      yield () => {
+        calls.push("A1");
+        performanceTime += 4;
+      };
+      yield () => {
+        calls.push("A2");
+        performanceTime += 4;
+      };
+    })();
   });
 
-  engine.addGenerator((function* () {
+  engine.addGenerator((function* (): AnimationGenerator {
     yield () => {
       calls.push("B1");
       performanceTime += 4;
@@ -440,149 +465,5 @@ test("generator factory source can be interrupted by another group", () => {
   runNextAnimationFrame(80);
 
   assert.deepEqual(calls, ["A1", "B1", "A2"]);
-
-  engine.clear();
-});
-
-
-test("a direct generator is scheduled as a non-atomic group", () => {
-  const calls: string[] = [];
-  const engine = createRunningEngine([]);
-
-  function* source(): AnimationGenerator {
-    yield () => calls.push("A1");
-    yield () => calls.push("A2");
-  }
-
-  engine.addGenerator(source());
-
-  performanceTime = 80;
-  runNextAnimationFrame(80);
-
-  assert.deepEqual(calls.slice(0, 2), ["A1", "A2"]);
-  engine.clear();
-});
-
-test("a completed direct generator removes its group", () => {
-  const calls: string[] = [];
-  const engine = createRunningEngine([]);
-
-  function* source(): AnimationGenerator {
-    yield () => calls.push("A");
-  }
-
-  engine.addGenerator(source());
-
-  performanceTime = 80;
-  runNextAnimationFrame(80);
-  performanceTime = 96;
-  runNextAnimationFrame(96);
-
-  assert.deepEqual(calls, ["A"]);
-  engine.clear();
-});
-
-test("generator callbacks participate in common group scheduling", () => {
-  const calls: string[] = [];
-  const engine = createRunningEngine([]);
-
-  function* source(): AnimationGenerator {
-    yield () => {
-      calls.push("A1");
-      performanceTime += 6;
-    };
-    yield () => {
-      calls.push("A2");
-      performanceTime += 6;
-    };
-  }
-
-  engine.addGenerator(source());
-  engine.addCallback(() => {
-    calls.push("B1");
-    performanceTime += 6;
-  });
-
-  performanceTime = 80;
-  runNextAnimationFrame(80);
-
-  assert.deepEqual(calls, ["A1"]);
-
-  performanceTime = 120;
-  runNextAnimationFrame(120);
-
-  assert.deepEqual(calls.slice(1, 3), ["B1", "A2"]);
-  engine.clear();
-});
-
-test("generator factory creates one generator per frame", () => {
-  const calls: string[] = [];
-  let factoryCalls = 0;
-  const engine = createRunningEngine([]);
-
-  function createSource(): AnimationGenerator {
-    factoryCalls++;
-
-    return (function* (): AnimationGenerator {
-      yield () => {
-        calls.push(`A${factoryCalls}`);
-        performanceTime += 6;
-      };
-      yield () => {
-        calls.push(`B${factoryCalls}`);
-        performanceTime += 6;
-      };
-    })();
-  }
-
-  engine.addGeneratorFactory(createSource);
-
-  performanceTime = 80;
-  runNextAnimationFrame(80);
-
-  assert.equal(factoryCalls, 1);
-  assert.deepEqual(calls, ["A1"]);
-
-  performanceTime = 120;
-  runNextAnimationFrame(120);
-
-  assert.equal(factoryCalls, 1);
-  assert.deepEqual(calls, ["A1", "B1"]);
-
-  performanceTime = 160;
-  runNextAnimationFrame(160);
-
-  assert.equal(factoryCalls, 2);
-  assert.deepEqual(calls, ["A1", "B1", "A2"]);
-  engine.clear();
-});
-
-test("generator factory waits for the next frame after exhaustion", () => {
-  const calls: string[] = [];
-  let factoryCalls = 0;
-  const engine = createRunningEngine([]);
-
-  engine.addGeneratorFactory(() => {
-    factoryCalls++;
-
-    return (function* (): AnimationGenerator {
-      yield () => {
-        calls.push(`A${factoryCalls}`);
-        performanceTime += 6;
-      };
-    })();
-  });
-
-  performanceTime = 80;
-  runNextAnimationFrame(80);
-
-  assert.equal(factoryCalls, 1);
-  assert.deepEqual(calls, ["A1"]);
-
-  performanceTime = 120;
-  runNextAnimationFrame(120);
-
-  assert.equal(factoryCalls, 2);
-  assert.deepEqual(calls, ["A1", "A2"]);
   engine.clear();
 });
