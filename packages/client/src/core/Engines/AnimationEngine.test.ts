@@ -489,18 +489,18 @@ test("generator callbacks participate in common group scheduling", () => {
   function* source(): AnimationGenerator {
     yield () => {
       calls.push("A1");
-      performanceTime += 20;
+      performanceTime += 6;
     };
     yield () => {
       calls.push("A2");
-      performanceTime += 20;
+      performanceTime += 6;
     };
   }
 
   engine.addGenerator(source());
   engine.addCallback(() => {
     calls.push("B1");
-    performanceTime += 20;
+    performanceTime += 6;
   });
 
   performanceTime = 80;
@@ -526,11 +526,11 @@ test("generator factory creates one generator per frame", () => {
     return (function* (): AnimationGenerator {
       yield () => {
         calls.push(`A${factoryCalls}`);
-        performanceTime += 20;
+        performanceTime += 6;
       };
       yield () => {
         calls.push(`B${factoryCalls}`);
-        performanceTime += 20;
+        performanceTime += 6;
       };
     })();
   }
@@ -568,7 +568,7 @@ test("generator factory waits for the next frame after exhaustion", () => {
     return (function* (): AnimationGenerator {
       yield () => {
         calls.push(`A${factoryCalls}`);
-        performanceTime += 20;
+        performanceTime += 6;
       };
     })();
   });
