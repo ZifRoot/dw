@@ -467,3 +467,51 @@ test("generator factory callbacks are interleaved with other groups", () => {
   assert.deepEqual(calls, ["A1", "B1", "A2"]);
   engine.clear();
 });
+
+
+test("generator factory failure is deferred to the next frame", () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  const errors: unknown[][] = [];
+  const originalError = console.error;
+  let factoryCalls = 0;
+
+  console.error = (...args: unknown[]) => {
+    errors.push(args);
+  };
+
+  try {
+    const engine = new AnimationEngine();
+    engine.addGeneratorFactory(() => {
+      factoryCalls++;
+
+      if (factoryCalls === 1) {
+        throw new Error("factory failed");
+      }
+
+      return (function* (): AnimationGenerator {
+        yield () => calls.push("A");
+      })();
+    });
+
+    runCalibration();
+
+    performanceTime = 80;
+    runNextAnimationFrame(80);
+
+    assert.equal(factoryCalls, 1);
+    assert.deepEqual(calls, []);
+    assert.equal(errors.length, 1);
+
+    performanceTime = 100;
+    runNextAnimationFrame(100);
+
+    assert.equal(factoryCalls, 2);
+    assert.deepEqual(calls, ["A"]);
+
+    engine.clear();
+  } finally {
+    console.error = originalError;
+  }
+});
