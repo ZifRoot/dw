@@ -429,7 +429,7 @@ export class AnimationEngine {
         group.generator = group.generatorFactory();
       } catch (error) {
         console.error("AnimationEngine generator factory failed", error);
-        this.removeGroup(group.node.groupId);
+        group.generator = null;
         return { done: true, value: undefined };
       }
     }
