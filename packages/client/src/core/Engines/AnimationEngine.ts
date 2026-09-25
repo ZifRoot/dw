@@ -63,13 +63,50 @@ interface GroupQueueNode {
 class GroupQueue {
   private head: GroupQueueNode | null = null;
   private tail: GroupQueueNode | null = null;
+  private startedHead: GroupQueueNode | null = null;
+  private pendingTail: GroupQueueNode | null = null;
   private count = 0;
 
   public get size(): number {
     return this.count;
   }
 
-  public enqueue(node: GroupQueueNode): void {
+  /**
+   * Добавить никогда не запускавшуюся группу перед уже запущенными.
+   *
+   * Очередь логически разделена на два участка:
+   * [pending groups] -> [started groups].
+   */
+  public enqueuePending(node: GroupQueueNode): void {
+    if (node.queue !== null) {
+      throw new Error("Group queue node is already queued");
+    }
+
+    node.queue = this;
+    node.next = this.startedHead;
+
+    if (this.startedHead === null) {
+      node.previous = this.tail;
+
+      if (this.tail === null) this.head = node;
+      else this.tail.next = node;
+
+      this.tail = node;
+    } else {
+      node.previous = this.startedHead.previous;
+
+      if (node.previous === null) this.head = node;
+      else node.previous.next = node;
+
+      this.startedHead.previous = node;
+    }
+
+    this.pendingTail = node;
+    this.count++;
+  }
+
+  /** Добавить завершившую callback работу группу в конец started-участка. */
+  public enqueueStarted(node: GroupQueueNode): void {
     if (node.queue !== null) {
       throw new Error("Group queue node is already queued");
     }
@@ -78,33 +115,63 @@ class GroupQueue {
     node.next = null;
     node.queue = this;
 
-    if (this.tail === null) this.head = node;
-    else this.tail.next = node;
+    if (this.tail === null) {
+      this.head = node;
+      this.startedHead = node;
+    } else {
+      this.tail.next = node;
+      if (this.startedHead === null) this.startedHead = node;
+    }
 
     this.tail = node;
     this.count++;
   }
 
-  public dequeue(): GroupQueueNode | null {
+  /** Взять первую никогда не запускавшуюся группу. */
+  public dequeuePending(): GroupQueueNode | null {
+    if (this.head === null || this.head === this.startedHead) return null;
+
     const node = this.head;
+    this.remove(node);
+    return node;
+  }
+
+  /** Взять старейшую уже запускавшуюся группу. */
+  public dequeueStarted(): GroupQueueNode | null {
+    const node = this.startedHead;
     if (node === null) return null;
 
     this.remove(node);
     return node;
   }
 
-  public peek(): GroupQueueNode | null {
+  public peekPending(): GroupQueueNode | null {
+    if (this.head === this.startedHead) return null;
     return this.head;
   }
 
   public remove(node: GroupQueueNode): void {
     if (node.queue !== this) return;
 
+    const wasStarted = node === this.startedHead;
+
     if (node.previous === null) this.head = node.next;
     else node.previous.next = node.next;
 
     if (node.next === null) this.tail = node.previous;
     else node.next.previous = node.previous;
+
+    if (wasStarted) {
+      this.startedHead = node.next;
+    }
+
+    if (this.pendingTail === node) {
+      this.pendingTail = node.previous;
+    }
+
+    if (this.startedHead === null) {
+      this.pendingTail = this.tail;
+    }
 
     node.previous = null;
     node.next = null;
@@ -125,6 +192,8 @@ class GroupQueue {
 
     this.head = null;
     this.tail = null;
+    this.startedHead = null;
+    this.pendingTail = null;
     this.count = 0;
   }
 }
@@ -152,8 +221,7 @@ export class AnimationEngine {
   private nextGroupId = 0;
   private lastFrameTime: number | null = null;
   private groups = new Map<number, CallbackGroup>();
-  private pendingGroups = new GroupQueue();
-  private startedGroups = new GroupQueue();
+  private groupsQueue = new GroupQueue();
 
   constructor() {}
 
@@ -219,7 +287,7 @@ export class AnimationEngine {
     };
 
     this.groups.set(groupId, group);
-    this.pendingGroups.enqueue(group.node);
+    this.groupsQueue.enqueuePending(group.node);
     this.start();
 
     let disposed = false;
@@ -248,8 +316,7 @@ export class AnimationEngine {
     const group = this.groups.get(groupId);
     if (group === undefined) return;
 
-    this.pendingGroups.remove(group.node);
-    this.startedGroups.remove(group.node);
+    this.groupsQueue.remove(group.node);
 
     this.groups.delete(groupId);
 
@@ -352,34 +419,21 @@ export class AnimationEngine {
   }
 
   private takeNextGroup(): CallbackGroup | null {
-    const pendingNode = this.pendingGroups.peek();
+    const pendingNode = this.groupsQueue.peekPending();
 
     if (
       pendingNode !== null &&
       (this.groups.get(pendingNode.groupId)?.eligibleStep ?? Infinity) <=
         this.currentStep
     ) {
-      this.pendingGroups.dequeue();
+      this.groupsQueue.dequeuePending();
       return this.groups.get(pendingNode.groupId) ?? null;
     }
 
-    const startedGroupsToInspect = this.startedGroups.size;
+    const startedNode = this.groupsQueue.dequeueStarted();
+    if (startedNode === null) return null;
 
-    for (let index = 0; index < startedGroupsToInspect; index++) {
-      const startedNode = this.startedGroups.dequeue();
-      if (startedNode === null) return null;
-
-      const group = this.groups.get(startedNode.groupId);
-      if (group === undefined) continue;
-
-      if (group.eligibleStep <= this.currentStep) {
-        return group;
-      }
-
-      this.startedGroups.enqueue(startedNode);
-    }
-
-    return null;
+    return this.groups.get(startedNode.groupId) ?? null;
   }
 
   private executeGroupCallback(group: CallbackGroup): boolean {
@@ -391,7 +445,7 @@ export class AnimationEngine {
       } else {
         group.generator = null;
         group.eligibleStep = this.currentStep + 1;
-        this.startedGroups.enqueue(group.node);
+        this.groupsQueue.enqueueStarted(group.node);
       }
 
       return false;
@@ -479,8 +533,8 @@ export class AnimationEngine {
 
   public clear(): void {
     this.groups.clear();
-    this.pendingGroups.clear();
-    this.startedGroups.clear();
+    // Группы хранятся в одной очереди с двумя логическими участками.
+    this.groupsQueue.clear();
     this.currentStep = 0;
     this.stop();
   }
