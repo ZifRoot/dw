@@ -132,21 +132,21 @@ adjacency: Map<pointId, Set<edgeId>>
 graph TD
     A[Backend API] --> B[DataManager]
     C[IndexedDB] <--> B
-    B -->|PointTable + EmbeddingTable + EdgeTable| D[PointsTransformer]
-    D -->|PointModel + EdgeRefs| E[PointGraphManager]
+    B -->|"PointTable + EmbeddingTable + EdgeTable"| D[PointsTransformer]
+    D -->|"PointModel + EdgeRefs"| E[PointGraphManager]
 
-    E -->|live PointModel[]| F[PointsScene / View Graph]
-    E -->|live EdgeModel[]| G[EdgesScene / View Graph]
+    E -->|"live PointModel[]"| F["PointsScene / View Graph"]
+    E -->|"live EdgeModel[]"| G["EdgesScene / View Graph"]
     E --> H[ModelManager]
 
     M[AppMediator]
-    M -.->|events / commands / UI state| F
-    M -.->|events / commands / UI state| G
+    M -.->|"events / commands / UI state"| F
+    M -.->|"events / commands / UI state"| G
     M -.->|signals| H
-    M -.->|reload / save commands| B
+    M -.->|"reload / save commands"| B
 
-    E -->|Model changes| F
-    E -->|Model changes| G
+    E -->|"Model changes"| F
+    E -->|"Model changes"| G
 ```
 
 ### Основные правила
