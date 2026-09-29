@@ -304,7 +304,6 @@ React
 - [x] Реализовать `Points Updated` при полной стабилизации.
 - [x] Реализовать периодические `Points Updated` checkpoints каждые 5 секунд.
 - [x] Не связывать `Points Updated` с `AnimationEngine.stop()`.
-- [ ] Добавить/обновить автоматические тесты lifecycle: client пока не содержит test runner; тестовый runner нужно подключить отдельно.
 - [x] Коалесцировать периодический и финальный `Points Updated` в одном 5-секундном окне.
 - [x] Актуализировать `MediatorScene` для нового источника `TEMPERATURE` и `POINTS_UPDATED`.
 
@@ -314,8 +313,10 @@ React
 
 Следующие решения намеренно оставлены отдельными задачами:
 
-1. Автоматические тесты lifecycle требуют подключения/создания test runner в client.
-2. Точная форма `PipelineViewState` и temperature DTO остаётся отдельной UI-задачей.
+1. Точная форма `PipelineViewState` и temperature DTO остаётся отдельной UI-задачей.
+2. Автоматические тесты Pipeline, scheduler и lifecycle вынесены в отдельную задачу и документ: `packages/client/tasks/Physics-Pipeline-Testing.md`.
+
+Документ тестирования определяет test runner, уровни тестов, сценарии lifecycle, scheduler, temperature и события `Points Updating` / `Points Updated`. Эти вопросы не являются частью реализации самого Pipeline.
 
 ### Зафиксированные параметры реализации
 
