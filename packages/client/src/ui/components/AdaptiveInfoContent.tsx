@@ -1,18 +1,24 @@
 // components/AdaptiveInfoContent.tsx
 import React, { useEffect, useState } from "react";
 import { EdgeInfoPanel } from "../Panels/EdgeInfoPanel";
-import { PointInfoPanel } from "../Panels/PointInfoPanel";
-import { AppMediator } from "../../core/AppMediator";
-import { UIEdge, UIPoint } from "../../core/models/ui-models";
+import { EmbeddingPointInfoPanel } from "../Panels/EmbeddingPointInfoPanel";
+import { DocumentPointInfoPanel } from "../Panels/DocumentPointInfoPanel";
+import { AppMediator } from "@core/AppMediator";
+import { UIEdge } from "@ui/dto/EdgeDto";
+import type { UISelectedPoint } from "@ui/dto/PointDto";
+import { PipelinePanel } from "../Panels/PipelinePanel";
+import { EnginePipeline } from "@core/Engines/EnginePipeline";
 
 interface AdaptiveInfoContentProps {
   mediator: AppMediator;
+  pipelines: EnginePipeline[];
 }
 
 export const AdaptiveInfoContent: React.FC<AdaptiveInfoContentProps> = ({
   mediator,
+  pipelines,
 }) => {
-  const [selectedPoint, setSelectedPoint] = useState<UIPoint | null>(
+  const [selectedPoint, setSelectedPoint] = useState<UISelectedPoint | null>(
     mediator.selectedPoint,
   );
   const [selectedEdge, setSelectedEdge] = useState<UIEdge | null>(
@@ -38,12 +44,12 @@ export const AdaptiveInfoContent: React.FC<AdaptiveInfoContentProps> = ({
   // Заглушка, когда ничего не выбрано.
   return (
     <>
-      {selectedPoint && (
-        <PointInfoPanel point={selectedPoint} mediator={mediator} />
-      )}
+      {selectedPoint?.kind === "embedding" && <EmbeddingPointInfoPanel point={selectedPoint} mediator={mediator} />}
+      {selectedPoint?.kind === "document" && <DocumentPointInfoPanel point={selectedPoint} mediator={mediator} />}
       {selectedEdge && (
         <EdgeInfoPanel edge={selectedEdge} mediator={mediator} />
       )}
+      <PipelinePanel mediator={mediator} pipelines={pipelines} />
       <br />
       <div>Выберите объект (точку или линию)</div>
       <div>

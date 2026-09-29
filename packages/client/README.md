@@ -10,6 +10,12 @@
 
 Этот документ описывает текущую архитектурную модель и ограничения для последующих изменений. Актуальные расхождения и оставшиеся архитектурные цели зафиксированы в отдельном аудите.
 
+## История рефакторинга
+
+Рефакторинг `PointsSceneTester` и связанной графовой инфраструктуры, а также его архитектурная цель, зафиксированы здесь:
+
+**[PointsSceneTester-Refactoring-Summary.md](./docs/PointsSceneTester-Refactoring-Summary.md)**
+
 ## View: UI и Graph
 
 В проекте различаются два представления:
@@ -126,21 +132,21 @@ adjacency: Map<pointId, Set<edgeId>>
 graph TD
     A[Backend API] --> B[DataManager]
     C[IndexedDB] <--> B
-    B -->|PointTable + EmbeddingTable + EdgeTable| D[PointsTransformer]
-    D -->|PointModel + EdgeRefs| E[PointGraphManager]
+    B -->|"PointTable + EmbeddingTable + EdgeTable"| D[PointsTransformer]
+    D -->|"PointModel + EdgeRefs"| E[PointGraphManager]
 
-    E -->|live PointModel[]| F[PointsScene / View Graph]
-    E -->|live EdgeModel[]| G[EdgesScene / View Graph]
+    E -->|"live PointModel[]"| F["PointsScene / View Graph"]
+    E -->|"live EdgeModel[]"| G["EdgesScene / View Graph"]
     E --> H[ModelManager]
 
     M[AppMediator]
-    M -.->|events / commands / UI state| F
-    M -.->|events / commands / UI state| G
+    M -.->|"events / commands / UI state"| F
+    M -.->|"events / commands / UI state"| G
     M -.->|signals| H
-    M -.->|reload / save commands| B
+    M -.->|"reload / save commands"| B
 
-    E -->|Model changes| F
-    E -->|Model changes| G
+    E -->|"Model changes"| F
+    E -->|"Model changes"| G
 ```
 
 ### Основные правила
@@ -224,3 +230,17 @@ Physics engines имеют `destroy()`, который освобождает an
 Результат выравнивания и оставшиеся вопросы зафиксированы в:
 
 **[CLIENT_ARCHITECTURE_AUDIT.md](./CLIENT_ARCHITECTURE_AUDIT.md)**
+
+## Живые коллекции и кэш-ссылки
+
+Основные коллекции графа могут быть большими и изменяются **in place**. Потребители `PointGraphManager` (PGM), которым нужна постоянная ссылка на коллекцию, должны сохранять её как **`readonly`**-поле и не создавать от неё рабочие копии через `filter`, `map`, spread и т. п.
+
+Например, `EdgesScene.edges` хранит прямую ссылку на живой массив рёбер PGM:
+```ts
+private readonly edges: Edge[];
+```
+
+Фильтрация должна выполняться при обработке данных потребителем (например, через D3.js для `visible`), а не созданием отдельного кэш-массива.
+
+- **AppMediator**: Централизованная шина событий между компонентами
+- 

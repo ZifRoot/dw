@@ -490,3 +490,25 @@ export function SingleGuardedTTL(guard: ExecutionGuard, ttl: number) {
     descriptor.value = createGuardedRunner(descriptor.value, guard, "ttl", ttl);
   };
 }
+
+/**
+ * Оборачивает свободную async-функцию в single-runner с ВНЕШНИМ автоматом.
+ *
+ * Guard передаётся снаружи и может быть общим для нескольких функций.
+ * Именно так реализуется «вариант А» для свободных функций:
+ * strict и retry на одном автомате.
+ *
+ * @param fn    Оборачиваемая функция.
+ * @param guard Общий автомат состояний.
+ * @param mode  Режим при ошибке: "retry" | "strict" | "ttl".
+ * @param ttl   Таймаут для режима "ttl" (мс). Игнорируется в других режимах.
+ * @returns     Функция с той же сигнатурой, возвращающая Promise.
+ */
+export function createGuardedFn<TArgs extends unknown[], TReturn>(
+  fn: (...args: TArgs) => Promise<TReturn>,
+  guard: ExecutionGuard,
+  mode: SingleRunnerMode,
+  ttl?: number,
+): (...args: TArgs) => Promise<TReturn> {
+  return (...args: TArgs) => guard.tryStart(() => fn(...args), mode, ttl);
+}

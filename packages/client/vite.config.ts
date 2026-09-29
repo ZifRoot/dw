@@ -40,8 +40,12 @@ export default defineConfig(({ mode }) => {
     plugins,
     resolve: {
       alias: {
-        "@shared": "../shared/src",
         "@clients/*": "src/clients/*",
+        "@core/*": "src/core/*",
+        "@domain/*": "src/Domain/*",
+        "@core/Scene/*": "src/core/Scene/*",
+        "@models/*": "src/models/*",
+        "@ui/*": "src/ui/*",
       },
     },
   };

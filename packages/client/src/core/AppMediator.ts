@@ -1,17 +1,30 @@
 // core/AppMediator.ts
 import { BaseMediator } from "./collections/BaseMediator";
-import { UIPoint, UIEdge } from "./models/ui-models";
+import type { UISelectedPoint } from "@ui/dto/PointDto";
+import type { UIEdge } from "@ui/dto/EdgeDto";
+import type { Point } from "./models/Point";
 
-export interface AppEventMap {
+export type PointChange = Partial<Omit<UISelectedPoint, "id">>;
+
+export interface EnginePipelineConfigChange {
+  pipelineName: string;
+  engineName: string;
+  changes: Record<string, unknown>;
+}
+
+export type AppEventMap = {
   [AppMediator.PROGRESS]: number;
   [AppMediator.TARGET_SIZE]: number;
   [AppMediator.TEMPERATURE]: number;
+  [AppMediator.SIZE_TEXT]: number;
   [AppMediator.AUTO_ZOOM]: boolean;
-  [AppMediator.SELECTED_POINT]: UIPoint | null;
+  [AppMediator.SELECTED_POINT]: UISelectedPoint | null;
+  [AppMediator.POINT_SELECTED]: Point | null;
   [AppMediator.SELECTED_EDGE]: UIEdge | null;
-  [AppMediator.POINT_CHANGE]: { pointId: string; changes: Partial<Omit<UIPoint, "id">> };
+  [AppMediator.POINT_CHANGE]: { pointId: string; changes: PointChange };
   [AppMediator.EDGE_UPDATE]: { edgeId: string; changes: Partial<Omit<UIEdge, "id">> };
   [AppMediator.POINT_UPDATED]: { pointId: string };
+  [AppMediator.POINT_UPDATING]: { pointId: string };
   [AppMediator.POINTS_UPDATED]: undefined;
   [AppMediator.POINTS_UPDATING]: undefined;
   [AppMediator.POINTS_GRAPH_UPDATED]: undefined;
@@ -19,32 +32,45 @@ export interface AppEventMap {
   [AppMediator.CLEAR_POINTS]: undefined;
   [AppMediator.ADD_POINT]: undefined;
   [AppMediator.START_REPULSION]: undefined;
-}
+  [AppMediator.START_GRAPH]: undefined;
+  [AppMediator.RELOAD_TABLES]: undefined;
+  [AppMediator.SAVE_POSITIONS]: undefined;
+  [AppMediator.POSITIONS_SAVED]: undefined;
+  [AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED]: EnginePipelineConfigChange;
+  [AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED]: {
+    pipelineName: string;
+    engineName: string;
+    enabled: boolean;
+  };
+};
 
-export class AppMediator extends BaseMediator {
-  static PROGRESS = "progress";
-  static TARGET_SIZE = "target-size";
-  static TEMPERATURE = "temperature";
-  static SIZE_TEXT = "size-text";
-  static AUTO_ZOOM = "auto-zoom";
-  static SELECTED_POINT = "selected-point";
-  static SELECTED_EDGE = "selected-edge";
-  static POINT_CHANGE = "point-update";
-  static POINT_UPDATED = "point-updated";
-  static EDGE_UPDATE = "edge-update";
+export class AppMediator extends BaseMediator<AppEventMap> {
+  static PROGRESS = "progress" as const;
+  static TARGET_SIZE = "target-size" as const;
+  static TEMPERATURE = "temperature" as const;
+  static SIZE_TEXT = "size-text" as const;
+  static AUTO_ZOOM = "auto-zoom" as const;
+  static SELECTED_POINT = "selected-point" as const;
+  static SELECTED_EDGE = "selected-edge" as const;
+  static POINT_SELECTED = "point-selected" as const;
+  static POINT_CHANGE = "point-update" as const;
+  static POINT_UPDATED = "point-updated" as const;
+  static EDGE_UPDATE = "edge-update" as const;
 
-  static CLEAR_POINTS = "clear-points";
-  static ADD_POINT = "add-point";
-  static START_REPULSION = "start-repulsion";
-  static START_GRAPH = "start-graph";
-  static RELOAD_TABLES = "reload-tables";
-  static POINTS_UPDATING = "points-updating";
-  static POINTS_UPDATED = "points-updated";
-  static POINTS_GRAPH_UPDATED = "points-graph-updated";
-  static MODEL_MANAGER_STEP = "model-manager-step";
-  static SAVE_POSITIONS = "save-positions";
-  static POSITIONS_SAVED = "positions-saved";
-  static POINT_UPDATING = "point-updating";
+  static CLEAR_POINTS = "clear-points" as const;
+  static ADD_POINT = "add-point" as const;
+  static START_REPULSION = "start-repulsion" as const;
+  static START_GRAPH = "start-graph" as const;
+  static RELOAD_TABLES = "reload-tables" as const;
+  static POINTS_UPDATING = "points-updating" as const;
+  static POINTS_UPDATED = "points-updated" as const;
+  static POINTS_GRAPH_UPDATED = "points-graph-updated" as const;
+  static MODEL_MANAGER_STEP = "model-manager-step" as const;
+  static SAVE_POSITIONS = "save-positions" as const;
+  static POSITIONS_SAVED = "positions-saved" as const;
+  static POINT_UPDATING = "point-updating" as const;
+  static PIPELINE_ENGINE_CONFIG_CHANGED = "pipeline-engine-config-changed" as const;
+  static PIPELINE_ENGINE_ENABLED_CHANGED = "pipeline-engine-enabled-changed" as const;
 
   public get progress(): number {
     return this.get(AppMediator.PROGRESS) ?? 0;
@@ -74,10 +100,10 @@ export class AppMediator extends BaseMediator {
     this.set(AppMediator.AUTO_ZOOM, value);
   }
 
-  public get selectedPoint(): UIPoint | null {
+  public get selectedPoint(): UISelectedPoint | null {
     return this.get(AppMediator.SELECTED_POINT) ?? null;
   }
-  public set selectedPoint(value: UIPoint | null) {
+  public set selectedPoint(value: UISelectedPoint | null) {
     this.set(AppMediator.SELECTED_POINT, value);
   }
 
@@ -99,11 +125,15 @@ export class AppMediator extends BaseMediator {
    * Уведомить UI о текущем выборе.
    * Само состояние выбора хранится в PointModel и не дублируется в медиаторе.
    */
-  public selectPoint(value: UIPoint | null): void {
+  public pointSelected(value: Point | null): void {
+    this.emit(AppMediator.POINT_SELECTED, value);
+  }
+
+  public selectPoint(value: UISelectedPoint | null): void {
     this.emit(AppMediator.SELECTED_POINT, value);
   }
 
-  public pointChange(pointId: string, changes: Partial<Omit<UIPoint, "id">>): void {
+  public pointChange(pointId: string, changes: PointChange): void {
     this.emit(AppMediator.POINT_CHANGE, { pointId, changes });
   }
 
@@ -120,6 +150,24 @@ export class AppMediator extends BaseMediator {
   public startRepulsion(): void {
     this.emit(AppMediator.START_REPULSION);
   }
+  /** Передать Pipeline изменения конфигурации движка из UI. */
+  public pipelineEngineConfigChanged(pipelineName: string, engineName: string, changes: Record<string, unknown>): void {
+    this.emit(AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED, {
+      pipelineName,
+      engineName,
+      changes,
+    });
+  }
+
+  /** Передать Pipeline изменение состояния engine из UI. */
+  public pipelineEngineEnabledChanged(pipelineName: string, engineName: string, enabled: boolean): void {
+    this.emit(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, {
+      pipelineName,
+      engineName,
+      enabled,
+    });
+  }
+
   public startGraph(): void {
     this.emit(AppMediator.START_GRAPH);
   }
@@ -173,8 +221,11 @@ export class AppMediator extends BaseMediator {
   public onAutoZoom(callback: (value: boolean) => void): () => void {
     return this.on(AppMediator.AUTO_ZOOM, callback);
   }
-  public onSelectedPoint(callback: (point: UIPoint | null) => void): () => void {
+  public onSelectedPoint(callback: (point: UISelectedPoint | null) => void): () => void {
     return this.on(AppMediator.SELECTED_POINT, callback);
+  }
+  public onPointSelected(callback: (point: Point | null) => void): () => void {
+    return this.on(AppMediator.POINT_SELECTED, callback);
   }
   public onSelectedEdge(callback: (edge: UIEdge | null) => void): () => void {
     return this.on(AppMediator.SELECTED_EDGE, callback);
@@ -194,6 +245,14 @@ export class AppMediator extends BaseMediator {
   public onStartRepulsion(callback: () => void): () => void {
     return this.on(AppMediator.START_REPULSION, () => callback());
   }
+  public onPipelineEngineConfigChanged(callback: (detail: EnginePipelineConfigChange) => void): () => void {
+    return this.on(AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED, callback);
+  }
+
+  public onPipelineEngineEnabledChanged(callback: (detail: { pipelineName: string; engineName: string; enabled: boolean }) => void): () => void {
+    return this.on(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, callback);
+  }
+
   public onStartGraph(callback: () => void): () => void {
     return this.on(AppMediator.START_GRAPH, () => callback());
   }
@@ -218,7 +277,7 @@ export class AppMediator extends BaseMediator {
   public onPointsUpdated(callback: () => void): () => void {
     return this.on(AppMediator.POINTS_UPDATED, callback);
   }
-  public onPointChange(callback: (detail: { pointId: string; changes: Partial<Omit<UIPoint, "id">> }) => void): () => void {
+  public onPointChange(callback: (detail: { pointId: string; changes: PointChange }) => void): () => void {
     return this.on(AppMediator.POINT_CHANGE, callback);
   }
   public onPointUpdated(callback: (detail: { pointId: string }) => void): () => void {

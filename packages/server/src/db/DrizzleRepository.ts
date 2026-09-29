@@ -720,16 +720,19 @@ export class DrizzleRepository implements IRepository {
 
   async findEmbeddingsByDate(createdAt: Date, modelname?: string, tx?: PgTransaction<any, any, any>): Promise<Embedding[]> {
     const db = tx || this.client;
+
+    const conditions = [gt(embeddingsTable.createdAt, createdAt)];
+
+    if (modelname != null) {
+      conditions.push(eq(embeddingsTable.model_name, modelname));
+    }
+
     const items = await db
-      .select({
-        sessionId: embeddingsTable.sessionId,
-        model_name: embeddingsTable.model_name,
-        createdAt: embeddingsTable.createdAt,
-        processing_time_ms: embeddingsTable.processing_time_ms,
-      })
+      .select()
       .from(embeddingsTable)
-      .where(gt(embeddingsTable.createdAt, createdAt))
-      .orderBy(desc(embeddingsTable.createdAt)); // по желанию
+      .where(and(...conditions))
+      .orderBy(desc(embeddingsTable.createdAt));
+
     return items.map((item) => new Embedding({ ...item }));
   }
 

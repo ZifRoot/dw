@@ -1,7 +1,7 @@
 // components/EdgeInfoPanel.tsx
 import React, { useState, useEffect } from "react";
-import { AppMediator } from "../../core/AppMediator";
-import { UIEdge } from "../../core/models/ui-models";
+import { AppMediator } from "@core/AppMediator";
+import { UIEdge } from "@ui/dto/EdgeDto";
 
 // import styles from './EdgeInfoPanel.module.scss';
 

@@ -1,6 +1,6 @@
 // core/NeighborGraph.ts
-import { IEdgeModelFactory } from "../interfaces/IEdgeModelFactory";
-import { EdgeModel } from "../models/EdgeModel";
+import { IEdgeFactory } from "../interfaces/IEdgeFactory";
+import { Edge } from "../models/Edge";
 import { EdgeRef } from "../models/EdgeRef";
 import { EntityCollection } from "./EntityCollection";
 
@@ -11,7 +11,7 @@ import { EntityCollection } from "./EntityCollection";
  *
  * Граф хранится как ДВА синхронизированных представления одного набора рёбер:
  *
- * 1. **Плоский список рёбер** — `edgeCollection: EntityCollection<EdgeModel>`.
+ * 1. **Плоский список рёбер** — `edgeCollection: EntityCollection<Edge>`.
  *    Единственный источник правды. Каждое ребро лежит здесь ровно один раз,
  *    независимо от количества инцидентных точек.
  *
@@ -50,7 +50,7 @@ export class NeighborGraph {
    * Наследует все свойства EntityCollection: стабильную ссылку на items
    * и всегда актуальный indexMap.
    */
-  private edgeCollection: EntityCollection<EdgeModel>;
+  private edgeCollection: EntityCollection<Edge>;
 
   /**
    * Индекс смежности: pointId → множество id инцидентных рёбер.
@@ -62,10 +62,10 @@ export class NeighborGraph {
   private adjacency: Map<string, Set<string>> = new Map();
 
   /**
-   * @param factory Фабрика EdgeModel из EdgeRef. Граф не знает конкретный класс ребра.
+   * @param factory Фабрика Edge из EdgeRef. Граф не знает конкретный класс ребра.
    */
-  constructor(private factory: IEdgeModelFactory) {
-    this.edgeCollection = new EntityCollection<EdgeModel>((model) => model.id);
+  constructor(private factory: IEdgeFactory) {
+    this.edgeCollection = new EntityCollection<Edge>((edge) => edge.id);
   }
 
   // ───────────────────── getters ─────────────────────
@@ -86,19 +86,18 @@ export class NeighborGraph {
   }
 
   // ───────────────────── private helpers ─────────────────────
-
   /**
-   * Есть ли среди рёбер, инцидентных `fromId`, ребро в `toId` с данным `modelName`.
+   * Есть ли среди рёбер, инцидентных `fromId`, ребро в `toId`.
    * Направление в модели не учитывается — граф неориентированный.
    */
-  private hasDirection(fromId: string, toId: string, modelName?: string): boolean {
+  private hasDirection(fromId: string, toId: string): boolean {
     const edgeIds = this.adjacency.get(fromId);
     if (!edgeIds) return false;
 
     for (const id of edgeIds) {
       const e = this.edgeCollection.getById(id);
       if (!e) continue;
-      if ((e.sourceId === toId || e.targetId === toId) && e.modelName === modelName) {
+      if (e.sourceId === toId || e.targetId === toId) {
         return true;
       }
     }
@@ -110,10 +109,10 @@ export class NeighborGraph {
    * и в addEdge (без варна — там нормально, что ребра ещё нет).
    */
   private checkBothDirections(edgeRef: EdgeRef): { forward: boolean; backward: boolean } {
-    const { sourceId, targetId, modelName } = edgeRef;
+    const { sourceId, targetId } = edgeRef;
     return {
-      forward: this.hasDirection(sourceId, targetId, modelName),
-      backward: this.hasDirection(targetId, sourceId, modelName),
+      forward: this.hasDirection(sourceId, targetId),
+      backward: this.hasDirection(targetId, sourceId),
     };
   }
 
@@ -139,7 +138,7 @@ export class NeighborGraph {
    * @returns true, если ребро существует хотя бы в одном направлении.
    */
   public hasEdge(edgeRef: EdgeRef): boolean {
-    const { sourceId, targetId, modelName } = edgeRef;
+    const { sourceId, targetId } = edgeRef;
     if (sourceId === targetId) return false;
 
     const { forward, backward } = this.checkBothDirections(edgeRef);
@@ -147,9 +146,7 @@ export class NeighborGraph {
     if (forward && backward) return true;
 
     if (forward || backward) {
-      console.warn(
-        `[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId} ` + `for model "${modelName}". Only one direction present.`,
-      );
+      console.warn(`[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId}. Only one direction present.`);
       return true;
     }
 
@@ -163,26 +160,28 @@ export class NeighborGraph {
    * Фабрика создаёт модель; регистрируем её в edgeCollection (источник правды)
    * и в adjacency под обоими концами.
    */
-  public addEdge(edgeRef: EdgeRef): EdgeModel | null {
+  public addEdge(edgeRef: EdgeRef): Edge | null {
     const { sourceId, targetId } = edgeRef;
-    if (sourceId === targetId) return null;
 
-    // Без варна: если ребра нет — это норма для addEdge.
+    if (edgeRef.sourceId === edgeRef.targetId) return null;
     const { forward, backward } = this.checkBothDirections(edgeRef);
+
+    if (forward && backward) return null;
+
     if (forward || backward) {
-      //this.rebuildAdjacency()
-      // Односторонний случай здесь тоже глушим добавление, но состояние
-      // остаётся «грязным» — починить можно через rebuildAdjacency().
+      console.warn(`[NeighborGraph] Inconsistent edge between ${sourceId} and ${targetId}. Only one direction present.`);
       return null;
     }
 
-    const model = this.factory.create(edgeRef);
-    if (!model) return null;
+    const edge = this.factory.create(edgeRef);
+    if (!edge) return null;
 
-    this.edgeCollection.add(model);
-    this.addToAdjacency(model.sourceId, model.id);
-    this.addToAdjacency(model.targetId, model.id);
-    return model;
+    if (this.edgeCollection.getById(edge.id)) return null;
+
+    this.edgeCollection.add(edge);
+    this.addToAdjacency(edge.sourceId, edge.id);
+    this.addToAdjacency(edge.targetId, edge.id);
+    return edge;
   }
 
   /**
@@ -200,8 +199,8 @@ export class NeighborGraph {
    * Коллекция (swap-with-last) переупорядочится, adjacency — нет:
    * он держит id, а не индексы.
    */
-  public removeEdge(model: EdgeModel): void {
-    const { sourceId, targetId, id } = model;
+  public removeEdge(edge: Edge): void {
+    const { sourceId, targetId, id } = edge;
     this.edgeCollection.removes([id]);
     this.removeFrom(sourceId, id);
     this.removeFrom(targetId, id);
@@ -213,15 +212,14 @@ export class NeighborGraph {
    * Все id уходят в EntityCollection.removes одним вызовом —
    * swap-with-last отработает один раз, а не N.
    */
-  public removeEdges(models: EdgeModel[]): void {
-    if (models.length === 0) return;
+  public removeEdges(edges: Edge[]): void {
+    if (edges.length === 0) return;
 
-    this.edgeCollection.removes(models.map((m) => m.id));
+    this.edgeCollection.removes(edges.map((edge) => edge.id));
 
-    // adjacency чистим по каждому ребру отдельно — у каждого свои два конца.
-    for (const m of models) {
-      this.removeFrom(m.sourceId, m.id);
-      this.removeFrom(m.targetId, m.id);
+    for (const edge of edges) {
+      this.removeFrom(edge.sourceId, edge.id);
+      this.removeFrom(edge.targetId, edge.id);
     }
   }
 
@@ -238,9 +236,7 @@ export class NeighborGraph {
     if (!edges) return;
 
     edges.delete(edgeId);
-    if (edges.size === 0) {
-      this.adjacency.delete(pointId);
-    }
+    if (edges.size === 0) this.adjacency.delete(pointId);
   }
 
   // ───────────────────── queries ─────────────────────
@@ -249,30 +245,26 @@ export class NeighborGraph {
    * Все рёбра, инцидентные точке.
    * Один проход по Set, без промежуточных массивов.
    */
-  public getEdgesForPoint(id: string): EdgeModel[] {
+  public getEdgesForPoint(id: string): Edge[] {
     const edgeIds = this.adjacency.get(id);
     if (!edgeIds) return [];
 
-    const result: EdgeModel[] = [];
+    const result: Edge[] = [];
     for (const edgeId of edgeIds) {
-      const e = this.edgeCollection.getById(edgeId);
-      if (e) result.push(e);
+      const edge = this.edgeCollection.getById(edgeId);
+      if (edge) result.push(edge);
     }
     return result;
   }
 
-  /**
-   * Множество id соседей точки.
-   * Строится напрямую из рёбер — без flatMap и промежуточных массивов.
-   */
   public getNeighbors(id: string): Set<string> {
     const neighbors = new Set<string>();
-    const edges = this.getEdgesForPoint(id);
 
-    for (const e of edges) {
-      if (e.sourceId !== id) neighbors.add(e.sourceId);
-      if (e.targetId !== id) neighbors.add(e.targetId);
+    for (const edge of this.getEdgesForPoint(id)) {
+      if (edge.sourceId !== id) neighbors.add(edge.sourceId);
+      if (edge.targetId !== id) neighbors.add(edge.targetId);
     }
+
     return neighbors;
   }
 
@@ -288,33 +280,23 @@ export class NeighborGraph {
    */
   public hasNeighbor(a: string, b: string): boolean {
     if (a === b) return false;
-    const edgeIds = this.adjacency.get(a);
-    if (!edgeIds) return false;
 
-    for (const id of edgeIds) {
-      const e = this.edgeCollection.getById(id);
-      if (!e) continue;
-      if (e.sourceId === b || e.targetId === b) return true;
+    for (const edge of this.getEdgesForPoint(a)) {
+      if (edge.sourceId === b || edge.targetId === b) return true;
     }
+
     return false;
   }
 
   /** Все рёбра между двумя точками (может быть несколько при разных modelName). */
-  public getEdgesBetween(a: string, b: string): EdgeModel[] {
+  public getEdgesBetween(a: string, b: string): Edge[] {
     if (a === b) return [];
-    const edgeIds = this.adjacency.get(a);
-    if (!edgeIds) return [];
 
-    const result: EdgeModel[] = [];
-    for (const id of edgeIds) {
-      const e = this.edgeCollection.getById(id);
-      if (e && (e.sourceId === b || e.targetId === b)) result.push(e);
-    }
-    return result;
+    return this.getEdgesForPoint(a).filter((edge) => edge.sourceId === b || edge.targetId === b);
   }
 
   /** Модель ребра по id — O(1) через indexMap коллекции. */
-  public getEdgeById(id: string): EdgeModel | null {
+  public getEdgeById(id: string): Edge | null {
     return this.edgeCollection.getById(id);
   }
 
@@ -323,17 +305,17 @@ export class NeighborGraph {
    * Возвращается ЖИВОЙ массив коллекции, не копия. Ссылка стабильна,
    * порядок может меняться после удаления (swap-with-last).
    */
-  public getAllEdgeModels(): EdgeModel[] {
+  public getAllEdges(): Edge[] {
     return this.edgeCollection.items;
   }
 
-  /** То же, что getAllEdgeModels — оставлено для совместимости. */
-  public getEdgesArrayDirect(): EdgeModel[] {
+  /** То же, что getAllEdges — оставлено для совместимости. */
+  public getEdgesArrayDirect(): Edge[] {
     return this.edgeCollection.items;
   }
 
   /** Доступ к самой коллекции — для validate/clone на её уровне. */
-  public getEdgeCollection(): EntityCollection<EdgeModel> {
+  public getEdgeCollection(): EntityCollection<Edge> {
     return this.edgeCollection;
   }
 
@@ -350,15 +332,15 @@ export class NeighborGraph {
    * Полезно при удалении узла из внешней системы: одна операция —
    * и в графе не остаётся «висячих» рёбер.
    */
-  public removeEdgesForPoint(pointId: string): EdgeModel[] {
+  public removeEdgesForPoint(pointId: string): Edge[] {
     const edges = this.getEdgesForPoint(pointId);
     if (edges.length === 0) return [];
 
-    this.edgeCollection.removes(edges.map((e) => e.id));
+    this.edgeCollection.removes(edges.map((edge) => edge.id));
 
-    for (const e of edges) {
-      this.removeFrom(e.sourceId, e.id);
-      this.removeFrom(e.targetId, e.id);
+    for (const edge of edges) {
+      this.removeFrom(edge.sourceId, edge.id);
+      this.removeFrom(edge.targetId, edge.id);
     }
 
     return edges;
@@ -378,7 +360,6 @@ export class NeighborGraph {
   public validate(): { ok: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    // 1. Коллекция → adjacency
     for (const edge of this.edgeCollection.items) {
       const sourceSet = this.adjacency.get(edge.sourceId);
       const targetSet = this.adjacency.get(edge.targetId);
@@ -391,7 +372,6 @@ export class NeighborGraph {
       }
     }
 
-    // 2 + 3. adjacency → коллекция и корректность точки
     for (const [pointId, edgeIds] of this.adjacency.entries()) {
       for (const edgeId of edgeIds) {
         const edge = this.edgeCollection.getById(edgeId);
@@ -400,6 +380,7 @@ export class NeighborGraph {
           errors.push(`Adjacency[${pointId}] references non-existent edge ${edgeId}`);
           continue;
         }
+
         if (edge.sourceId !== pointId && edge.targetId !== pointId) {
           errors.push(`Adjacency[${pointId}] references edge ${edgeId} which doesn't touch this point`);
         }
@@ -417,6 +398,7 @@ export class NeighborGraph {
    */
   public rebuildAdjacency(): void {
     this.adjacency.clear();
+
     for (const edge of this.edgeCollection.items) {
       this.addToAdjacency(edge.sourceId, edge.id);
       this.addToAdjacency(edge.targetId, edge.id);
@@ -434,7 +416,7 @@ export class NeighborGraph {
     const newGraph = new NeighborGraph(this.factory);
 
     for (const edge of this.edgeCollection.items) {
-      const cloned = { ...edge } as EdgeModel;
+      const cloned = { ...edge } as Edge;
       newGraph.edgeCollection.add(cloned);
       newGraph.addToAdjacency(cloned.sourceId, cloned.id);
       newGraph.addToAdjacency(cloned.targetId, cloned.id);

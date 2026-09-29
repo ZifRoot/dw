@@ -6,13 +6,15 @@ import { PointGraphManager } from "../collections/PointGraphManager";
  * AnimationEngine.
  */
 export abstract class BaseAlgorithm {
+  /** Конфигурация алгоритма, доступная Pipeline для UI-изменений. */
+  public abstract readonly config: object;
+
   public temperature = 0;
   private running = false;
 
   protected constructor(
     protected readonly mediator: AppMediator,
     protected readonly pointGraphManager: PointGraphManager,
-    protected readonly stopTemperature: number,
   ) {}
 
   /** Запустить алгоритм. */
@@ -30,17 +32,23 @@ export abstract class BaseAlgorithm {
     return this.running;
   }
 
+  /** Возвращает актуальную температуру остановки алгоритма. */
+  public abstract getStopTemperature(): number;
+
   /**
    * Выполнить один шаг алгоритма.
+   *
+   * Температура вычисляется как часть этого же шага. Pipeline получает
+   * результат через состояние алгоритма и использует его для scheduling.
+   *
    * @returns true, если алгоритм должен продолжить работу.
    */
   public step(deltaTime: number): boolean {
     if (!this.running) return false;
 
     this.temperature = this.applyStep(deltaTime);
-    this.mediator.temperature = this.temperature;
 
-    if (this.temperature < this.stopTemperature) this.stop();
+    if (this.temperature < this.getStopTemperature()) this.stop();
     return this.running;
   }
 
