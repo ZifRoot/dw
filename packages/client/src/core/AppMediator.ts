@@ -3,6 +3,7 @@ import { BaseMediator } from "./collections/BaseMediator";
 import type { UISelectedPoint } from "@ui/dto/PointDto";
 import type { UIEdge } from "@ui/dto/EdgeDto";
 import type { Point } from "./models/Point";
+import type { PipelineViewState } from "@ui/dto/PipelineViewState";
 
 export type PointChange = Partial<Omit<UISelectedPoint, "id">>;
 
@@ -42,6 +43,8 @@ export type AppEventMap = {
     engineName: string;
     enabled: boolean;
   };
+  [AppMediator.PIPELINE_STATES]: ReadonlyArray<PipelineViewState>;
+  [AppMediator.PIPELINE_STATE_CHANGED]: PipelineViewState;
 };
 
 export class AppMediator extends BaseMediator<AppEventMap> {
@@ -71,6 +74,8 @@ export class AppMediator extends BaseMediator<AppEventMap> {
   static POINT_UPDATING = "point-updating" as const;
   static PIPELINE_ENGINE_CONFIG_CHANGED = "pipeline-engine-config-changed" as const;
   static PIPELINE_ENGINE_ENABLED_CHANGED = "pipeline-engine-enabled-changed" as const;
+  static PIPELINE_STATES = "pipeline-states" as const;
+  static PIPELINE_STATE_CHANGED = "pipeline-state-changed" as const;
 
   public get progress(): number {
     return this.get(AppMediator.PROGRESS) ?? 0;
@@ -168,6 +173,19 @@ export class AppMediator extends BaseMediator<AppEventMap> {
     });
   }
 
+  /** Обновить UI snapshot конкретного Pipeline. */
+  public pipelineStateChanged(state: PipelineViewState): void {
+    const states = this.pipelineStates.filter((item) => item.name !== state.name);
+    const nextStates = [...states, state];
+    this.set(AppMediator.PIPELINE_STATES, nextStates);
+    this.emit(AppMediator.PIPELINE_STATE_CHANGED, state);
+
+    const temperatures = nextStates.map((item) => item.temperature);
+    const temperature = temperatures.length > 0 ? Math.max(...temperatures) : 0;
+
+    this.temperature = temperature;
+  }
+
   public startGraph(): void {
     this.emit(AppMediator.START_GRAPH);
   }
@@ -251,6 +269,14 @@ export class AppMediator extends BaseMediator<AppEventMap> {
 
   public onPipelineEngineEnabledChanged(callback: (detail: { pipelineName: string; engineName: string; enabled: boolean }) => void): () => void {
     return this.on(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, callback);
+  }
+
+  public get pipelineStates(): ReadonlyArray<PipelineViewState> {
+    return this.get(AppMediator.PIPELINE_STATES) ?? [];
+  }
+
+  public onPipelineStateChanged(callback: (state: PipelineViewState) => void): () => void {
+    return this.on(AppMediator.PIPELINE_STATE_CHANGED, callback);
   }
 
   public onStartGraph(callback: () => void): () => void {

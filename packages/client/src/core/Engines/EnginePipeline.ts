@@ -2,6 +2,7 @@ import { EventCoagulator } from "@utils/event-coagulator";
 import { AppMediator } from "../AppMediator";
 import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
 import { BaseAlgorithm } from "./BaseAlgorithm";
+import type { PipelineViewState } from "@ui/dto/PipelineViewState";
 
 export type EnginePipelineTemperatureAggregation = "maximum" | "average";
 
@@ -53,8 +54,8 @@ export class EnginePipeline {
     private readonly animation: AnimationEngine,
     private readonly name: string,
   ) {
-    this.temperatureCoagulator = new EventCoagulator(TEMPERATURE_UI_DELAY_MS, "latest", (temperature) => {
-      this.mediator.temperature = temperature;
+    this.temperatureCoagulator = new EventCoagulator(TEMPERATURE_UI_DELAY_MS, "latest", () => {
+      this.mediator.pipelineStateChanged(this.createViewState());
     });
 
     this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
@@ -89,6 +90,7 @@ export class EnginePipeline {
       enabled: entry.enabled ?? true,
     }));
     this.skipFrames.clear();
+    this.publishViewState();
   }
 
   /**
@@ -115,7 +117,7 @@ export class EnginePipeline {
   /** Установить способ агрегации температур physics. */
   public setTemperatureAggregation(mode: EnginePipelineTemperatureAggregation): void {
     this.temperatureAggregation = mode;
-    this.publishTemperature();
+    this.publishViewState();
   }
 
   /** Включить или выключить алгоритм по его имени. */
@@ -135,6 +137,7 @@ export class EnginePipeline {
     }
 
     if (this.running) this.rebuild();
+    this.publishViewState();
   }
 
   /** Запустить все включённые алгоритмы. */
@@ -159,6 +162,7 @@ export class EnginePipeline {
     this.lastPointsUpdatedAt = 0;
     this.startCheckpointTimer();
     this.rebuild();
+    this.publishViewState();
   }
 
   /**
@@ -177,6 +181,8 @@ export class EnginePipeline {
     for (const entry of this.entries) {
       entry.algorithm.stop();
     }
+
+    this.publishViewState();
   }
 
   /** Освободить все подписки и ресурсы pipeline. */
@@ -263,7 +269,7 @@ export class EnginePipeline {
     return Math.max(0, Math.min(MAX_SKIP_FRAMES, skip));
   }
 
-  /** Агрегировать температуры всех включённых physics и отправить их в UI. */
+  /** Агрегировать температуры всех включённых physics и обновить View DTO. */
   private publishTemperature(): void {
     const temperatures = this.entries.filter((entry) => entry.enabled).map((entry) => entry.algorithm.temperature);
 
@@ -272,12 +278,40 @@ export class EnginePipeline {
       return;
     }
 
-    const temperature =
-      this.temperatureAggregation === "average"
-        ? temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length
-        : Math.max(...temperatures);
+    this.temperatureCoagulator.push(this.calculatePipelineTemperature(temperatures));
+  }
 
-    this.temperatureCoagulator.push(temperature);
+  /** Рассчитать температуру Pipeline из температур включённых physics. */
+  private calculatePipelineTemperature(temperatures: number[]): number {
+    if (temperatures.length === 0) return 0;
+
+    return this.temperatureAggregation === "average"
+      ? temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length
+      : Math.max(...temperatures);
+  }
+
+  /** Создать UI snapshot Pipeline без ссылок на domain/runtime объекты. */
+  private createViewState(): PipelineViewState {
+    const temperatures = this.entries.filter((entry) => entry.enabled).map((entry) => entry.algorithm.temperature);
+
+    return {
+      name: this.name,
+      running: this.running,
+      temperature: this.calculatePipelineTemperature(temperatures),
+      temperatureAggregation: this.temperatureAggregation,
+      engines: this.entries.map((entry) => ({
+        name: entry.name,
+        enabled: entry.enabled ?? true,
+        config: { ...entry.algorithm.config },
+        temperature: entry.algorithm.temperature,
+        skipFrames: this.skipFrames.get(entry.algorithm) ?? 0,
+      })),
+    };
+  }
+
+  /** Опубликовать актуальный UI snapshot Pipeline. */
+  private publishViewState(): void {
+    this.mediator.pipelineStateChanged(this.createViewState());
   }
 
   /** Запустить периодические checkpoints. */

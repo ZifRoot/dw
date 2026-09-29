@@ -1,19 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AppMediator } from "@core/AppMediator";
-import { EnginePipeline } from "@core/Engines/EnginePipeline";
+import type { PipelineViewState } from "@ui/dto/PipelineViewState";
 
 interface PipelinePanelProps {
-  pipelines: EnginePipeline[];
   mediator: AppMediator;
-}
-
-interface PipelineState {
-  name: string;
-  engines: Array<{
-    name: string;
-    enabled: boolean;
-    config: Record<string, unknown>;
-  }>;
 }
 
 /**
@@ -22,22 +12,21 @@ interface PipelineState {
  * UI не изменяет Pipeline и конфигурации алгоритмов напрямую.
  * Изменения конфигурации передаются через AppMediator.
  */
-export const PipelinePanel: React.FC<PipelinePanelProps> = ({
-  pipelines,
-  mediator,
-}) => {
+export const PipelinePanel: React.FC<PipelinePanelProps> = ({ mediator }) => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  const [states, setStates] = useState<PipelineState[]>(() =>
-    pipelines.map((pipeline) => ({
-      name: pipeline.pipelineName,
-      engines: pipeline.getConfiguration().map((engine) => ({
-        name: engine.name,
-        enabled: engine.enabled,
-        config: { ...engine.config },
-      })),
-    })),
+  const [states, setStates] = useState<ReadonlyArray<PipelineViewState>>(
+    mediator.pipelineStates,
   );
+
+  useEffect(() => {
+    setStates(mediator.pipelineStates);
+    return mediator.onPipelineStateChanged((state) => {
+      setStates((current) => {
+        const withoutCurrent = current.filter((item) => item.name !== state.name);
+        return [...withoutCurrent, state];
+      });
+    });
+  }, [mediator]);
 
   const toggleExpanded = (pipelineName: string) => {
     setExpanded((current) => ({
@@ -51,25 +40,7 @@ export const PipelinePanel: React.FC<PipelinePanelProps> = ({
     engineName: string,
     enabled: boolean,
   ) => {
-    const pipeline = pipelines.find(
-      (item) => item.pipelineName === pipelineName,
-    );
-    if (!pipeline) return;
-
     mediator.pipelineEngineEnabledChanged(pipelineName, engineName, enabled);
-
-    setStates((current) =>
-      current.map((state) =>
-        state.name !== pipelineName
-          ? state
-          : {
-              ...state,
-              engines: state.engines.map((engine) =>
-                engine.name === engineName ? { ...engine, enabled } : engine,
-              ),
-            },
-      ),
-    );
   };
 
   const setConfigValue = (
@@ -81,24 +52,6 @@ export const PipelinePanel: React.FC<PipelinePanelProps> = ({
     mediator.pipelineEngineConfigChanged(pipelineName, engineName, {
       [key]: value,
     });
-
-    setStates((current) =>
-      current.map((state) =>
-        state.name !== pipelineName
-          ? state
-          : {
-              ...state,
-              engines: state.engines.map((engine) =>
-                engine.name !== engineName
-                  ? engine
-                  : {
-                      ...engine,
-                      config: { ...engine.config, [key]: value },
-                    },
-              ),
-            },
-      ),
-    );
   };
 
   return (
@@ -113,6 +66,10 @@ export const PipelinePanel: React.FC<PipelinePanelProps> = ({
             <button type="button" onClick={() => toggleExpanded(pipeline.name)}>
               {isExpanded ? "▼" : "▶"} {pipeline.name}
             </button>
+
+            <div>Температура: {pipeline.temperature.toFixed(4)}</div>
+            <div>Состояние: {pipeline.running ? "выполняется" : "остановлен"}</div>
+            <div>Агрегация температуры: {pipeline.temperatureAggregation}</div>
 
             {isExpanded && (
               <div>
@@ -132,6 +89,9 @@ export const PipelinePanel: React.FC<PipelinePanelProps> = ({
                       />
                       {engine.name}
                     </label>
+
+                    <div>Температура physics: {engine.temperature.toFixed(4)}</div>
+                    <div>Пропуск кадров: {engine.skipFrames}</div>
 
                     {engine.enabled && (
                       <div>

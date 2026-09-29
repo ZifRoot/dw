@@ -104,7 +104,7 @@ function start(way: Way) {
       { name: "Затухание по Z", algorithm: zdampingAlgorithm },
     ]);
     createControlPanel(controlPanelDiv, mediator);
-    createInfoPanel(infoPanelDiv, mediator, [enginePipeline]);
+    createInfoPanel(infoPanelDiv, mediator);
   }
 }
 

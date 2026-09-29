@@ -55,9 +55,9 @@ export class MediatorScene {
       receivers: [],
     },
     {
-      event: AppMediator.TEMPERATURE,
+      event: AppMediator.PIPELINE_STATE_CHANGED,
       senders: [{ name: "EnginePipeline", lines: [60] }],
-      receivers: [{ name: "ControlPanel", lines: [28] }],
+      receivers: [{ name: "PipelinePanel", lines: [30] }],
     },
     {
       event: AppMediator.SIZE_TEXT,
