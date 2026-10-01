@@ -159,7 +159,10 @@ test("splice emits removals, additions, and updates for shifted existing items",
     { index: 1, value: 20 },
     { index: 2, value: 30 },
   ]);
-  assert.deepEqual(events.update, [{ index: 3, value: 4 }]);
+  assert.deepEqual(events.update, [
+    { index: 3, value: 3 },
+    { index: 4, value: 4 },
+  ]);
   assert.deepEqual([...array], [1, 20, 30, 3, 4]);
 });
 
