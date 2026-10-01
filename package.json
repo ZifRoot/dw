@@ -33,7 +33,7 @@
     "typecheck:server": "npm --workspace server run typecheck",
     "typecheck:client": "npm --workspace client run typecheck",
     "typecheck": "npm run typecheck:client && npm run typecheck:server",
-    "test:shared:utils": "tsx --test packages/shared/src/utils/logger-singleRunner.test.ts",
+    "test:shared:utils": "tsx --test packages/shared/src/utils/logger-singleRunner.test.ts packages/shared/src/utils/observable-array.test.ts",
     "db:generate": "npm --workspace server run db:generate",
     "db:migrate": "npm --workspace server run db:migrate",
     "db:push": "npm --workspace server run db:push",
