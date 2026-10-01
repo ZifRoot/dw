@@ -72,6 +72,7 @@ export class AppMediator extends BaseMediator<AppEventMap> {
   static PIPELINE_ENGINE_CONFIG_CHANGED = "pipeline-engine-config-changed" as const;
   static PIPELINE_ENGINE_ENABLED_CHANGED = "pipeline-engine-enabled-changed" as const;
   static PIPELINE_STATE = "pipeline-state" as const;
+  static PIPELINE_STATE_CHANGED = "pipeline-state-changed" as const;
 
   public get progress(): number {
     return this.get(AppMediator.PROGRESS) ?? 0;
