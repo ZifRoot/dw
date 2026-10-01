@@ -19,7 +19,6 @@ export interface EnginePipelineEntry {
 }
 
 export interface EnginePipelineConfigChange {
-  pipelineName: string;
   engineName: string;
   changes: Record<string, unknown>;
 }
@@ -52,7 +51,6 @@ export class EnginePipeline {
   constructor(
     private readonly mediator: AppMediator,
     private readonly animation: AnimationEngine,
-    private readonly name: string,
   ) {
     this.temperatureCoagulator = new EventCoagulator(TEMPERATURE_UI_DELAY_MS, "latest", () => {
       this.mediator.pipelineStateChanged(this.createViewState());
@@ -60,8 +58,6 @@ export class EnginePipeline {
 
     this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
     this.unsubscribeConfig = this.mediator.onPipelineEngineConfigChanged((change) => {
-      if (change.pipelineName !== this.name) return;
-
       const entry = this.entries.find((item) => item.name === change.engineName);
       if (!entry) return;
 
@@ -69,14 +65,8 @@ export class EnginePipeline {
     });
 
     this.unsubscribeEnabled = this.mediator.onPipelineEngineEnabledChanged((change) => {
-      if (change.pipelineName !== this.name) return;
       this.setEnabled(change.engineName, change.enabled);
     });
-  }
-
-  /** Возвращает человекочитаемое название pipeline. */
-  public get pipelineName(): string {
-    return this.name;
   }
 
   /** Установить алгоритмы и их порядок. Повтор одного алгоритма разрешён. */
@@ -295,7 +285,6 @@ export class EnginePipeline {
     const temperatures = this.entries.filter((entry) => entry.enabled).map((entry) => entry.algorithm.temperature);
 
     return {
-      name: this.name,
       running: this.running,
       temperature: this.calculatePipelineTemperature(temperatures),
       temperatureAggregation: this.temperatureAggregation,
