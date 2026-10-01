@@ -214,7 +214,7 @@ export class ObservableArray<T extends Primitive[]>
               ]);
 
         if (removed.length > 0) {
-          this.events.emit(
+          events.emit(
             "remove",
             removed.map((value, offset) => ({
               index: index + offset,
@@ -224,7 +224,7 @@ export class ObservableArray<T extends Primitive[]>
         }
 
         if (items.length > 0) {
-          this.events.emit(
+          events.emit(
             "add",
             items.map((value, offset) => ({
               index: index + offset,
