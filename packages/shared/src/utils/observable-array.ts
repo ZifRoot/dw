@@ -88,10 +88,12 @@ export class ObservableArray<T extends Primitive[]>
   private readonly events = new EventEmitter<ObservableArrayEvents<T>>();
 
   public constructor(values: T = [] as unknown as T) {
+    super();
+
     if (typeof values === "number") {
-      super(values);
+      this.length = values;
     } else {
-      super(...values);
+      Array.prototype.push.apply(this, values);
     }
 
     const target = this;
