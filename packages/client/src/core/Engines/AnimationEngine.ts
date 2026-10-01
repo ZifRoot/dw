@@ -362,10 +362,7 @@ export class AnimationEngine {
         return;
       }
 
-      this.frameBudgetMs = Math.max(
-        1,
-        (totalFrameTime / measuredFrames) * COMPUTATION_BUDGET_RATIO,
-      );
+      this.frameBudgetMs = Math.max(1, (totalFrameTime / measuredFrames) * COMPUTATION_BUDGET_RATIO);
       this.isCalibrating = "yes";
       this.start();
     };
@@ -392,12 +389,7 @@ export class AnimationEngine {
       const frameStart = performance.now();
       let executedCallbacks = 0;
 
-      while (
-        this.isRunning &&
-        this.groups.size > 0 &&
-        (executedCallbacks === 0 ||
-          performance.now() - frameStart < this.frameBudgetMs)
-      ) {
+      while (this.isRunning && this.groups.size > 0 && (executedCallbacks === 0 || performance.now() - frameStart < this.frameBudgetMs)) {
         const group = this.takeNextGroup();
         if (group === null) break;
 
@@ -421,11 +413,7 @@ export class AnimationEngine {
   private takeNextGroup(): CallbackGroup | null {
     const pendingNode = this.groupsQueue.peekPending();
 
-    if (
-      pendingNode !== null &&
-      (this.groups.get(pendingNode.groupId)?.eligibleStep ?? Infinity) <=
-        this.currentStep
-    ) {
+    if (pendingNode !== null && (this.groups.get(pendingNode.groupId)?.eligibleStep ?? Infinity) <= this.currentStep) {
       this.groupsQueue.dequeuePending();
       return this.groups.get(pendingNode.groupId) ?? null;
     }
@@ -452,10 +440,7 @@ export class AnimationEngine {
     }
 
     const startedAt = performance.now();
-    const deltaTime =
-      group.lastCompletedAt === null
-        ? 0
-        : Math.max(0, startedAt - group.lastCompletedAt);
+    const deltaTime = group.lastCompletedAt === null ? 0 : Math.max(0, startedAt - group.lastCompletedAt);
 
     this.executeSafely(next.value, deltaTime);
 
@@ -467,9 +452,7 @@ export class AnimationEngine {
     return true;
   }
 
-  private getNextCallback(
-    group: CallbackGroup,
-  ): IteratorResult<AnimationCallback> {
+  private getNextCallback(group: CallbackGroup): IteratorResult<AnimationCallback> {
     if (group.sequence !== null) {
       return group.sequence.next();
     }
