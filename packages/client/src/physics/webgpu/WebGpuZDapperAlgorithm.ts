@@ -25,7 +25,6 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
   private readonly parametersBuffer: WebGpuBuffer;
   private readonly temperatureReadbackBuffer: WebGpuBuffer;
   private instanceId: number | null = null;
-  private executionPending = false;
 
   public constructor(
     mediator: AppMediator,
@@ -69,11 +68,7 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     );
   }
 
-  protected applyStep(_deltaTime: number): number {
-    if (this.executionPending) {
-      return this.config.stopTemperature;
-    }
-
+  protected async applyStep(_deltaTime: number): Promise<number> {
     this.getInstanceId();
     const updatePipeline = this.getUpdatePipeline();
     const reductionPipeline = this.getReductionPipeline();
@@ -132,8 +127,6 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
       },
     ];
 
-    this.executionPending = true;
-
     this.backend.submit(
       [
         {
@@ -150,22 +143,18 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
       copyCommands,
     );
 
-    void Promise.all([
-      this.transformer.save(data.readback),
-      this.backend.readBuffer(this.temperatureReadbackBuffer),
-    ])
-      .then(([, temperatureData]) => {
-        this.temperature = new Float32Array(temperatureData)[0];
-      })
-      .catch((error: unknown) => {
-        console.error("WebGPU Z-damping execution failed.", error);
-        this.stop();
-      })
-      .finally(() => {
-        this.executionPending = false;
-      });
+    try {
+      const [, temperatureData] = await Promise.all([
+        this.transformer.save(data.readback),
+        this.backend.readBuffer(this.temperatureReadbackBuffer),
+      ]);
 
-    return this.config.stopTemperature;
+      return new Float32Array(temperatureData)[0];
+    } catch (error: unknown) {
+      console.error("WebGPU Z-damping execution failed.", error);
+      this.stop();
+      return 0;
+    }
   }
 
   public getStopTemperature(): number {
