@@ -64,211 +64,17 @@ class EventEmitter<
   }
 }
 
-export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
-  private readonly events = new EventEmitter<ObservableArrayEvents<T>>();
+const observableArrayEvents = new WeakMap<object, EventEmitter<any>>();
 
+export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
   public constructor(...args: [number] | T[number][]) {
     super(...args);
 
     const target = this;
-    const events = this.events;
-    let proxy: ObservableArray<T>;
+    const events = new EventEmitter<ObservableArrayEvents<T>>();
+    observableArrayEvents.set(target, events);
 
-    Object.assign(target, {
-      onUpdate: (callback: ObservableArrayEvents<T>["update"]): (() => void) => {
-        this.events.addListener("update", callback);
-
-        return () => {
-          this.events.removeListener("update", callback);
-        };
-      },
-
-      onAdd: (callback: ObservableArrayEvents<T>["add"]): (() => void) => {
-        this.events.addListener("add", callback);
-
-        return () => {
-          this.events.removeListener("add", callback);
-        };
-      },
-
-      onRemove: (callback: ObservableArrayEvents<T>["remove"]): (() => void) => {
-        this.events.addListener("remove", callback);
-
-        return () => {
-          this.events.removeListener("remove", callback);
-        };
-      },
-
-      push: (...items: T[number][]): number => {
-        const index = target.length;
-        const result = Array.prototype.push.apply(target, items);
-
-        if (items.length > 0) {
-          this.events.emit(
-            "add",
-            items.map((value, offset) => ({
-              index: index + offset,
-              value,
-            })),
-          );
-        }
-
-        return result;
-      },
-
-      pop: (): T[number] | undefined => {
-        if (target.length === 0) {
-          return undefined;
-        }
-
-        const index = target.length - 1;
-        const value = Array.prototype.pop.call(target);
-
-        this.events.emit("remove", [
-          {
-            index,
-            value,
-          },
-        ]);
-
-        return value;
-      },
-
-      shift: (): T[number] | undefined => {
-        if (target.length === 0) {
-          return undefined;
-        }
-
-        const value = Array.prototype.shift.call(target);
-
-        this.events.emit("remove", [
-          {
-            index: 0,
-            value,
-          },
-        ]);
-
-        return value;
-      },
-
-      unshift: (...items: T[number][]): number => {
-        const result = Array.prototype.unshift.apply(target, items);
-
-        if (items.length > 0) {
-          this.events.emit(
-            "add",
-            items.map((value, index) => ({
-              index,
-              value,
-            })),
-          );
-        }
-
-        return result;
-      },
-
-      splice: function (start: number, deleteCount?: number, ...items: T[number][]): (T[number] | undefined)[] {
-        const length = target.length;
-        const index = start < 0 ? Math.max(length + start, 0) : Math.min(start, length);
-
-        const removed: T =
-          arguments.length === 1
-            ? Reflect.apply(Array.prototype.splice, target, [start])
-            : Reflect.apply(Array.prototype.splice, target, [start, deleteCount, ...items]);
-
-        if (removed.length > 0) {
-          events.emit(
-            "remove",
-            removed.map((value, offset) => ({
-              index: index + offset,
-              value,
-            })),
-          );
-        }
-
-        if (items.length > 0) {
-          events.emit(
-            "add",
-            items.map((value, offset) => ({
-              index: index + offset,
-              value,
-            })),
-          );
-        }
-
-        return removed;
-      },
-
-      fill: (value: T[number], start?: number, end?: number): ObservableArray<T> => {
-        const oldValues = Array.from(target);
-        const length = target.length;
-        const first = normalizeIndex(start ?? 0, length);
-        const last = normalizeIndex(end ?? length, length);
-
-        Array.prototype.fill.call(target, value, start, end);
-
-        const updates: ObservableArrayItem<T[number]>[] = [];
-
-        for (let index = first; index < last; index++) {
-          if (oldValues[index] !== target[index]) {
-            updates.push({
-              index,
-              value: target[index],
-            });
-          }
-        }
-
-        if (updates.length > 0) {
-          this.events.emit("update", updates);
-        }
-
-        return proxy;
-      },
-
-      reverse: (): ObservableArray<T> => {
-        const oldValues = Array.from(target);
-
-        Array.prototype.reverse.call(target);
-
-        const updates = collectChangedItems(target, oldValues);
-
-        if (updates.length > 0) {
-          this.events.emit("update", updates);
-        }
-
-        return proxy;
-      },
-
-      sort: (compareFn?: (a: T[number], b: T[number]) => number): ObservableArray<T> => {
-        const oldValues = Array.from(target);
-
-        Array.prototype.sort.call(target, compareFn);
-
-        const updates = collectChangedItems(target, oldValues);
-
-        if (updates.length > 0) {
-          this.events.emit("update", updates);
-        }
-
-        return proxy;
-      },
-
-      copyWithin: (targetIndex: number, start: number, end?: number): ObservableArray<T> => {
-        const oldValues = Array.from(target);
-
-        Array.prototype.copyWithin.call(target, targetIndex, start, end);
-
-        const updates = collectChangedItems(target, oldValues);
-
-        if (updates.length > 0) {
-          this.events.emit("update", updates);
-        }
-
-        return proxy;
-      },
-    });
-
-    proxy = new Proxy(target, {
+    const proxy = new Proxy(target, {
       set: (currentTarget, property, value): boolean => {
         if (property === "length") {
           const oldLength = currentTarget.length;
@@ -289,7 +95,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
             }
 
             currentTarget.length = newLength;
-            this.events.emit("remove", removed);
+            getEvents(currentTarget).emit("remove", removed);
 
             return true;
           }
@@ -305,7 +111,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
             });
           }
 
-          this.events.emit("add", added);
+          getEvents(currentTarget).emit("add", added);
 
           return true;
         }
@@ -336,12 +142,11 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
             });
           }
 
-          this.events.emit("add", added);
-
+          getEvents(currentTarget).emit("add", added);
           return true;
         }
 
-        this.events.emit("update", [
+        getEvents(currentTarget).emit("update", [
           {
             index,
             value: value as T[number],
@@ -361,7 +166,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
         const deleted = Reflect.deleteProperty(currentTarget, property);
 
         if (deleted) {
-          this.events.emit("update", [
+          getEvents(currentTarget).emit("update", [
             {
               index,
               value: undefined,
@@ -373,16 +178,205 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
       },
     });
 
+    observableArrayEvents.set(proxy, events);
+
     return proxy;
   }
+
+  public onUpdate(callback: ObservableArrayEvents<T>["update"]): () => void {
+    const events = getEvents(this);
+    events.addListener("update", callback);
+
+    return () => {
+      events.removeListener("update", callback);
+    };
+  }
+
+  public onAdd(callback: ObservableArrayEvents<T>["add"]): () => void {
+    const events = getEvents(this);
+    events.addListener("add", callback);
+
+    return () => {
+      events.removeListener("add", callback);
+    };
+  }
+
+  public onRemove(callback: ObservableArrayEvents<T>["remove"]): () => void {
+    const events = getEvents(this);
+    events.addListener("remove", callback);
+
+    return () => {
+      events.removeListener("remove", callback);
+    };
+  }
+
+  public push(...items: T[number][]): number {
+    const index = this.length;
+    const result = Array.prototype.push.apply(this, items);
+
+    if (items.length > 0) {
+      getEvents(this).emit(
+        "add",
+        items.map((value, offset) => ({
+          index: index + offset,
+          value,
+        })),
+      );
+    }
+
+    return result;
+  }
+
+  public pop(): T[number] | undefined {
+    if (this.length === 0) {
+      return undefined;
+    }
+
+    const index = this.length - 1;
+    const value = Array.prototype.pop.call(this);
+
+    getEvents(this).emit("remove", [{ index, value }]);
+
+    return value;
+  }
+
+  public shift(): T[number] | undefined {
+    if (this.length === 0) {
+      return undefined;
+    }
+
+    const value = Array.prototype.shift.call(this);
+
+    getEvents(this).emit("remove", [{ index: 0, value }]);
+
+    return value;
+  }
+
+  public unshift(...items: T[number][]): number {
+    const result = Array.prototype.unshift.apply(this, items);
+
+    if (items.length > 0) {
+      getEvents(this).emit(
+        "add",
+        items.map((value, index) => ({ index, value })),
+      );
+    }
+
+    return result;
+  }
+
+  public splice(
+    start: number,
+    deleteCount?: number,
+    ...items: T[number][]
+  ): (T[number] | undefined)[] {
+    const length = this.length;
+    const index = start < 0 ? Math.max(length + start, 0) : Math.min(start, length);
+
+    const removed: T =
+      arguments.length === 1
+        ? Reflect.apply(Array.prototype.splice, this, [start])
+        : Reflect.apply(Array.prototype.splice, this, [start, deleteCount, ...items]);
+
+    const events = getEvents(this);
+
+    if (removed.length > 0) {
+      events.emit(
+        "remove",
+        removed.map((value, offset) => ({
+          index: index + offset,
+          value,
+        })),
+      );
+    }
+
+    if (items.length > 0) {
+      events.emit(
+        "add",
+        items.map((value, offset) => ({
+          index: index + offset,
+          value,
+        })),
+      );
+    }
+
+    return removed;
+  }
+
+  public fill(value: T[number], start?: number, end?: number): ObservableArray<T> {
+    const oldValues = Array.from(this);
+    const length = this.length;
+    const first = normalizeIndex(start ?? 0, length);
+    const last = normalizeIndex(end ?? length, length);
+
+    Array.prototype.fill.call(this, value, start, end);
+
+    const updates: ObservableArrayItem<T[number]>[] = [];
+
+    for (let index = first; index < last; index++) {
+      if (oldValues[index] !== this[index]) {
+        updates.push({ index, value: this[index] });
+      }
+    }
+
+    if (updates.length > 0) {
+      getEvents(this).emit("update", updates);
+    }
+
+    return this;
+  }
+
+  public reverse(): ObservableArray<T> {
+    const oldValues = Array.from(this);
+    Array.prototype.reverse.call(this);
+
+    const updates = collectChangedItems(this, oldValues);
+
+    if (updates.length > 0) {
+      getEvents(this).emit("update", updates);
+    }
+
+    return this;
+  }
+
+  public sort(compareFn?: (a: T[number], b: T[number]) => number): ObservableArray<T> {
+    const oldValues = Array.from(this);
+    Array.prototype.sort.call(this, compareFn);
+
+    const updates = collectChangedItems(this, oldValues);
+
+    if (updates.length > 0) {
+      getEvents(this).emit("update", updates);
+    }
+
+    return this;
+  }
+
+  public copyWithin(targetIndex: number, start: number, end?: number): ObservableArray<T> {
+    const oldValues = Array.from(this);
+    Array.prototype.copyWithin.call(this, targetIndex, start, end);
+
+    const updates = collectChangedItems(this, oldValues);
+
+    if (updates.length > 0) {
+      getEvents(this).emit("update", updates);
+    }
+
+    return this;
+  }
+}
+  }
+}
 }
 
-export interface ObservableArray<T extends Primitive[]> {
-  onUpdate(callback: ObservableArrayEvents<T>["update"]): () => void;
+function getEvents<T extends Primitive[]>(array: ObservableArray<T>): EventEmitter<ObservableArrayEvents<T>> {
+  const events = observableArrayEvents.get(array);
 
-  onAdd(callback: ObservableArrayEvents<T>["add"]): () => void;
+  if (!events) {
+    throw new Error("ObservableArray events are not initialized.");
+  }
 
-  onRemove(callback: ObservableArrayEvents<T>["remove"]): () => void;
+  return events as EventEmitter<ObservableArrayEvents<T>>;
 }
 
 function getArrayIndex(property: PropertyKey): number | undefined {
