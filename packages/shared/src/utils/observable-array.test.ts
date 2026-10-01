@@ -104,7 +104,8 @@ test("length decrease emits remove events for removed indexes", () => {
 });
 
 test("push emits added items at their final indexes", () => {
-  const array = new ObservableArray(1);
+  const array = new ObservableArray<number>();
+  array[0] = 1;
   const events = subscribe(array);
 
   assert.equal(array.push(2, 3), 3);
@@ -269,7 +270,8 @@ test("empty mutations do not emit events", () => {
 });
 
 test("disposing a subscription stops future notifications", () => {
-  const array = new ObservableArray(1);
+  const array = new ObservableArray<number>();
+  array[0] = 1;
   const updates: Array<{ index: number; value: number }> = [];
 
   const dispose = array.onUpdate((items) => updates.push(...items));
