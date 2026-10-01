@@ -8,7 +8,6 @@ import type { PipelineViewState } from "@ui/dto/PipelineViewState";
 export type PointChange = Partial<Omit<UISelectedPoint, "id">>;
 
 export interface EnginePipelineConfigChange {
-  pipelineName: string;
   engineName: string;
   changes: Record<string, unknown>;
 }
@@ -39,12 +38,10 @@ export type AppEventMap = {
   [AppMediator.POSITIONS_SAVED]: undefined;
   [AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED]: EnginePipelineConfigChange;
   [AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED]: {
-    pipelineName: string;
     engineName: string;
     enabled: boolean;
   };
-  [AppMediator.PIPELINE_STATES]: ReadonlyArray<PipelineViewState>;
-  [AppMediator.PIPELINE_STATE_CHANGED]: PipelineViewState;
+  [AppMediator.PIPELINE_STATE]: PipelineViewState;
 };
 
 export class AppMediator extends BaseMediator<AppEventMap> {
@@ -74,8 +71,7 @@ export class AppMediator extends BaseMediator<AppEventMap> {
   static POINT_UPDATING = "point-updating" as const;
   static PIPELINE_ENGINE_CONFIG_CHANGED = "pipeline-engine-config-changed" as const;
   static PIPELINE_ENGINE_ENABLED_CHANGED = "pipeline-engine-enabled-changed" as const;
-  static PIPELINE_STATES = "pipeline-states" as const;
-  static PIPELINE_STATE_CHANGED = "pipeline-state-changed" as const;
+  static PIPELINE_STATE = "pipeline-state" as const;
 
   public get progress(): number {
     return this.get(AppMediator.PROGRESS) ?? 0;
@@ -156,34 +152,29 @@ export class AppMediator extends BaseMediator<AppEventMap> {
     this.emit(AppMediator.START_REPULSION);
   }
   /** Передать Pipeline изменения конфигурации движка из UI. */
-  public pipelineEngineConfigChanged(pipelineName: string, engineName: string, changes: Record<string, unknown>): void {
+  public pipelineEngineConfigChanged(engineName: string, changes: Record<string, unknown>): void {
     this.emit(AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED, {
-      pipelineName,
       engineName,
       changes,
     });
   }
 
   /** Передать Pipeline изменение состояния engine из UI. */
-  public pipelineEngineEnabledChanged(pipelineName: string, engineName: string, enabled: boolean): void {
+  public pipelineEngineEnabledChanged(engineName: string, enabled: boolean): void {
     this.emit(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, {
-      pipelineName,
       engineName,
       enabled,
     });
   }
 
-  /** Обновить UI snapshot конкретного Pipeline. */
+  /** Обновить UI snapshot единственного Pipeline. */
   public pipelineStateChanged(state: PipelineViewState): void {
-    const states = this.pipelineStates.filter((item) => item.name !== state.name);
-    const nextStates = [...states, state];
-    this.set(AppMediator.PIPELINE_STATES, nextStates);
+    this.set(AppMediator.PIPELINE_STATE, state);
     this.emit(AppMediator.PIPELINE_STATE_CHANGED, state);
 
-    const temperatures = nextStates.map((item) => item.temperature);
-    const temperature = temperatures.length > 0 ? Math.max(...temperatures) : 0;
-
-    this.temperature = temperature;
+    // TODO: BUSINESS LOGIC LEAK — агрегация глобальной температуры не должна выполняться в Mediator.
+    // Пока Pipeline единственный, глобальная температура совпадает с его температурой.
+    this.temperature = state.temperature;
   }
 
   public startGraph(): void {
@@ -267,12 +258,12 @@ export class AppMediator extends BaseMediator<AppEventMap> {
     return this.on(AppMediator.PIPELINE_ENGINE_CONFIG_CHANGED, callback);
   }
 
-  public onPipelineEngineEnabledChanged(callback: (detail: { pipelineName: string; engineName: string; enabled: boolean }) => void): () => void {
+  public onPipelineEngineEnabledChanged(callback: (detail: { engineName: string; enabled: boolean }) => void): () => void {
     return this.on(AppMediator.PIPELINE_ENGINE_ENABLED_CHANGED, callback);
   }
 
-  public get pipelineStates(): ReadonlyArray<PipelineViewState> {
-    return this.get(AppMediator.PIPELINE_STATES) ?? [];
+  public get pipelineState(): PipelineViewState | null {
+    return this.get(AppMediator.PIPELINE_STATE) ?? null;
   }
 
   public onPipelineStateChanged(callback: (state: PipelineViewState) => void): () => void {
