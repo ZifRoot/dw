@@ -65,6 +65,7 @@ class EventEmitter<
 }
 
 const observableArrayEvents = new WeakMap<object, EventEmitter<any>>();
+const observableArrayTargets = new WeakMap<object, object>();
 
 export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
   public constructor(...args: [number] | T[number][]) {
@@ -73,6 +74,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
     const target = this;
     const events = new EventEmitter<ObservableArrayEvents<T>>();
     observableArrayEvents.set(target, events);
+    observableArrayTargets.set(target, target);
 
     const proxy = new Proxy(target, {
       set: (currentTarget, property, value): boolean => {
@@ -179,6 +181,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
     });
 
     observableArrayEvents.set(proxy, events);
+    observableArrayTargets.set(proxy, target);
 
     return proxy;
   }
@@ -212,7 +215,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
 
   public push(...items: T[number][]): number {
     const index = this.length;
-    const result = Array.prototype.push.apply(this, items);
+    const result = Array.prototype.push.apply(getTarget(this), items);
 
     if (items.length > 0) {
       getEvents(this).emit(
@@ -233,7 +236,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
     }
 
     const index = this.length - 1;
-    const value = Array.prototype.pop.call(this);
+    const value = Array.prototype.pop.call(getTarget(this));
 
     getEvents(this).emit("remove", [{ index, value }]);
 
@@ -245,7 +248,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
       return undefined;
     }
 
-    const value = Array.prototype.shift.call(this);
+    const value = Array.prototype.shift.call(getTarget(this));
 
     getEvents(this).emit("remove", [{ index: 0, value }]);
 
@@ -253,7 +256,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
   }
 
   public unshift(...items: T[number][]): number {
-    const result = Array.prototype.unshift.apply(this, items);
+    const result = Array.prototype.unshift.apply(getTarget(this), items);
 
     if (items.length > 0) {
       getEvents(this).emit(
@@ -275,8 +278,8 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
 
     const removed: T =
       arguments.length === 1
-        ? Reflect.apply(Array.prototype.splice, this, [start])
-        : Reflect.apply(Array.prototype.splice, this, [start, deleteCount, ...items]);
+        ? Reflect.apply(Array.prototype.splice, getTarget(this), [start])
+        : Reflect.apply(Array.prototype.splice, getTarget(this), [start, deleteCount, ...items]);
 
     const events = getEvents(this);
 
@@ -309,7 +312,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
     const first = normalizeIndex(start ?? 0, length);
     const last = normalizeIndex(end ?? length, length);
 
-    Array.prototype.fill.call(this, value, start, end);
+    Array.prototype.fill.call(getTarget(this), value, start, end);
 
     const updates: ObservableArrayItem<T[number]>[] = [];
 
@@ -328,7 +331,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
 
   public reverse(): ObservableArray<T> {
     const oldValues = Array.from(this);
-    Array.prototype.reverse.call(this);
+    Array.prototype.reverse.call(getTarget(this));
 
     const updates = collectChangedItems(this, oldValues);
 
@@ -341,7 +344,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
 
   public sort(compareFn?: (a: T[number], b: T[number]) => number): this {
     const oldValues = Array.from(this);
-    Array.prototype.sort.call(this, compareFn);
+    Array.prototype.sort.call(getTarget(this), compareFn);
 
     const updates = collectChangedItems(this, oldValues);
 
@@ -354,7 +357,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
 
   public copyWithin(targetIndex: number, start: number, end?: number): this {
     const oldValues = Array.from(this);
-    Array.prototype.copyWithin.call(this, targetIndex, start, end);
+    Array.prototype.copyWithin.call(getTarget(this), targetIndex, start, end);
 
     const updates = collectChangedItems(this, oldValues);
 
@@ -364,6 +367,16 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
 
     return this;
   }
+}
+
+function getTarget<T extends Primitive[]>(array: ObservableArray<T>): T[number][] {
+  const target = observableArrayTargets.get(array);
+
+  if (!target) {
+    throw new Error("ObservableArray target is not initialized.");
+  }
+
+  return target as T[number][];
 }
 
 function getEvents<T extends Primitive[]>(array: ObservableArray<T>): EventEmitter<ObservableArrayEvents<T>> {
