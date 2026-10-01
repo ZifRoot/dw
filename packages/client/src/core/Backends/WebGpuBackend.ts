@@ -33,6 +33,10 @@ interface WebGpuDevice {
   queue: WebGpuQueue;
 }
 
+interface WebGpuAlgorithmInstance {
+  shaderModule: unknown;
+}
+
 export interface WebGpuBuffer {
   mapAsync(mode: number): Promise<void>;
   getMappedRange(): ArrayBuffer;
@@ -89,18 +93,16 @@ export interface WebGpuCopyCommand {
 }
 
 export class WebGpuBackend extends Backend {
+  private nextInstanceId = 1;
+  private readonly instances = new Map<number, WebGpuAlgorithmInstance>();
+
   private constructor(
     private readonly device: WebGpuDevice,
-    private readonly shaderModule: unknown,
   ) {
     super();
   }
 
-  public static isSupported(): boolean {
-    return "gpu" in navigator;
-  }
-
-  public static async create(sourceUrl: URL): Promise<WebGpuBackend> {
+  public static async create(): Promise<WebGpuBackend> {
     const gpu = (navigator as Navigator & { gpu?: WebGpuApi }).gpu;
 
     if (!gpu) {
@@ -114,6 +116,10 @@ export class WebGpuBackend extends Backend {
     }
 
     const device = (await adapter.requestDevice()) as unknown as WebGpuDevice;
+    return new WebGpuBackend(device);
+  }
+
+  public async createInstance(sourceUrl: URL): Promise<number> {
     const response = await fetch(sourceUrl);
 
     if (!response.ok) {
@@ -123,9 +129,11 @@ export class WebGpuBackend extends Backend {
     }
 
     const sourceCode = await response.text();
-    const shaderModule = device.createShaderModule({ code: sourceCode });
+    const shaderModule = this.device.createShaderModule({ code: sourceCode });
+    const instanceId = this.nextInstanceId++;
 
-    return new WebGpuBackend(device, shaderModule);
+    this.instances.set(instanceId, { shaderModule });
+    return instanceId;
   }
 
   public createBuffer(size: number, usage: number): WebGpuBuffer {
@@ -140,12 +148,15 @@ export class WebGpuBackend extends Backend {
   }
 
   public createComputePipeline(
+    instanceId: number,
     entryPoint: string,
   ): WebGpuComputePipeline {
+    const instance = this.getInstance(instanceId);
+
     return this.device.createComputePipeline({
       layout: "auto",
       compute: {
-        module: this.shaderModule,
+        module: instance.shaderModule,
         entryPoint,
       },
     });
@@ -203,8 +214,21 @@ export class WebGpuBackend extends Backend {
     return BUFFER_USAGE;
   }
 
+  public destroyInstance(instanceId: number): void {
+    this.instances.delete(instanceId);
+  }
+
   public destroy(): void {
-    // WebGPU device resources are owned by the browser and are released
-    // when their buffers are explicitly destroyed by their owners.
+    this.instances.clear();
+  }
+
+  private getInstance(instanceId: number): WebGpuAlgorithmInstance {
+    const instance = this.instances.get(instanceId);
+
+    if (!instance) {
+      throw new Error(`WebGPU algorithm instance "${instanceId}" does not exist.`);
+    }
+
+    return instance;
   }
 }
