@@ -204,7 +204,7 @@ export class ObservableArray<T extends Primitive[]>
             ? Math.max(length + start, 0)
             : Math.min(start, length);
 
-        const removed =
+        const removed: T =
           arguments.length === 1
             ? Reflect.apply(Array.prototype.splice, target, [start])
             : Reflect.apply(Array.prototype.splice, target, [
