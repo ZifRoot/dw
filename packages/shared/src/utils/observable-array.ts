@@ -1,11 +1,4 @@
-type Primitive =
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined;
+type Primitive = string | number | boolean | bigint | symbol | null | undefined;
 
 export type Property<T extends Primitive[]> = Extract<keyof T, number>;
 
@@ -29,17 +22,11 @@ export interface ObservableArrayEvents<T extends Primitive[]> {
 class EventEmitter<
   TEventMap extends {
     [K in keyof TEventMap]: (...args: any[]) => void;
-  }
+  },
 > {
-  private readonly listeners = new Map<
-    keyof TEventMap,
-    Set<TEventMap[keyof TEventMap]>
-  >();
+  private readonly listeners = new Map<keyof TEventMap, Set<TEventMap[keyof TEventMap]>>();
 
-  public addListener<K extends keyof TEventMap>(
-    eventName: K,
-    callback: TEventMap[K],
-  ): void {
+  public addListener<K extends keyof TEventMap>(eventName: K, callback: TEventMap[K]): void {
     let listeners = this.listeners.get(eventName);
 
     if (!listeners) {
@@ -50,10 +37,7 @@ class EventEmitter<
     listeners.add(callback);
   }
 
-  public removeListener<K extends keyof TEventMap>(
-    eventName: K,
-    callback: TEventMap[K],
-  ): void {
+  public removeListener<K extends keyof TEventMap>(eventName: K, callback: TEventMap[K]): void {
     const listeners = this.listeners.get(eventName);
 
     if (!listeners) {
@@ -67,10 +51,7 @@ class EventEmitter<
     }
   }
 
-  public emit<K extends keyof TEventMap>(
-    eventName: K,
-    ...args: Parameters<TEventMap[K]>
-  ): void {
+  public emit<K extends keyof TEventMap>(eventName: K, ...args: Parameters<TEventMap[K]>): void {
     const listeners = this.listeners.get(eventName);
 
     if (!listeners) {
@@ -83,8 +64,7 @@ class EventEmitter<
   }
 }
 
-export class ObservableArray<T extends Primitive[]>
-  extends Array<T[number]> {
+export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
   private readonly events = new EventEmitter<ObservableArrayEvents<T>>();
 
   public constructor(values: T = [] as unknown as T) {
@@ -93,7 +73,7 @@ export class ObservableArray<T extends Primitive[]>
     if (typeof values === "number") {
       this.length = values;
     } else {
-      Array.prototype.push.apply(this, values);
+      super(...values);
     }
 
     const target = this;
@@ -101,9 +81,7 @@ export class ObservableArray<T extends Primitive[]>
     let proxy: ObservableArray<T>;
 
     Object.assign(target, {
-      onUpdate: (
-        callback: ObservableArrayEvents<T>["update"],
-      ): (() => void) => {
+      onUpdate: (callback: ObservableArrayEvents<T>["update"]): (() => void) => {
         this.events.addListener("update", callback);
 
         return () => {
@@ -111,9 +89,7 @@ export class ObservableArray<T extends Primitive[]>
         };
       },
 
-      onAdd: (
-        callback: ObservableArrayEvents<T>["add"],
-      ): (() => void) => {
+      onAdd: (callback: ObservableArrayEvents<T>["add"]): (() => void) => {
         this.events.addListener("add", callback);
 
         return () => {
@@ -121,9 +97,7 @@ export class ObservableArray<T extends Primitive[]>
         };
       },
 
-      onRemove: (
-        callback: ObservableArrayEvents<T>["remove"],
-      ): (() => void) => {
+      onRemove: (callback: ObservableArrayEvents<T>["remove"]): (() => void) => {
         this.events.addListener("remove", callback);
 
         return () => {
@@ -199,25 +173,14 @@ export class ObservableArray<T extends Primitive[]>
         return result;
       },
 
-      splice: function (
-        start: number,
-        deleteCount?: number,
-        ...items: T[number][]
-      ): (T[number] | undefined)[] {
+      splice: function (start: number, deleteCount?: number, ...items: T[number][]): (T[number] | undefined)[] {
         const length = target.length;
-        const index =
-          start < 0
-            ? Math.max(length + start, 0)
-            : Math.min(start, length);
+        const index = start < 0 ? Math.max(length + start, 0) : Math.min(start, length);
 
         const removed: T =
           arguments.length === 1
             ? Reflect.apply(Array.prototype.splice, target, [start])
-            : Reflect.apply(Array.prototype.splice, target, [
-                start,
-                deleteCount,
-                ...items,
-              ]);
+            : Reflect.apply(Array.prototype.splice, target, [start, deleteCount, ...items]);
 
         if (removed.length > 0) {
           events.emit(
@@ -242,11 +205,7 @@ export class ObservableArray<T extends Primitive[]>
         return removed;
       },
 
-      fill: (
-        value: T[number],
-        start?: number,
-        end?: number,
-      ): ObservableArray<T> => {
+      fill: (value: T[number], start?: number, end?: number): ObservableArray<T> => {
         const oldValues = Array.from(target);
         const length = target.length;
         const first = normalizeIndex(start ?? 0, length);
@@ -286,12 +245,7 @@ export class ObservableArray<T extends Primitive[]>
         return proxy;
       },
 
-      sort: (
-        compareFn?: (
-          a: T[number],
-          b: T[number],
-        ) => number,
-      ): ObservableArray<T> => {
+      sort: (compareFn?: (a: T[number], b: T[number]) => number): ObservableArray<T> => {
         const oldValues = Array.from(target);
 
         Array.prototype.sort.call(target, compareFn);
@@ -305,19 +259,10 @@ export class ObservableArray<T extends Primitive[]>
         return proxy;
       },
 
-      copyWithin: (
-        targetIndex: number,
-        start: number,
-        end?: number,
-      ): ObservableArray<T> => {
+      copyWithin: (targetIndex: number, start: number, end?: number): ObservableArray<T> => {
         const oldValues = Array.from(target);
 
-        Array.prototype.copyWithin.call(
-          target,
-          targetIndex,
-          start,
-          end,
-        );
+        Array.prototype.copyWithin.call(target, targetIndex, start, end);
 
         const updates = collectChangedItems(target, oldValues);
 
@@ -330,11 +275,7 @@ export class ObservableArray<T extends Primitive[]>
     });
 
     proxy = new Proxy(target, {
-      set: (
-        currentTarget,
-        property,
-        value,
-      ): boolean => {
+      set: (currentTarget, property, value): boolean => {
         if (property === "length") {
           const oldLength = currentTarget.length;
           const newLength = value as number;
@@ -397,10 +338,7 @@ export class ObservableArray<T extends Primitive[]>
           for (let addedIndex = oldLength; addedIndex <= index; addedIndex++) {
             added.push({
               index: addedIndex,
-              value:
-                addedIndex === index
-                  ? (value as T[number])
-                  : undefined,
+              value: addedIndex === index ? (value as T[number]) : undefined,
             });
           }
 
@@ -419,10 +357,7 @@ export class ObservableArray<T extends Primitive[]>
         return true;
       },
 
-      deleteProperty: (
-        currentTarget,
-        property,
-      ): boolean => {
+      deleteProperty: (currentTarget, property): boolean => {
         const index = getArrayIndex(property);
 
         if (index === undefined || !(index in currentTarget)) {
@@ -449,17 +384,11 @@ export class ObservableArray<T extends Primitive[]>
 }
 
 export interface ObservableArray<T extends Primitive[]> {
-  onUpdate(
-    callback: ObservableArrayEvents<T>["update"],
-  ): () => void;
+  onUpdate(callback: ObservableArrayEvents<T>["update"]): () => void;
 
-  onAdd(
-    callback: ObservableArrayEvents<T>["add"],
-  ): () => void;
+  onAdd(callback: ObservableArrayEvents<T>["add"]): () => void;
 
-  onRemove(
-    callback: ObservableArrayEvents<T>["remove"],
-  ): () => void;
+  onRemove(callback: ObservableArrayEvents<T>["remove"]): () => void;
 }
 
 function getArrayIndex(property: PropertyKey): number | undefined {
@@ -484,10 +413,7 @@ function normalizeIndex(index: number, length: number): number {
   return Math.min(index, length);
 }
 
-function collectChangedItems<T>(
-  target: T[],
-  oldValues: T[],
-): ObservableArrayItem<T>[] {
+function collectChangedItems<T>(target: T[], oldValues: T[]): ObservableArrayItem<T>[] {
   const updates: ObservableArrayItem<T>[] = [];
 
   for (let index = 0; index < target.length; index++) {
