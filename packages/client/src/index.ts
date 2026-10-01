@@ -15,8 +15,12 @@ import { PointsSceneTester } from "./main/PointsSceneTester";
 import { MediatorScene } from "@core/Scenes/MediatorScene";
 import { PointsScene } from "@core/Scenes/PointsScene";
 import { EdgesScene } from "@core/Scenes/EdgesScene";
+import { WasmBackend } from "@core/Backends/WasmBackend";
+import { WebGpuBackend } from "@core/Backends/WebGpuBackend";
 import { WasmZDapperAlgorithm } from "./physics/wasm/WasmZDapperAlgorithm";
+import { WasmPointsTransformer } from "./physics/wasm/WasmPointsTransformer";
 import { WebGpuZDapperAlgorithm } from "./physics/webgpu/WebGpuZDapperAlgorithm";
+import { WebGpuPointsTransformer } from "./physics/webgpu/WebGpuPointsTransformer";
 
 type Way = "dw" | "tester" | "levenshtein" | "mediator" | "";
 
@@ -72,7 +76,11 @@ async function connectWasmZDampingPipeline(
   animationEngine: AnimationEngine,
   pointGraphManager: NonNullable<ReturnType<typeof PointGraphManager>>,
 ): Promise<EnginePipeline> {
-  const algorithm = await WasmZDapperAlgorithm.create(mediator, pointGraphManager, new ZDampingConfig());
+  const moduleUrl = new URL("./physics/wasm/z-damping.wasm", import.meta.url);
+  const sourceUrl = new URL("./physics/wasm/z-damping.cpp", import.meta.url);
+  const backend = await WasmBackend.create(moduleUrl);
+  const transformer = new WasmPointsTransformer(pointGraphManager, backend);
+  const algorithm = new WasmZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig(), backend, transformer, sourceUrl);
   const pipeline = new EnginePipeline(mediator, animationEngine, "WASM Z-damping prototype");
 
   pipeline.setConfiguration([{ name: "Затухание по Z", algorithm }]);
@@ -85,7 +93,10 @@ async function connectWebGpuZDampingPipeline(
   animationEngine: AnimationEngine,
   pointGraphManager: NonNullable<ReturnType<typeof PointGraphManager>>,
 ): Promise<EnginePipeline> {
-  const algorithm = await WebGpuZDapperAlgorithm.create(mediator, pointGraphManager, new ZDampingConfig());
+  const sourceUrl = new URL("./physics/webgpu/z-damping.wgsl", import.meta.url);
+  const backend = await WebGpuBackend.create(sourceUrl);
+  const transformer = new WebGpuPointsTransformer(pointGraphManager, backend);
+  const algorithm = new WebGpuZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig(), backend, transformer, sourceUrl);
   const pipeline = new EnginePipeline(mediator, animationEngine, "WebGPU Z-damping prototype");
 
   pipeline.setConfiguration([{ name: "Затухание по Z", algorithm }]);
