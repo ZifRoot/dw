@@ -365,7 +365,6 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
     return this;
   }
 }
-}
 
 function getEvents<T extends Primitive[]>(array: ObservableArray<T>): EventEmitter<ObservableArrayEvents<T>> {
   const events = observableArrayEvents.get(array);
