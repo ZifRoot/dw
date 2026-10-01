@@ -161,7 +161,7 @@ test("splice emits removals and additions without index updates", () => {
   const array = createArray(1, 2, 3, 4);
   const events = subscribe(array);
 
-  assert.deepEqual(array.splice(1, 1, 20, 30), [2]);
+  assert.deepEqual([...array.splice(1, 1, 20, 30)], [2]);
 
   assert.deepEqual(events.remove, [{ index: 1, value: 2 }]);
   assert.deepEqual(events.add, [
@@ -176,7 +176,7 @@ test("splice without delete count removes the tail", () => {
   const array = createArray(1, 2, 3);
   const events = subscribe(array);
 
-  assert.deepEqual(array.splice(1), [2, 3]);
+  assert.deepEqual([...array.splice(1)], [2, 3]);
 
   assert.deepEqual(events.remove, [
     { index: 1, value: 2 },
@@ -252,7 +252,7 @@ test("delete emits update to undefined without changing array length", () => {
 });
 
 test("empty mutations do not emit events", () => {
-  const array = new ObservableArray<number[]>([]);
+  const array = new ObservableArray<number>();
   const events: Events<number> = {
     update: [],
     add: [],
