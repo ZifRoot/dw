@@ -1,6 +1,6 @@
 type Primitive = string | number | boolean | bigint | symbol | null | undefined;
 
-export type Property<T extends Primitive[]> = Extract<keyof T, number>;
+export type Property<T extends Primitive[]> = keyof T;
 
 export interface ObservableArrayItem<T> {
   index: number;
@@ -67,14 +67,8 @@ class EventEmitter<
 export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
   private readonly events = new EventEmitter<ObservableArrayEvents<T>>();
 
-  public constructor(values: T = [] as unknown as T) {
-    super();
-
-    if (typeof values === "number") {
-      this.length = values;
-    } else {
-      super(...values);
-    }
+  public constructor(...args: [number] | T[number][]) {
+    super(...args);
 
     const target = this;
     const events = this.events;
