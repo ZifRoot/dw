@@ -26,7 +26,11 @@ export interface ObservableArrayEvents<T extends Primitive[]> {
  * ObservableArray не хранит подписчиков самостоятельно.
  * Подписка и публикация событий выполняются через EventEmitter.
  */
-class EventEmitter<TEventMap> {
+class EventEmitter<
+  TEventMap extends {
+    [K in keyof TEventMap]: (...args: any[]) => void;
+  }
+> {
   private readonly listeners = new Map<
     keyof TEventMap,
     Set<TEventMap[keyof TEventMap]>
