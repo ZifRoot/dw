@@ -144,7 +144,15 @@ export class WebGpuBackend extends Backend {
     buffer: WebGpuBuffer,
     data: ArrayBufferView,
   ): void {
-    this.device.queue.writeBuffer(buffer, 0, data);
+    this.writeBufferAt(buffer, 0, data);
+  }
+
+  public writeBufferAt(
+    buffer: WebGpuBuffer,
+    offset: number,
+    data: ArrayBufferView,
+  ): void {
+    this.device.queue.writeBuffer(buffer, offset, data);
   }
 
   public createComputePipeline(
