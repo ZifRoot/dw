@@ -18,6 +18,15 @@ interface Events<T> {
   remove: Array<{ index: number; value: T | undefined }>;
 }
 
+
+function createArray<T extends PrimitiveTestValue>(
+  ...values: T[]
+): ObservableArray<T[]> {
+  const array = new ObservableArray<T[]>();
+  array.push(...values);
+  return array;
+}
+
 function subscribe<T extends PrimitiveTestValue>(
   array: ObservableArray<T[]>,
 ): Events<T> {
@@ -34,16 +43,22 @@ function subscribe<T extends PrimitiveTestValue>(
   return events;
 }
 
-test("constructor preserves initial values and does not emit events", () => {
-  const array = new ObservableArray([1, 2, 3]);
-  const events = subscribe(array);
+test("constructor follows Array semantics", () => {
+  const empty = new ObservableArray<number[]>();
+  const length = new ObservableArray<number[]>(3);
+  const values = new ObservableArray(1, 2, 3);
 
-  assert.deepEqual([...array], [1, 2, 3]);
+  assert.deepEqual([...empty], []);
+  assert.equal(length.length, 3);
+  assert.equal(0 in length, false);
+  assert.deepEqual([...values], [1, 2, 3]);
+
+  const events = subscribe(values);
   assert.deepEqual(events, { update: [], add: [], remove: [] });
 });
 
 test("index assignment emits update only for an existing changed value", () => {
-  const array = new ObservableArray([1, 2, 3]);
+  const array = createArray(...[1, 2, 3]);
   const events = subscribe(array);
 
   array[1] = 20;
@@ -54,7 +69,7 @@ test("index assignment emits update only for an existing changed value", () => {
 });
 
 test("index assignment beyond length emits add events for every created position", () => {
-  const array = new ObservableArray([1]);
+  const array = createArray(...[1]);
   const events = subscribe(array);
 
   array[3] = 40;
@@ -69,7 +84,7 @@ test("index assignment beyond length emits add events for every created position
 });
 
 test("length increase emits add events for every new index", () => {
-  const array = new ObservableArray([1, 2]);
+  const array = createArray(...[1, 2]);
   const events = subscribe(array);
 
   array.length = 5;
@@ -85,7 +100,7 @@ test("length increase emits add events for every new index", () => {
 });
 
 test("length decrease emits remove events for removed indexes", () => {
-  const array = new ObservableArray([1, 2, 3, 4]);
+  const array = createArray(...[1, 2, 3, 4]);
   const events = subscribe(array);
 
   array.length = 2;
@@ -98,7 +113,7 @@ test("length decrease emits remove events for removed indexes", () => {
 });
 
 test("push emits added items at their final indexes", () => {
-  const array = new ObservableArray([1]);
+  const array = createArray(...[1]);
   const events = subscribe(array);
 
   assert.equal(array.push(2, 3), 3);
@@ -111,7 +126,7 @@ test("push emits added items at their final indexes", () => {
 });
 
 test("pop emits the removed item at its previous index", () => {
-  const array = new ObservableArray([1, 2]);
+  const array = createArray(...[1, 2]);
   const events = subscribe(array);
 
   assert.equal(array.pop(), 2);
@@ -122,7 +137,7 @@ test("pop emits the removed item at its previous index", () => {
 });
 
 test("shift emits only the removed item", () => {
-  const array = new ObservableArray([1, 2, 3]);
+  const array = createArray(...[1, 2, 3]);
   const events = subscribe(array);
 
   assert.equal(array.shift(), 1);
@@ -133,7 +148,7 @@ test("shift emits only the removed item", () => {
 });
 
 test("unshift emits only added items", () => {
-  const array = new ObservableArray([2, 3]);
+  const array = createArray(...[2, 3]);
   const events = subscribe(array);
 
   assert.equal(array.unshift(1), 3);
@@ -144,7 +159,7 @@ test("unshift emits only added items", () => {
 });
 
 test("splice emits removals and additions without index updates", () => {
-  const array = new ObservableArray([1, 2, 3, 4]);
+  const array = createArray(...[1, 2, 3, 4]);
   const events = subscribe(array);
 
   assert.deepEqual(array.splice(1, 1, 20, 30), [2]);
@@ -159,7 +174,7 @@ test("splice emits removals and additions without index updates", () => {
 });
 
 test("splice without delete count removes the tail", () => {
-  const array = new ObservableArray([1, 2, 3]);
+  const array = createArray(...[1, 2, 3]);
   const events = subscribe(array);
 
   assert.deepEqual(array.splice(1), [2, 3]);
@@ -172,7 +187,7 @@ test("splice without delete count removes the tail", () => {
 });
 
 test("fill emits updates only for positions whose value changed", () => {
-  const array = new ObservableArray([1, 2, 3]);
+  const array = createArray(...[1, 2, 3]);
   const events = subscribe(array);
 
   array.fill(9, 1);
@@ -185,7 +200,7 @@ test("fill emits updates only for positions whose value changed", () => {
 });
 
 test("reverse emits updates for changed positions", () => {
-  const array = new ObservableArray([1, 2, 3]);
+  const array = createArray(...[1, 2, 3]);
   const events = subscribe(array);
 
   array.reverse();
@@ -198,7 +213,7 @@ test("reverse emits updates for changed positions", () => {
 });
 
 test("sort emits updates for changed positions", () => {
-  const array = new ObservableArray([3, 1, 2]);
+  const array = createArray(...[3, 1, 2]);
   const events = subscribe(array);
 
   array.sort((a, b) => a - b);
@@ -212,7 +227,7 @@ test("sort emits updates for changed positions", () => {
 });
 
 test("copyWithin emits updates for changed positions", () => {
-  const array = new ObservableArray([1, 2, 3, 4]);
+  const array = createArray(...[1, 2, 3, 4]);
   const events = subscribe(array);
 
   array.copyWithin(1, 2);
@@ -225,7 +240,7 @@ test("copyWithin emits updates for changed positions", () => {
 });
 
 test("delete emits update to undefined without changing array length", () => {
-  const array = new ObservableArray([1, 2, 3]);
+  const array = createArray(...[1, 2, 3]);
   const events = subscribe(array);
 
   assert.equal(delete array[1], true);
@@ -263,7 +278,7 @@ test("empty mutations do not emit events", () => {
 });
 
 test("disposing a subscription stops future notifications", () => {
-  const array = new ObservableArray([1]);
+  const array = createArray(...[1]);
   const updates: Array<{ index: number; value: number }> = [];
 
   const dispose = array.onUpdate((items) => updates.push(...items));
