@@ -88,7 +88,11 @@ export class ObservableArray<T extends Primitive[]>
   private readonly events = new EventEmitter<ObservableArrayEvents<T>>();
 
   public constructor(values: T = [] as unknown as T) {
-    super(...values);
+    if (typeof values === "number") {
+      super(values);
+    } else {
+      super(...values);
+    }
 
     const target = this;
     const events = this.events;
@@ -423,14 +427,13 @@ export class ObservableArray<T extends Primitive[]>
           return Reflect.deleteProperty(currentTarget, property);
         }
 
-        const value = currentTarget[index];
         const deleted = Reflect.deleteProperty(currentTarget, property);
 
         if (deleted) {
-          this.events.emit("remove", [
+          this.events.emit("update", [
             {
               index,
-              value,
+              value: undefined,
             },
           ]);
         }
