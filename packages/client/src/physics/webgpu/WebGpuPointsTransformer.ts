@@ -17,6 +17,7 @@ export interface WebGpuPointData {
 export class WebGpuPointsTransformer {
   private pointsBuffer: WebGpuBuffer | null = null;
   private readbackBuffer: WebGpuBuffer | null = null;
+  private pointReadbackBuffer: WebGpuBuffer | null = null;
   private capacity = 0;
 
   public constructor(
@@ -29,13 +30,7 @@ export class WebGpuPointsTransformer {
     const values = new Float32Array(points.length * POINT_STRIDE);
 
     for (let index = 0; index < points.length; index++) {
-      const point = points[index];
-      const offset = index * POINT_STRIDE;
-
-      values[offset] = point.x;
-      values[offset + 1] = point.y;
-      values[offset + 2] = point.z;
-      values[offset + 3] = point.fixed ? 1 : 0;
+      this.writePointToValues(values, index);
     }
 
     this.ensureCapacity(points.length);
@@ -49,23 +44,68 @@ export class WebGpuPointsTransformer {
     };
   }
 
-  public async save(readback: WebGpuBuffer, byteLength: number): Promise<void> {
+  public loadPoint(index: number): void {
+    const points = this.pointGraphManager.getPointsArray();
+    const point = points[index];
+
+    if (!point) {
+      throw new Error(`Point index "${index}" does not exist.`);
+    }
+
+    this.ensureCapacity(points.length);
+
+    const values = new Float32Array([
+      point.x,
+      point.y,
+      point.z,
+      point.fixed ? 1 : 0,
+    ]);
+
+    this.backend.writeBufferAt(
+      this.pointsBuffer!,
+      index * POINT_BYTES,
+      values,
+    );
+  }
+
+  public async save(readback: WebGpuBuffer): Promise<void> {
     const values = new Float32Array(
       await this.backend.readBuffer(readback),
     );
-
     const points = this.pointGraphManager.getPointsArray();
 
     for (let index = 0; index < points.length; index++) {
-      const point = points[index];
-      const offset = index * POINT_STRIDE;
+      this.writeValuesToPoint(values, index);
+    }
+  }
 
-      point.x = values[offset];
-      point.y = values[offset + 1];
-      point.z = values[offset + 2];
+  public async savePoint(index: number): Promise<void> {
+    const points = this.pointGraphManager.getPointsArray();
+
+    if (!points[index]) {
+      throw new Error(`Point index "${index}" does not exist.`);
     }
 
-    void byteLength;
+    this.ensureCapacity(points.length);
+
+    this.backend.submit([], [
+      {
+        source: this.pointsBuffer!,
+        sourceOffset: index * POINT_BYTES,
+        destination: this.pointReadbackBuffer!,
+        destinationOffset: 0,
+        size: POINT_BYTES,
+      },
+    ]);
+
+    const values = new Float32Array(
+      await this.backend.readBuffer(this.pointReadbackBuffer!),
+    );
+    const point = points[index];
+
+    point.x = values[0];
+    point.y = values[1];
+    point.z = values[2];
   }
 
   public getPointBytes(): number {
@@ -75,8 +115,10 @@ export class WebGpuPointsTransformer {
   public destroy(): void {
     this.pointsBuffer?.destroy();
     this.readbackBuffer?.destroy();
+    this.pointReadbackBuffer?.destroy();
     this.pointsBuffer = null;
     this.readbackBuffer = null;
+    this.pointReadbackBuffer = null;
     this.capacity = 0;
   }
 
@@ -84,6 +126,7 @@ export class WebGpuPointsTransformer {
     if (
       this.pointsBuffer &&
       this.readbackBuffer &&
+      this.pointReadbackBuffer &&
       this.capacity >= length
     ) {
       return;
@@ -108,6 +151,31 @@ export class WebGpuPointsTransformer {
         this.backend.getBufferUsage().COPY_DST,
     );
 
+    this.pointReadbackBuffer ??= this.backend.createBuffer(
+      POINT_BYTES,
+      this.backend.getBufferUsage().MAP_READ |
+        this.backend.getBufferUsage().COPY_DST,
+    );
+
     this.capacity = capacity;
+  }
+
+  private writePointToValues(values: Float32Array, index: number): void {
+    const point = this.pointGraphManager.getPointsArray()[index];
+    const offset = index * POINT_STRIDE;
+
+    values[offset] = point.x;
+    values[offset + 1] = point.y;
+    values[offset + 2] = point.z;
+    values[offset + 3] = point.fixed ? 1 : 0;
+  }
+
+  private writeValuesToPoint(values: Float32Array, index: number): void {
+    const point = this.pointGraphManager.getPointsArray()[index];
+    const offset = index * POINT_STRIDE;
+
+    point.x = values[offset];
+    point.y = values[offset + 1];
+    point.z = values[offset + 2];
   }
 }
