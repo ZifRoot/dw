@@ -15,6 +15,10 @@ import { PointsSceneTester } from "./main/PointsSceneTester";
 import { MediatorScene } from "@core/Scenes/MediatorScene";
 import { PointsScene } from "@core/Scenes/PointsScene";
 import { EdgesScene } from "@core/Scenes/EdgesScene";
+import { WasmPhysicsMemory } from "./physics/wasm/WasmPhysicsMemory";
+import { WasmZDapperAlgorithm } from "./physics/wasm/WasmZDapperAlgorithm";
+import { WebGpuPhysicsMemory } from "./physics/webgpu/WebGpuPhysicsMemory";
+import { WebGpuZDapperAlgorithm } from "./physics/webgpu/WebGpuZDapperAlgorithm";
 
 type Way = "dw" | "tester" | "levenshtein" | "mediator" | "";
 
@@ -54,7 +58,7 @@ function Levenshtein(mediator: AppMediator, animationEngine: AnimationEngine) {
 }
 
 function PointGraphManager(b: Way, mediator: AppMediator, animationEngine: AnimationEngine) {
-  let X = {
+  const X = {
     dw: (mediator: AppMediator, animationEngine: AnimationEngine) => DW(mediator, animationEngine),
     tester: (mediator: AppMediator, animationEngine: AnimationEngine) => Tester(mediator),
     levenshtein: (mediator: AppMediator, animationEngine: AnimationEngine) => Levenshtein(mediator, animationEngine),
@@ -64,6 +68,35 @@ function PointGraphManager(b: Way, mediator: AppMediator, animationEngine: Anima
 
   return X[b](mediator, animationEngine);
 }
+
+async function connectWasmZDampingPipeline(
+  mediator: AppMediator,
+  animationEngine: AnimationEngine,
+  pointGraphManager: NonNullable<ReturnType<typeof PointGraphManager>>,
+): Promise<EnginePipeline> {
+  const memory = await WasmPhysicsMemory.create(pointGraphManager);
+  const algorithm = new WasmZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig(), memory);
+  const pipeline = new EnginePipeline(mediator, animationEngine, "WASM Z-damping prototype");
+
+  pipeline.setConfiguration([{ name: "Затухание по Z", algorithm }]);
+
+  return pipeline;
+}
+
+async function connectWebGpuZDampingPipeline(
+  mediator: AppMediator,
+  animationEngine: AnimationEngine,
+  pointGraphManager: NonNullable<ReturnType<typeof PointGraphManager>>,
+): Promise<EnginePipeline> {
+  const memory = await WebGpuPhysicsMemory.create(pointGraphManager);
+  const algorithm = new WebGpuZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig(), memory);
+  const pipeline = new EnginePipeline(mediator, animationEngine, "WebGPU Z-damping prototype");
+
+  pipeline.setConfiguration([{ name: "Затухание по Z", algorithm }]);
+
+  return pipeline;
+}
+
 function start(way: Way) {
   const app = creatediv("app", document.body);
   const controlPanelDiv = creatediv("control-panel", app);
@@ -105,6 +138,15 @@ function start(way: Way) {
     ]);
     createControlPanel(controlPanelDiv, mediator);
     createInfoPanel(infoPanelDiv, mediator);
+
+    // Экспериментальные backend pipelines пока намеренно не подключаются.
+    // Чтобы проверить один из прототипов, замените false на true.
+    if (false) {
+      void connectWasmZDampingPipeline(mediator, animationEngine, pointGraphManager);
+
+      // Для WebGPU замените вызов выше на:
+      void connectWebGpuZDampingPipeline(mediator, animationEngine, pointGraphManager);
+    }
   }
 }
 
