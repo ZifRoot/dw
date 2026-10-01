@@ -7,7 +7,7 @@ type Primitive =
   | null
   | undefined;
 
-type Property<T extends Primitive[]> = Extract<keyof T, number>;
+export type Property<T extends Primitive[]> = Extract<keyof T, number>;
 
 export interface ObservableArrayItem<T> {
   index: number;
@@ -21,15 +21,15 @@ export interface ObservableArrayEvents<T extends Primitive[]> {
 }
 
 /**
- * Минимальный типизированный emitter для ObservableArray.
+ * Минимальный типизированный emitter.
  *
  * ObservableArray не хранит подписчиков самостоятельно.
- * Все операции подписки и публикации выполняются через этот объект.
+ * Подписка и публикация событий выполняются через EventEmitter.
  */
-class EventEmitter<TEventMap extends Record<string, unknown>> {
+class EventEmitter<TEventMap extends Record<string, (...args: any[]) => void>> {
   private readonly listeners = new Map<
     keyof TEventMap,
-    Set<(payload: TEventMap[keyof TEventMap]) => void>
+    Set<TEventMap[keyof TEventMap]>
   >();
 
   public addListener<K extends keyof TEventMap>(
@@ -43,7 +43,7 @@ class EventEmitter<TEventMap extends Record<string, unknown>> {
       this.listeners.set(eventName, listeners);
     }
 
-    listeners.add(callback as (payload: TEventMap[keyof TEventMap]) => void);
+    listeners.add(callback);
   }
 
   public removeListener<K extends keyof TEventMap>(
@@ -56,9 +56,7 @@ class EventEmitter<TEventMap extends Record<string, unknown>> {
       return;
     }
 
-    listeners.delete(
-      callback as (payload: TEventMap[keyof TEventMap]) => void,
-    );
+    listeners.delete(callback);
 
     if (listeners.size === 0) {
       this.listeners.delete(eventName);
@@ -67,7 +65,7 @@ class EventEmitter<TEventMap extends Record<string, unknown>> {
 
   public emit<K extends keyof TEventMap>(
     eventName: K,
-    payload: Parameters<TEventMap[K] & ((...args: never[]) => unknown)>[0],
+    ...args: Parameters<TEventMap[K]>
   ): void {
     const listeners = this.listeners.get(eventName);
 
@@ -76,28 +74,25 @@ class EventEmitter<TEventMap extends Record<string, unknown>> {
     }
 
     for (const listener of listeners) {
-      listener(payload);
+      listener(...args);
     }
   }
 }
 
 export class ObservableArray<T extends Primitive[]>
   extends Array<T[number]> {
-  private readonly events: EventEmitter<ObservableArrayEvents<T>>;
-  private readonly proxy: ObservableArray<T>;
+  private readonly events = new EventEmitter<ObservableArrayEvents<T>>();
 
-  public constructor(
-    values: T,
-    events: EventEmitter<ObservableArrayEvents<T>>,
-  ) {
+  public constructor(values: T = [] as unknown as T) {
     super(...values);
 
-    this.events = events;
-
     const target = this;
+    let proxy: ObservableArray<T>;
 
     Object.assign(target, {
-      onUpdate: (callback: ObservableArrayEvents<T>["update"]): (() => void) => {
+      onUpdate: (
+        callback: ObservableArrayEvents<T>["update"],
+      ): (() => void) => {
         this.events.addListener("update", callback);
 
         return () => {
@@ -105,7 +100,9 @@ export class ObservableArray<T extends Primitive[]>
         };
       },
 
-      onAdd: (callback: ObservableArrayEvents<T>["add"]): (() => void) => {
+      onAdd: (
+        callback: ObservableArrayEvents<T>["add"],
+      ): (() => void) => {
         this.events.addListener("add", callback);
 
         return () => {
@@ -113,7 +110,9 @@ export class ObservableArray<T extends Primitive[]>
         };
       },
 
-      onRemove: (callback: ObservableArrayEvents<T>["remove"]): (() => void) => {
+      onRemove: (
+        callback: ObservableArrayEvents<T>["remove"],
+      ): (() => void) => {
         this.events.addListener("remove", callback);
 
         return () => {
@@ -189,11 +188,11 @@ export class ObservableArray<T extends Primitive[]>
         return result;
       },
 
-      splice: (
+      splice: function (
         start: number,
         deleteCount?: number,
         ...items: T[number][]
-      ): (T[number] | undefined)[] => {
+      ): (T[number] | undefined)[] {
         const length = target.length;
         const index =
           start < 0
@@ -238,6 +237,7 @@ export class ObservableArray<T extends Primitive[]>
         start?: number,
         end?: number,
       ): ObservableArray<T> => {
+        const oldValues = Array.from(target);
         const length = target.length;
         const first = normalizeIndex(start ?? 0, length);
         const last = normalizeIndex(end ?? length, length);
@@ -247,14 +247,12 @@ export class ObservableArray<T extends Primitive[]>
         const updates: ObservableArrayItem<T[number]>[] = [];
 
         for (let index = first; index < last; index++) {
-          if (target[index] !== value) {
-            continue;
+          if (oldValues[index] !== target[index]) {
+            updates.push({
+              index,
+              value: target[index],
+            });
           }
-
-          updates.push({
-            index,
-            value,
-          });
         }
 
         if (updates.length > 0) {
@@ -321,7 +319,7 @@ export class ObservableArray<T extends Primitive[]>
       },
     });
 
-    const proxy = new Proxy(target, {
+    proxy = new Proxy(target, {
       set: (
         currentTarget,
         property,
@@ -373,59 +371,86 @@ export class ObservableArray<T extends Primitive[]>
           return Reflect.set(currentTarget, property, value);
         }
 
+        const oldLength = currentTarget.length;
+        const existed = index in currentTarget;
         const oldValue = currentTarget[index];
 
-        if (oldValue === value) {
+        if (existed && oldValue === value) {
           return true;
         }
 
         currentTarget[index] = value as T[number];
 
+        if (!existed) {
+          const added: ObservableArrayItem<T[number] | undefined>[] = [];
+
+          for (let addedIndex = oldLength; addedIndex <= index; addedIndex++) {
+            added.push({
+              index: addedIndex,
+              value:
+                addedIndex === index
+                  ? (value as T[number])
+                  : undefined,
+            });
+          }
+
+          this.events.emit("add", added);
+
+          return true;
+        }
+
         this.events.emit("update", [
           {
-            index: index as Property<T>,
+            index,
             value: value as T[number],
           },
         ]);
 
         return true;
       },
-    });
 
-    this.proxy = proxy;
+      deleteProperty: (
+        currentTarget,
+        property,
+      ): boolean => {
+        const index = getArrayIndex(property);
+
+        if (index === undefined || !(index in currentTarget)) {
+          return Reflect.deleteProperty(currentTarget, property);
+        }
+
+        const value = currentTarget[index];
+        const deleted = Reflect.deleteProperty(currentTarget, property);
+
+        if (deleted) {
+          this.events.emit("remove", [
+            {
+              index,
+              value,
+            },
+          ]);
+        }
+
+        return deleted;
+      },
+    });
 
     return proxy;
   }
+}
 
-  public onUpdate(
+export interface ObservableArray<T extends Primitive[]> {
+  onUpdate(
     callback: ObservableArrayEvents<T>["update"],
-  ): () => void {
-    this.events.addListener("update", callback);
+  ): () => void;
 
-    return () => {
-      this.events.removeListener("update", callback);
-    };
-  }
-
-  public onAdd(
+  onAdd(
     callback: ObservableArrayEvents<T>["add"],
-  ): () => void {
-    this.events.addListener("add", callback);
+  ): () => void;
 
-    return () => {
-      this.events.removeListener("add", callback);
-    };
-  }
-
-  public onRemove(
+  onRemove(
     callback: ObservableArrayEvents<T>["remove"],
-  ): () => void {
-    this.events.addListener("remove", callback);
-
-    return () => {
-      this.events.removeListener("remove", callback);
-    };
-  }
+  ): () => void;
 }
 
 function getArrayIndex(property: PropertyKey): number | undefined {
