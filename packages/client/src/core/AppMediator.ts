@@ -42,6 +42,7 @@ export type AppEventMap = {
     enabled: boolean;
   };
   [AppMediator.PIPELINE_STATE]: PipelineViewState;
+  [AppMediator.PIPELINE_STATE_CHANGED]: PipelineViewState;
 };
 
 export class AppMediator extends BaseMediator<AppEventMap> {
