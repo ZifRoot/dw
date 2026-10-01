@@ -10,6 +10,7 @@ interface WasmModuleExports {
 interface WasmInstanceState {
   instance: WebAssembly.Instance;
   memory: WebAssembly.Memory;
+  nextPointer: number;
 }
 
 export class WasmBackend extends Backend {
@@ -49,6 +50,7 @@ export class WasmBackend extends Backend {
     this.instances.set(instanceId, {
       instance,
       memory: exports.memory,
+      nextPointer: 0,
     });
 
     return instanceId;
@@ -129,13 +131,11 @@ export class WasmBackend extends Backend {
   }
 
   private getNextPointer(state: WasmInstanceState): number {
-    const value = state as WasmInstanceState & { nextPointer?: number };
-    return value.nextPointer ?? 0;
+    return state.nextPointer;
   }
 
   private setNextPointer(state: WasmInstanceState, value: number): void {
-    const target = state as WasmInstanceState & { nextPointer?: number };
-    target.nextPointer = value;
+    state.nextPointer = value;
   }
 
   private align(byteLength: number): number {
