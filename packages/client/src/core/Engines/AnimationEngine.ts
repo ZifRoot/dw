@@ -213,13 +213,11 @@ const COMPUTATION_BUDGET_RATIO = 0.8;
 export class AnimationEngine {
   private frameBudgetMs: number | null = null;
   private rafId: number | null = null;
-  private calibrationRafId: number | null = null;
   private isRunning = false;
   private isCalibrating: "no" | "process" | "yes" = "no";
   private isStepping = false;
   private currentStep = 0;
   private nextGroupId = 0;
-  private lastFrameTime: number | null = null;
   private groups = new Map<number, CallbackGroup>();
   private groupsQueue = new GroupQueue();
 
@@ -328,7 +326,6 @@ export class AnimationEngine {
     if (!this.calibrate()) return;
 
     this.isRunning = true;
-    this.lastFrameTime = null;
     this.scheduleStep();
   }
 
@@ -347,7 +344,7 @@ export class AnimationEngine {
     let measuredFrames = 0;
 
     const measure = (timestamp: number): void => {
-      this.calibrationRafId = null;
+      this.rafId = null;
       if (this.isCalibrating !== "process") return;
 
       if (previousTimestamp !== null) {
@@ -358,7 +355,7 @@ export class AnimationEngine {
       previousTimestamp = timestamp;
 
       if (measuredFrames < CALIBRATION_FRAMES - 1) {
-        this.calibrationRafId = requestAnimationFrame(measure);
+        this.rafId = requestAnimationFrame(measure);
         return;
       }
 
@@ -367,7 +364,7 @@ export class AnimationEngine {
       this.start();
     };
 
-    this.calibrationRafId = requestAnimationFrame(measure);
+    this.rafId = requestAnimationFrame(measure);
     return false;
   }
 
@@ -402,8 +399,6 @@ export class AnimationEngine {
     } finally {
       this.isStepping = false;
     }
-
-    this.lastFrameTime = timestamp;
 
     if (this.isRunning && this.groups.size > 0) {
       this.scheduleStep();
@@ -497,18 +492,12 @@ export class AnimationEngine {
   }
 
   public stop(): void {
-    if (this.calibrationRafId !== null) {
-      cancelAnimationFrame(this.calibrationRafId);
-      this.calibrationRafId = null;
-    }
-
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
 
     this.isRunning = false;
-    this.lastFrameTime = null;
     this.frameBudgetMs = null;
     this.isCalibrating = "no";
     this.isStepping = false;
