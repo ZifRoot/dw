@@ -96,7 +96,7 @@ function start(way: Way) {
     const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
     const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
 
-    const enginePipeline = new EnginePipeline(mediator, animationEngine, "Основной pipeline");
+    const enginePipeline = new EnginePipeline(mediator, animationEngine);
 
     enginePipeline.setConfiguration([
       { name: "Отталкивание", algorithm: repulsionAlgorithm },
