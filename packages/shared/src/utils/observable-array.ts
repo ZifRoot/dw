@@ -26,7 +26,7 @@ export interface ObservableArrayEvents<T extends Primitive[]> {
  * ObservableArray не хранит подписчиков самостоятельно.
  * Подписка и публикация событий выполняются через EventEmitter.
  */
-class EventEmitter<TEventMap extends Record<string, (...args: any[]) => void>> {
+class EventEmitter<TEventMap> {
   private readonly listeners = new Map<
     keyof TEventMap,
     Set<TEventMap[keyof TEventMap]>
@@ -87,6 +87,7 @@ export class ObservableArray<T extends Primitive[]>
     super(...values);
 
     const target = this;
+    const events = this.events;
     let proxy: ObservableArray<T>;
 
     Object.assign(target, {
@@ -201,13 +202,12 @@ export class ObservableArray<T extends Primitive[]>
 
         const removed =
           arguments.length === 1
-            ? Array.prototype.splice.call(target, start)
-            : Array.prototype.splice.call(
-                target,
+            ? Reflect.apply(Array.prototype.splice, target, [start])
+            : Reflect.apply(Array.prototype.splice, target, [
                 start,
                 deleteCount,
                 ...items,
-              );
+              ]);
 
         if (removed.length > 0) {
           this.events.emit(
