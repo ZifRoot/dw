@@ -19,5 +19,6 @@
       "@models/*": ["src/db/models/*"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"]
 }
