@@ -7,7 +7,6 @@ export interface PipelineEngineViewState {
 }
 
 export interface PipelineViewState {
-  name: string;
   running: boolean;
   temperature: number;
   temperatureAggregation: "maximum" | "average";
