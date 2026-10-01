@@ -116,39 +116,34 @@ test("pop emits the removed item at its previous index", () => {
 
   assert.equal(array.pop(), 2);
 
-  assert.deepEqual(events.remove, [{ index: 1, value: 2 }]);
+  assert.deepEqual(events.update, [{ index: 1, value: undefined }]);
+  assert.deepEqual(events.remove, []);
   assert.deepEqual([...array], [1]);
 });
 
-test("shift emits remove plus updates for items whose indexes changed", () => {
+test("shift emits only the removed item", () => {
   const array = new ObservableArray([1, 2, 3]);
   const events = subscribe(array);
 
   assert.equal(array.shift(), 1);
 
   assert.deepEqual(events.remove, [{ index: 0, value: 1 }]);
-  assert.deepEqual(events.update, [
-    { index: 0, value: 2 },
-    { index: 1, value: 3 },
-  ]);
+  assert.deepEqual(events.update, []);
   assert.deepEqual([...array], [2, 3]);
 });
 
-test("unshift emits added items plus updates for existing items whose indexes changed", () => {
+test("unshift emits only added items", () => {
   const array = new ObservableArray([2, 3]);
   const events = subscribe(array);
 
   assert.equal(array.unshift(1), 3);
 
   assert.deepEqual(events.add, [{ index: 0, value: 1 }]);
-  assert.deepEqual(events.update, [
-    { index: 1, value: 2 },
-    { index: 2, value: 3 },
-  ]);
+  assert.deepEqual(events.update, []);
   assert.deepEqual([...array], [1, 2, 3]);
 });
 
-test("splice emits removals, additions, and updates for shifted existing items", () => {
+test("splice emits removals and additions without index updates", () => {
   const array = new ObservableArray([1, 2, 3, 4]);
   const events = subscribe(array);
 
@@ -159,10 +154,7 @@ test("splice emits removals, additions, and updates for shifted existing items",
     { index: 1, value: 20 },
     { index: 2, value: 30 },
   ]);
-  assert.deepEqual(events.update, [
-    { index: 3, value: 3 },
-    { index: 4, value: 4 },
-  ]);
+  assert.deepEqual(events.update, []);
   assert.deepEqual([...array], [1, 20, 30, 3, 4]);
 });
 
@@ -232,7 +224,7 @@ test("copyWithin emits updates for changed positions", () => {
   assert.deepEqual([...array], [1, 3, 4, 4]);
 });
 
-test("delete emits remove without changing array length", () => {
+test("delete emits update to undefined without changing array length", () => {
   const array = new ObservableArray([1, 2, 3]);
   const events = subscribe(array);
 
