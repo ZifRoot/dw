@@ -65,7 +65,7 @@ WASM и WebGPU holders получают `PointGraphManager` в конструк�
 
 1. хранит ссылку на `PointGraphManager`;
 2. владеет своим backend-compatible physics state;
-3. подписывается на необходимые события `AppMediator`;
+3. при активации подписывается на необходимые события `AppMediator`;
 4. при необходимости самостоятельно читает актуальные данные из `PointGraphManager`;
 5. при необходимости самостоятельно записывает результат обратно в существующие `Point` через `PointGraphManager`;
 6. не зависит от второго backend holder.
@@ -456,7 +456,7 @@ Factory отвечает за первое. Index отвечает за втор
 
 ## 9. Взаимодействие с AppMediator
 
-Backend holders подписываются на необходимые события `AppMediator`.
+Активный backend holder подписывается на необходимые события `AppMediator`. Неактивный holder не обрабатывает physics events.
 
 Особенно важно событие изменения позиции точки.
 
@@ -470,13 +470,12 @@ AppMediator
     │ point-updating / point-updated
     │ { pointId }
     ▼
-WasmPhysicsMemory
-WebGpuPhysicsMemory
+active backend holder
 ```
 
 Payload mediator event содержит идентификатор точки, а не полную структуру `Point`.
 
-Получив `pointId`, каждый holder:
+Получив `pointId`, активный holder:
 
 1. определяет соответствующий backend buffer index;
 2. самостоятельно получает актуальное состояние точки из своего `PointGraphManager`;
