@@ -53,13 +53,9 @@ export class EnginePipeline {
     private readonly animation: AnimationEngine,
     private readonly name: string,
   ) {
-    this.temperatureCoagulator = new EventCoagulator(
-      TEMPERATURE_UI_DELAY_MS,
-      "latest",
-      (temperature) => {
-        this.mediator.temperature = temperature;
-      },
-    );
+    this.temperatureCoagulator = new EventCoagulator(TEMPERATURE_UI_DELAY_MS, "latest", (temperature) => {
+      this.mediator.temperature = temperature;
+    });
 
     this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
     this.unsubscribeConfig = this.mediator.onPipelineEngineConfigChanged((change) => {
@@ -216,10 +212,7 @@ export class EnginePipeline {
 
         entry.algorithm.step(deltaTime);
         didExecutePhysics = true;
-        this.skipFrames.set(
-          entry.algorithm,
-          this.calculateSkipFrames(entry.algorithm),
-        );
+        this.skipFrames.set(entry.algorithm, this.calculateSkipFrames(entry.algorithm));
       });
     }
 
@@ -236,10 +229,7 @@ export class EnginePipeline {
       this.mediator.pointsUpdating();
 
       const activeEntries = this.entries.filter((entry) => entry.enabled);
-      if (
-        activeEntries.length > 0 &&
-        activeEntries.every((entry) => !entry.algorithm.isRunning)
-      ) {
+      if (activeEntries.length > 0 && activeEntries.every((entry) => !entry.algorithm.isRunning)) {
         this.finishRun();
       }
 
@@ -260,33 +250,22 @@ export class EnginePipeline {
     const stopTemperature = algorithm.getStopTemperature();
     const temperature = algorithm.temperature;
 
-    if (
-      !Number.isFinite(stopTemperature) ||
-      !Number.isFinite(temperature) ||
-      stopTemperature <= 0 ||
-      temperature <= stopTemperature
-    ) {
+    if (!Number.isFinite(stopTemperature) || !Number.isFinite(temperature) || stopTemperature <= 0 || temperature <= stopTemperature) {
       return 0;
     }
 
-    const normalizedDistance =
-      (temperature - stopTemperature) /
-      (stopTemperature * TEMPERATURE_SKIP_RANGE);
+    const normalizedDistance = (temperature - stopTemperature) / (stopTemperature * TEMPERATURE_SKIP_RANGE);
 
     if (normalizedDistance >= 1) return 0;
 
-    const skip = Math.floor(
-      (1 - Math.max(0, normalizedDistance)) * MAX_SKIP_FRAMES,
-    );
+    const skip = Math.floor((1 - Math.max(0, normalizedDistance)) * MAX_SKIP_FRAMES);
 
     return Math.max(0, Math.min(MAX_SKIP_FRAMES, skip));
   }
 
   /** Агрегировать температуры всех включённых physics и отправить их в UI. */
   private publishTemperature(): void {
-    const temperatures = this.entries
-      .filter((entry) => entry.enabled)
-      .map((entry) => entry.algorithm.temperature);
+    const temperatures = this.entries.filter((entry) => entry.enabled).map((entry) => entry.algorithm.temperature);
 
     if (temperatures.length === 0) {
       this.temperatureCoagulator.push(0);

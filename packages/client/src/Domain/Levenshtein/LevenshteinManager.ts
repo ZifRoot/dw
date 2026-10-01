@@ -116,14 +116,27 @@ export class LevenshteinManager {
   }
 
   private toUiPoint(point: DocumentPoint) {
-    const neighbors = this.pointGraphManager.getEdgesForPoint(point.id).map((edge) => {
-      const id = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
-      const neighbor = this.pointGraphManager.getPointById(id);
-      return neighbor ? { id: neighbor.id, name: neighbor.text, distance: edge.distance } : null;
-    }).filter((x): x is NonNullable<typeof x> => x !== null)
-      .sort((a,b) => a.distance - b.distance);
-    return { kind: "document" as const, id: point.id, x: point.x, y: point.y, z: point.z,
-      text: point.text, pinned: point.pinned, selected: point.selected, neighbors, largeText: point.largeText };
+    const neighbors = this.pointGraphManager
+      .getEdgesForPoint(point.id)
+      .map((edge) => {
+        const id = edge.sourceId === point.id ? edge.targetId : edge.sourceId;
+        const neighbor = this.pointGraphManager.getPointById(id);
+        return neighbor ? { id: neighbor.id, name: neighbor.text, distance: edge.distance } : null;
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => a.distance - b.distance);
+    return {
+      kind: "document" as const,
+      id: point.id,
+      x: point.x,
+      y: point.y,
+      z: point.z,
+      text: point.text,
+      pinned: point.pinned,
+      selected: point.selected,
+      neighbors,
+      largeText: point.largeText,
+    };
   }
 
   /** Создать точки документов. */

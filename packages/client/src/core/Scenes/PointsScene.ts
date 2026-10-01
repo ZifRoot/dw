@@ -76,10 +76,15 @@ export class PointsScene {
     if (!this.mediator.autoZoom || this.points.length === 0) return;
     const xs = this.points.map((p) => p.x);
     const ys = this.points.map((p) => p.y);
-    this.svgEngine.applyZoomToBounds({
-      minX: Math.min(...xs), minY: Math.min(...ys),
-      maxX: Math.max(...xs), maxY: Math.max(...ys),
-    }, padding);
+    this.svgEngine.applyZoomToBounds(
+      {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      },
+      padding,
+    );
   }
 
   public getSvgEngine(): SvgEngine {
@@ -97,7 +102,10 @@ export class PointsScene {
 
   private syncDomWithPoints(): void {
     const selection = this.rootGroup.selectAll<SVGGElement, Point>("g.point-group").data(this.points, (d) => d.id);
-    selection.exit<Point>().each((d) => this.domMap.delete(d.id)).remove();
+    selection
+      .exit<Point>()
+      .each((d) => this.domMap.delete(d.id))
+      .remove();
 
     const enter = selection.enter().append("g").attr("class", "point-group");
     const thisMap = this.domMap;
@@ -129,7 +137,8 @@ export class PointsScene {
   private updateAllProperties(d3Sel?: d3.Selection<SVGGElement, Point, any, any> | null): void {
     d3Sel ??= this.d3Points;
     if (!d3Sel) return;
-    d3Sel.classed("dragged", (d) => d.dragged)
+    d3Sel
+      .classed("dragged", (d) => d.dragged)
       .classed("selected", (d) => d.selected)
       .classed("pinned", (d) => d.pinned);
     d3Sel.select("text.point-label").text((d) => d.text);
@@ -147,7 +156,10 @@ export class PointsScene {
     if (!d3Sel) return;
     const inv = 1 / (scale ?? this.svgEngine.getTransform().k);
     const fontSize = this.mediator.sizeText;
-    d3Sel.selectAll("circle.point").attr("r", 20 * inv).attr("stroke-width", 2 * inv);
+    d3Sel
+      .selectAll("circle.point")
+      .attr("r", 20 * inv)
+      .attr("stroke-width", 2 * inv);
     d3Sel.selectAll("text.point-label").style("font-size", `${fontSize * inv}px`);
   }
 

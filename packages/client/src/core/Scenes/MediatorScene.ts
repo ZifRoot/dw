@@ -69,7 +69,10 @@ export class MediatorScene {
     },
     {
       event: AppMediator.AUTO_ZOOM,
-      senders: [{ name: "index.ts", lines: [72] }, { name: "ControlPanel", lines: [69] }],
+      senders: [
+        { name: "index.ts", lines: [72] },
+        { name: "ControlPanel", lines: [69] },
+      ],
       receivers: [{ name: "PointsScene", lines: [41] }],
     },
     {
@@ -206,28 +209,14 @@ export class MediatorScene {
     const receiverColumnX = width - margin.right;
 
     const eventNodes = this.flows.map((flow) => flow.event);
-    const senderEndpoints = this.uniqueEndpoints(
-      this.flows.flatMap((flow) => flow.senders),
-    );
-    const receiverEndpoints = this.uniqueEndpoints(
-      this.flows.flatMap((flow) => flow.receivers),
-    );
+    const senderEndpoints = this.uniqueEndpoints(this.flows.flatMap((flow) => flow.senders));
+    const receiverEndpoints = this.uniqueEndpoints(this.flows.flatMap((flow) => flow.receivers));
 
-    const senderNodes = this.createNodes(
-      senderEndpoints,
-      "sender",
-      senderColumnX,
-      innerHeight,
-      margin.top,
-    );
+    const senderNodes = this.createNodes(senderEndpoints, "sender", senderColumnX, innerHeight, margin.top);
     const eventNodeMap = new Map<string, FlowNode>();
     const eventNodeHeight = Math.max(18, Math.min(28, innerHeight / Math.max(eventNodes.length, 1) - 4));
 
-    const eventGap = Math.max(
-      4,
-      (innerHeight - eventNodes.length * eventNodeHeight) /
-        Math.max(eventNodes.length - 1, 1),
-    );
+    const eventGap = Math.max(4, (innerHeight - eventNodes.length * eventNodeHeight) / Math.max(eventNodes.length - 1, 1));
 
     eventNodes.forEach((name, index) => {
       eventNodeMap.set(name, {
@@ -240,13 +229,7 @@ export class MediatorScene {
       });
     });
 
-    const receiverNodes = this.createNodes(
-      receiverEndpoints,
-      "receiver",
-      receiverColumnX,
-      innerHeight,
-      margin.top,
-    );
+    const receiverNodes = this.createNodes(receiverEndpoints, "receiver", receiverColumnX, innerHeight, margin.top);
 
     const senderMap = new Map(senderNodes.map((node) => [node.id, node]));
     const receiverMap = new Map(receiverNodes.map((node) => [node.id, node]));
@@ -310,18 +293,9 @@ export class MediatorScene {
       .text("Получатель");
   }
 
-  private createNodes(
-    endpoints: FlowEndpoint[],
-    column: FlowNode["column"],
-    x: number,
-    height: number,
-    top: number,
-  ): FlowNode[] {
+  private createNodes(endpoints: FlowEndpoint[], column: FlowNode["column"], x: number, height: number, top: number): FlowNode[] {
     const nodeHeight = 24;
-    const gap = Math.max(
-      6,
-      (height - endpoints.length * nodeHeight) / Math.max(endpoints.length - 1, 1),
-    );
+    const gap = Math.max(6, (height - endpoints.length * nodeHeight) / Math.max(endpoints.length - 1, 1));
 
     return endpoints.map((endpoint, index) => ({
       id: `${column}:${endpoint.name}`,
@@ -334,10 +308,7 @@ export class MediatorScene {
   }
 
   private renderLinks(links: FlowLink[]): void {
-    const linkGroup = this.rootGroup
-      .append("g")
-      .attr("class", "mediator-scene__links")
-      .attr("fill", "none");
+    const linkGroup = this.rootGroup.append("g").attr("class", "mediator-scene__links").attr("fill", "none");
 
     linkGroup
       .selectAll<SVGPathElement, FlowLink>("path")
@@ -349,15 +320,9 @@ export class MediatorScene {
   }
 
   private renderNodes(nodes: FlowNode[], column: FlowNode["column"]): void {
-    const nodeGroup = this.rootGroup
-      .append("g")
-      .attr("class", `mediator-scene__nodes mediator-scene__nodes--${column}`);
+    const nodeGroup = this.rootGroup.append("g").attr("class", `mediator-scene__nodes mediator-scene__nodes--${column}`);
 
-    const node = nodeGroup
-      .selectAll<SVGGElement, FlowNode>("g")
-      .data(nodes)
-      .join("g")
-      .attr("class", "mediator-scene__node");
+    const node = nodeGroup.selectAll<SVGGElement, FlowNode>("g").data(nodes).join("g").attr("class", "mediator-scene__node");
 
     node
       .append("rect")
@@ -377,14 +342,8 @@ export class MediatorScene {
   }
 
   private createLinkPath(link: FlowLink): string {
-    const sourceX =
-      link.source.column === "sender"
-        ? link.source.x + 70
-        : link.source.x + 70;
-    const targetX =
-      link.target.column === "receiver"
-        ? link.target.x - 70
-        : link.target.x - 70;
+    const sourceX = link.source.column === "sender" ? link.source.x + 70 : link.source.x + 70;
+    const targetX = link.target.column === "receiver" ? link.target.x - 70 : link.target.x - 70;
 
     const sourceY = link.source.y + link.source.height / 2;
     const targetY = link.target.y + link.target.height / 2;
