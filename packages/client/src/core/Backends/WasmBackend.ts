@@ -7,21 +7,28 @@ interface WasmModuleExports {
   memory: WebAssembly.Memory;
 }
 
-export class WasmBackend extends Backend {
-  private nextPointer = 0;
+interface WasmInstanceState {
+  instance: WebAssembly.Instance;
+  memory: WebAssembly.Memory;
+}
 
-  private constructor(
-    private readonly instance: WebAssembly.Instance,
-    private readonly memory: WebAssembly.Memory,
-  ) {
+export class WasmBackend extends Backend {
+  private nextInstanceId = 1;
+  private readonly instances = new Map<number, WasmInstanceState>();
+
+  private constructor() {
     super();
   }
 
-  public static async create(moduleUrl: URL): Promise<WasmBackend> {
+  public static async create(): Promise<WasmBackend> {
     if (typeof WebAssembly === "undefined") {
       throw new Error("WebAssembly is not supported by this browser.");
     }
 
+    return new WasmBackend();
+  }
+
+  public async createInstance(moduleUrl: URL): Promise<number> {
     const response = await fetch(moduleUrl);
 
     if (!response.ok) {
@@ -38,26 +45,35 @@ export class WasmBackend extends Backend {
       throw new Error("WebAssembly module does not export memory.");
     }
 
-    return new WasmBackend(instance, exports.memory);
+    const instanceId = this.nextInstanceId++;
+    this.instances.set(instanceId, {
+      instance,
+      memory: exports.memory,
+    });
+
+    return instanceId;
   }
 
-  public allocate(byteLength: number): number {
+  public allocate(instanceId: number, byteLength: number): number {
+    const state = this.getInstance(instanceId);
     const alignedLength = this.align(byteLength);
-    const pointer = this.nextPointer;
+    const pointer = this.getNextPointer(state);
     const requiredBytes = pointer + alignedLength;
 
-    this.ensureCapacity(requiredBytes);
-    this.nextPointer = requiredBytes;
+    this.ensureCapacity(state.memory, requiredBytes);
+    this.setNextPointer(state, requiredBytes);
 
     return pointer;
   }
 
   public writeFloat32(
+    instanceId: number,
     pointer: number,
     values: Float32Array,
   ): void {
+    const memory = this.getInstance(instanceId).memory;
     const target = new Float32Array(
-      this.memory.buffer,
+      memory.buffer,
       pointer,
       values.length,
     );
@@ -66,20 +82,23 @@ export class WasmBackend extends Backend {
   }
 
   public readFloat32(
+    instanceId: number,
     pointer: number,
     length: number,
   ): Float32Array {
-    const source = new Float32Array(
-      this.memory.buffer,
-      pointer,
-      length,
-    );
+    const memory = this.getInstance(instanceId).memory;
+    const source = new Float32Array(memory.buffer, pointer, length);
 
     return new Float32Array(source);
   }
 
-  public invoke(exportName: string, args: number[]): number {
-    const exportedFunction = this.instance.exports[exportName];
+  public invoke(
+    instanceId: number,
+    exportName: string,
+    args: number[],
+  ): number {
+    const instance = this.getInstance(instanceId).instance;
+    const exportedFunction = instance.exports[exportName];
 
     if (typeof exportedFunction !== "function") {
       throw new Error(
@@ -91,16 +110,43 @@ export class WasmBackend extends Backend {
     return typeof result === "number" ? result : 0;
   }
 
+  public destroyInstance(instanceId: number): void {
+    this.instances.delete(instanceId);
+  }
+
   public destroy(): void {
-    this.nextPointer = 0;
+    this.instances.clear();
+  }
+
+  private getInstance(instanceId: number): WasmInstanceState {
+    const state = this.instances.get(instanceId);
+
+    if (!state) {
+      throw new Error(`WebAssembly instance "${instanceId}" does not exist.`);
+    }
+
+    return state;
+  }
+
+  private getNextPointer(state: WasmInstanceState): number {
+    const value = state as WasmInstanceState & { nextPointer?: number };
+    return value.nextPointer ?? 0;
+  }
+
+  private setNextPointer(state: WasmInstanceState, value: number): void {
+    const target = state as WasmInstanceState & { nextPointer?: number };
+    target.nextPointer = value;
   }
 
   private align(byteLength: number): number {
     return Math.ceil(byteLength / FLOAT_ALIGNMENT) * FLOAT_ALIGNMENT;
   }
 
-  private ensureCapacity(requiredBytes: number): void {
-    const availableBytes = this.memory.buffer.byteLength;
+  private ensureCapacity(
+    memory: WebAssembly.Memory,
+    requiredBytes: number,
+  ): void {
+    const availableBytes = memory.buffer.byteLength;
 
     if (requiredBytes <= availableBytes) {
       return;
@@ -110,6 +156,6 @@ export class WasmBackend extends Backend {
       (requiredBytes - availableBytes) / WASM_PAGE_SIZE,
     );
 
-    this.memory.grow(requiredPages);
+    memory.grow(requiredPages);
   }
 }
