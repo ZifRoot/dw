@@ -303,7 +303,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
     return removed;
   }
 
-  public fill(value: T[number], start?: number, end?: number): ObservableArray<T> {
+  public fill(value: T[number], start?: number, end?: number): this {
     const oldValues = Array.from(this);
     const length = this.length;
     const first = normalizeIndex(start ?? 0, length);
@@ -339,7 +339,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
     return this;
   }
 
-  public sort(compareFn?: (a: T[number], b: T[number]) => number): ObservableArray<T> {
+  public sort(compareFn?: (a: T[number], b: T[number]) => number): this {
     const oldValues = Array.from(this);
     Array.prototype.sort.call(this, compareFn);
 
@@ -352,7 +352,7 @@ export class ObservableArray<T extends Primitive[]> extends Array<T[number]> {
     return this;
   }
 
-  public copyWithin(targetIndex: number, start: number, end?: number): ObservableArray<T> {
+  public copyWithin(targetIndex: number, start: number, end?: number): this {
     const oldValues = Array.from(this);
     Array.prototype.copyWithin.call(this, targetIndex, start, end);
 
