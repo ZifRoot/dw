@@ -140,7 +140,7 @@ export class WebGpuPhysicsMemory {
       throw new Error("WebGPU adapter is not available.");
     }
 
-    const device = await adapter.requestDevice();
+    const device = (await adapter.requestDevice()) as unknown as WebGpuDevice;
 
     return new WebGpuPhysicsMemory(
       pointGraphManager,
