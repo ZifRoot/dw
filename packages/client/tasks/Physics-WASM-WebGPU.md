@@ -252,7 +252,209 @@ Z-damping
 
 ---
 
-## 8. Взаимодействие с AppMediator
+## 8. Выбор активного backend и защита от конфликтов
+
+WASM и WebGPU не должны одновременно выполнять physics для одного PointGraphManager.
+
+В приложении может существовать два созданных backend holder:
+
+`Index
+  │
+  ├── WasmPhysicsMemory
+  └── WebGpuPhysicsMemory`
+
+но в каждый момент времени существует ровно один **active physics backend**.
+
+`text
+             Physics Backend
+                    │
+          ┌─────────┴─────────┐
+          │                   │
+        WASM                WebGPU
+          │                   │
+       ACTIVE              INACTIVE
+`
+
+Неактивный backend:
+
+- не регистрирует physics callbacks в AnimationEngine;
+- не выполняет physics algorithms;
+- не обрабатывает physics-related mediator events;
+- не записывает координаты обратно в PointGraphManager.
+
+Это основной механизм предотвращения конфликта двух backend.
+
+### Backend interface
+
+Оба backend предоставляют единый публичный интерфейс, например концептуально:
+
+`text
+PhysicsBackend
+    ├── initialize()
+    ├── activate()
+    ├── deactivate()
+    ├── syncFromPointGraph()
+    ├── syncToPointGraph()
+    └── destroy()
+`
+
+Конкретный TypeScript API будет определён на этапе реализации.
+
+`activate()` означает, что backend становится единственным владельцем текущего physics execution cycle.
+
+`deactivate()` должен остановить execution и снять все подписки/регистрации, относящиеся к активному physics backend.
+
+Переключение не должно просто менять enum или флаг. Оно должно менять **активный execution owner**.
+
+### Static factory
+
+Создание каждого backend выполняется через статическую factory.
+
+Концептуально:
+
+`text
+WasmPhysicsMemory.create(...)
+WebGpuPhysicsMemory.create(...)
+`
+
+или через соответствующие backend factories.
+
+Factory обязана проверить возможность создания backend и выбросить ошибку, если backend невозможно создать.
+
+Проверки включают как минимум:
+
+- наличие требуемого browser API;
+- возможность инициализации backend runtime;
+- возможность создания необходимых backend resources;
+- корректность обязательных возможностей устройства/окружения.
+
+Для WebGPU это означает проверку доступности WebGPU и успешного получения необходимых GPU resources.
+
+Для WASM это означает проверку возможности загрузки/инициализации WASM runtime и требуемого модуля.
+
+Ошибка factory является **ошибкой создания конкретного backend**, а не обязательно ошибкой всего приложения.
+
+Поэтому Index создаёт backend независимо:
+
+`text
+try create WASM
+       │
+       ├── success → backend available
+       └── failure → backend unavailable
+
+try create WebGPU
+       │
+       ├── success → backend available
+       └── failure → backend unavailable
+`
+
+Если один backend недоступен, это не должно блокировать использование другого.
+
+### Переключатель находится в Index
+
+Index является composition root приложения и поэтому владеет связыванием:
+
+`text
+React UI
+   │
+   ▼
+AppMediator
+   │
+   │ physics-backend-changed
+   ▼
+Index
+   │
+   ├── activate WASM
+   └── activate WebGPU
+`
+
+React UI не должен напрямую создавать WasmPhysicsMemory или WebGpuPhysicsMemory.
+
+UI знает только публичный интерфейс выбора backend и вызывает метод медиатора, например концептуально:
+
+`text
+mediator.physicsBackendChanged("wasm")
+mediator.physicsBackendChanged("webgpu")
+`
+
+Index подписывается на это событие и выполняет фактическое переключение.
+
+Это сохраняет границы:
+
+- React — отображает переключатель;
+- AppMediator — передаёт команду;
+- Index — управляет composition/runtime wiring;
+- backend holder — выполняет physics;
+- PointGraphManager — хранит domain state.
+
+### Безопасное переключение
+
+Переключение выполняется последовательно:
+
+`text
+active backend
+      │
+      ▼
+deactivate()
+      │
+      ▼
+sync current result if required
+      │
+      ▼
+new backend
+      │
+      ▼
+syncFromPointGraph()
+      │
+      ▼
+activate()
+`
+
+Новый backend перед активацией получает актуальное состояние из PointGraphManager.
+
+Поэтому backend не должен продолжать вычисление со старым состоянием после переключения.
+
+Критический инвариант:
+
+> В каждый момент времени только один backend имеет право выполнять physics и записывать physics result обратно в PointGraphManager.
+
+### Состояние переключателя в UI
+
+UI-переключатель должен показывать только backend, которые успешно созданы и доступны.
+
+Например:
+
+`text
+Physics backend:
+  ○ WASM
+  ○ WebGPU
+`
+
+Если WebGPU factory завершилась ошибкой, UI получает состояние вида:
+
+`text
+WASM    available
+WebGPU  unavailable
+`
+
+и не предлагает выполнить переключение на недоступный backend.
+
+Причина ошибки может быть доступна для diagnostics, но UI не должен самостоятельно проверять WebGPU/WASM capabilities.
+
+### Создание и переключение не смешиваются
+
+Важно различать две операции:
+
+1. **Factory creation** — можно ли вообще создать backend.
+2. **Activation** — какой из уже созданных backend сейчас выполняет physics.
+
+Factory отвечает за первое. Index отвечает за второе.
+
+Это позволяет иметь оба backend созданными для исследовательского сравнения, но исключает их одновременное выполнение.
+
+---
+
+## 9. Взаимодействие с AppMediator
 
 Backend holders подписываются на необходимые события `AppMediator`.
 
@@ -717,6 +919,14 @@ Backend holder получает domain data напрямую из `PointGraphMan
 20. Swap-with-last в `EntityCollection` не должен ломать point → buffer index mapping.
 21. `PointGraphManager` не знает деталей конкретного backend.
 22. `AppMediator` не становится транспортом backend state.
+23. В каждый момент времени активен только один physics backend.
+24. Неактивный backend не выполняет physics и не пишет результаты в `PointGraphManager`.
+25. Создание backend выполняется через static factory с обязательной проверкой capabilities.
+26. Ошибка создания одного backend не должна автоматически делать недоступным другой backend.
+27. UI не создаёт backend напрямую.
+28. UI сообщает выбор backend через `AppMediator`.
+29. `Index` является composition root и выполняет фактическое переключение active backend.
+30. Перед активацией нового backend его state синхронизируется из `PointGraphManager`.
 
 ---
 
@@ -734,6 +944,9 @@ Backend holder получает domain data напрямую из `PointGraphMan
 8. WASM ABI;
 9. WebGPU buffer layout и bind groups;
 10. способ создания согласованного набора из трёх algorithms для каждого backend;
-11. benchmark contract.
+11. backend public interface: initialize / activate / deactivate / sync / destroy;
+12. static factory и capability checks;
+13. lifecycle переключения active backend;
+14. benchmark contract.
 
 После согласования этих решений WASM и WebGPU backend можно реализовывать независимо, сохраняя единый physics contract.
