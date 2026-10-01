@@ -74,7 +74,7 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
       return this.config.stopTemperature;
     }
 
-    const instanceId = this.getInstanceId();
+    this.getInstanceId();
     const updatePipeline = this.getUpdatePipeline();
     const reductionPipeline = this.getReductionPipeline();
     const data = this.transformer.load();
