@@ -3,14 +3,23 @@ import { test } from "node:test";
 
 import { ObservableArray } from "./observable-array";
 
+type PrimitiveTestValue =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined;
+
 interface Events<T> {
   update: Array<{ index: number; value: T }>;
   add: Array<{ index: number; value: T | undefined }>;
   remove: Array<{ index: number; value: T | undefined }>;
 }
 
-function subscribe<T extends string | number | boolean | bigint | symbol | null | undefined>(
-  array: ObservableArray<[T, ...T[]]>,
+function subscribe<T extends PrimitiveTestValue>(
+  array: ObservableArray<T[]>,
 ): Events<T> {
   const events: Events<T> = {
     update: [],
