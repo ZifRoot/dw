@@ -118,12 +118,13 @@ function start(way: Way) {
   }
 
   if (pointGraphManager) {
-    const pointsScene = new PointsScene(mediator, svgEngine, pointGraphManager);
-    const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
+    const physicsPointGraphManager = pointGraphManager;
+    const pointsScene = new PointsScene(mediator, svgEngine, physicsPointGraphManager);
+    const edgesScene = new EdgesScene(mediator, svgEngine, physicsPointGraphManager);
 
-    const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
-    const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
-    const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
+    const zdampingAlgorithm = new ZDapperAlgorithm(mediator, physicsPointGraphManager, new ZDampingConfig());
+    const graphAlgorithm = new GraphAlgorithm(mediator, physicsPointGraphManager, new GraphEngineConfig());
+    const repulsionAlgorithm = new RepulsionAlgorithm(mediator, physicsPointGraphManager, new RepulsionEngineConfig());
 
     const enginePipeline = new EnginePipeline(mediator, animationEngine);
 
@@ -138,10 +139,10 @@ function start(way: Way) {
     // Экспериментальные backend pipelines пока намеренно не подключаются.
     // Чтобы проверить один из прототипов, замените false на true.
     if (false) {
-      void connectWasmZDampingPipeline(mediator, animationEngine, pointGraphManager);
+      void connectWasmZDampingPipeline(mediator, animationEngine, physicsPointGraphManager);
 
       // Для WebGPU замените вызов выше на:
-      void connectWebGpuZDampingPipeline(mediator, animationEngine, pointGraphManager);
+      void connectWebGpuZDampingPipeline(mediator, animationEngine, physicsPointGraphManager);
     }
   }
 }
