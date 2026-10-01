@@ -43,15 +43,15 @@ export abstract class BaseAlgorithm {
    *
    * @returns true, если алгоритм должен продолжить работу.
    */
-  public step(deltaTime: number): boolean {
+  public async step(deltaTime: number): Promise<boolean> {
     if (!this.running) return false;
 
-    this.temperature = this.applyStep(deltaTime);
+    this.temperature = await this.applyStep(deltaTime);
 
     if (this.temperature < this.getStopTemperature()) this.stop();
     return this.running;
   }
 
   /** Выполнить один вычислительный шаг алгоритма. */
-  protected abstract applyStep(deltaTime: number): number;
+  protected abstract applyStep(deltaTime: number): number | Promise<number>;
 }
