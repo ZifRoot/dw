@@ -116,8 +116,8 @@ test("pop emits the removed item at its previous index", () => {
 
   assert.equal(array.pop(), 2);
 
-  assert.deepEqual(events.update, [{ index: 1, value: undefined }]);
-  assert.deepEqual(events.remove, []);
+  assert.deepEqual(events.remove, [{ index: 1, value: 2 }]);
+  assert.deepEqual(events.update, []);
   assert.deepEqual([...array], [1]);
 });
 
@@ -230,7 +230,8 @@ test("delete emits update to undefined without changing array length", () => {
 
   assert.equal(delete array[1], true);
 
-  assert.deepEqual(events.remove, [{ index: 1, value: 2 }]);
+  assert.deepEqual(events.update, [{ index: 1, value: undefined }]);
+  assert.deepEqual(events.remove, []);
   assert.equal(array.length, 3);
   assert.equal(1 in array, false);
   assert.deepEqual([array[0], array[1], array[2]], [1, undefined, 3]);
