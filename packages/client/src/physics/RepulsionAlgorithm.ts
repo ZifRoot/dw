@@ -15,13 +15,20 @@ export class RepulsionEngineConfig {
 export class RepulsionAlgorithm extends BaseAlgorithm {
   constructor(
     mediator: AppMediator,
-    pointGraphManager: PointGraphManager,
+    private readonly pointGraphManager: PointGraphManager,
     public readonly config: RepulsionEngineConfig,
   ) {
-    super(mediator, pointGraphManager);
+    super(mediator);
   }
 
   public applyPair1(p1: Point, p2: Point) {
+    const force = this.applyPair1Internal(p1, p2);
+    if (!force) return null;
+
+    return force;
+  }
+
+  private applyPair1Internal(p1: Point, p2: Point) {
     const targetDistance = this.config.targetDistance;
     const minDistance = this.config.minDistance;
     if (p1.fixed && p2.fixed) return null;
