@@ -1,5 +1,4 @@
 import { AppMediator } from "../AppMediator";
-import { PointGraphManager } from "../collections/PointGraphManager";
 
 /**
  * Базовый класс алгоритма, который выполняется как периодическая работа
@@ -14,7 +13,6 @@ export abstract class BaseAlgorithm {
 
   protected constructor(
     protected readonly mediator: AppMediator,
-    protected readonly pointGraphManager: PointGraphManager,
   ) {}
 
   /** Запустить алгоритм. */
@@ -36,22 +34,23 @@ export abstract class BaseAlgorithm {
   public abstract getStopTemperature(): number;
 
   /**
-   * Выполнить один шаг алгоритма.
+   * Выполнить один синхронный шаг алгоритма.
    *
-   * Температура вычисляется как часть этого же шага. Pipeline получает
-   * результат через состояние алгоритма и использует его для scheduling.
+   * Асинхронные шаги не являются частью текущего контракта AnimationEngine.
+   * Поддержка async physics должна быть добавлена отдельно на уровне
+   * AnimationEngine и Pipeline.
    *
    * @returns true, если алгоритм должен продолжить работу.
    */
-  public async step(deltaTime: number): Promise<boolean> {
+  public step(deltaTime: number): boolean {
     if (!this.running) return false;
 
-    this.temperature = await this.applyStep(deltaTime);
+    this.temperature = this.applyStep(deltaTime);
 
     if (this.temperature < this.getStopTemperature()) this.stop();
     return this.running;
   }
 
   /** Выполнить один вычислительный шаг алгоритма. */
-  protected abstract applyStep(deltaTime: number): number | Promise<number>;
+  protected abstract applyStep(deltaTime: number): number;
 }
