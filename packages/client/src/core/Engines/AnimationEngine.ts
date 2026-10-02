@@ -1,34 +1,43 @@
 export type AnimationCallback = (deltaTime: number) => void;
 
-/** Источник callback'ов для одной группы AnimationEngine. */
-export interface AnimationGenerator extends Iterator<AnimationCallback> {}
-
-/** Фабрика, создающая источник callback'ов для группы. */
-export type AnimationGeneratorFactory = () => AnimationGenerator;
-
-interface CallbackSequence extends AnimationGenerator {
-  remove(callback: AnimationCallback): boolean;
-  isEmpty(): boolean;
+/** Последовательность callback'ов, которую можно перезапустить. */
+export interface Sequence<T> extends Iterator<T> {
+  /**
+   * Завершить текущий проход и подготовить следующий.
+   *
+   * Возвращает true, если последовательность может быть запущена снова.
+   */
+  reset(): boolean;
 }
 
-class ArrayCallbackSequence implements CallbackSequence {
+/** Дополнительные параметры повторяемой последовательности. */
+export interface SequenceOptions {
+  /** Выполнить последовательность только один раз. */
+  oneShot?: boolean;
+}
+
+class ArraySequence implements Sequence<AnimationCallback> {
   private cursor = 0;
 
-  public constructor(private readonly callbacks: AnimationCallback[]) {}
+  public constructor(
+    private readonly callbacks: AnimationCallback[],
+    private readonly oneShot = false,
+  ) {}
 
   public next(): IteratorResult<AnimationCallback> {
-    if (this.callbacks.length === 0) {
+    if (this.cursor >= this.callbacks.length) {
       return { done: true, value: undefined };
     }
 
-    if (this.cursor >= this.callbacks.length) {
-      this.cursor = 0;
-    }
-
     const callback = this.callbacks[this.cursor];
-    this.cursor = (this.cursor + 1) % this.callbacks.length;
-
+    this.cursor++;
     return { done: false, value: callback };
+  }
+
+  public reset(): boolean {
+    if (this.oneShot) return false;
+    this.cursor = 0;
+    return true;
   }
 
   public remove(callback: AnimationCallback): boolean {
@@ -41,15 +50,48 @@ class ArrayCallbackSequence implements CallbackSequence {
       this.cursor--;
     }
 
-    if (this.cursor >= this.callbacks.length) {
-      this.cursor = 0;
-    }
-
     return true;
   }
 
   public isEmpty(): boolean {
     return this.callbacks.length === 0;
+  }
+}
+
+/** Обёртка над уже созданным Generator. Generator по определению одноразовый. */
+class GeneratorSequence implements Sequence<AnimationCallback> {
+  public constructor(private readonly generator: AnimationGenerator) {}
+
+  public next(): IteratorResult<AnimationCallback> {
+    return this.generator.next();
+  }
+
+  public reset(): boolean {
+    return false;
+  }
+}
+
+/** Последовательность, создающая новый Generator для каждого нового прохода. */
+class GeneratorFactorySequence implements Sequence<AnimationCallback> {
+  private generator: AnimationGenerator | null = null;
+
+  public constructor(
+    private readonly factory: AnimationGeneratorFactory,
+    private readonly oneShot = false,
+  ) {}
+
+  public next(): IteratorResult<AnimationCallback> {
+    if (this.generator === null) {
+      this.generator = this.factory();
+    }
+
+    return this.generator.next();
+  }
+
+  public reset(): boolean {
+    if (this.oneShot) return false;
+    this.generator = null;
+    return true;
   }
 }
 
@@ -199,9 +241,7 @@ class GroupQueue {
 }
 
 interface CallbackGroup {
-  sequence: CallbackSequence | null;
-  generator: AnimationGenerator | null;
-  generatorFactory: AnimationGeneratorFactory | null;
+  sequence: Sequence<AnimationCallback>;
   lastCompletedAt: number | null;
   node: GroupQueueNode;
   eligibleStep: number;
@@ -229,51 +269,33 @@ export class AnimationEngine {
   }
 
   /** Добавить последовательную группу callback'ов. */
-  public addCallbacks(callbacks: AnimationCallback[]): () => void {
+  public addCallbacks(
+    callbacks: AnimationCallback[],
+    options: SequenceOptions = {},
+  ): () => void {
     if (callbacks.length === 0) return () => {};
 
-    return this.addGroup({
-      sequence: new ArrayCallbackSequence([...callbacks]),
-      generator: null,
-      generatorFactory: null,
-    });
+    return this.addGroup(new ArraySequence([...callbacks], options.oneShot === true));
   }
 
   /** Добавить существующий Generator как отдельную группу. */
   public addGenerator(generator: AnimationGenerator): () => void {
-    return this.addGroup({
-      sequence: null,
-      generator,
-      generatorFactory: null,
-    });
+    return this.addGroup(new GeneratorSequence(generator));
   }
 
-  /**
-   * Добавить фабрику Generator.
-   *
-   * Новый Generator создаётся при первом обращении группы в каждом кадре.
-   * После завершения Generator группа остаётся зарегистрированной и
-   * продолжает работу со следующим Generator в следующем кадре.
-   */
-  public addGeneratorFactory(factory: AnimationGeneratorFactory): () => void {
-    return this.addGroup({
-      sequence: null,
-      generator: null,
-      generatorFactory: factory,
-    });
+  /** Добавить фабрику Generator как повторяемую последовательность. */
+  public addGeneratorFactory(
+    factory: AnimationGeneratorFactory,
+    options: SequenceOptions = {},
+  ): () => void {
+    return this.addGroup(new GeneratorFactorySequence(factory, options.oneShot === true));
   }
 
-  private addGroup(source: {
-    sequence: CallbackSequence | null;
-    generator: AnimationGenerator | null;
-    generatorFactory: AnimationGeneratorFactory | null;
-  }): () => void {
+  private addGroup(sequence: Sequence<AnimationCallback>): () => void {
     const groupId = this.nextGroupId++;
 
     const group: CallbackGroup = {
-      sequence: source.sequence,
-      generator: source.generator,
-      generatorFactory: source.generatorFactory,
+      sequence,
       lastCompletedAt: null,
       node: {
         groupId,
@@ -299,8 +321,9 @@ export class AnimationEngine {
   /** Удалить первую регистрацию указанного callback. */
   public removeCallback(callback: AnimationCallback): void {
     for (const [groupId, group] of this.groups) {
-      if (group.sequence === null) continue;
-      if (!group.sequence.remove(callback)) continue;
+      const sequence = group.sequence;
+      if (!(sequence instanceof ArraySequence)) continue;
+      if (!sequence.remove(callback)) continue;
 
       if (group.sequence.isEmpty()) {
         this.removeGroup(groupId);
@@ -448,37 +471,10 @@ export class AnimationEngine {
   }
 
   private getNextCallback(group: CallbackGroup): IteratorResult<AnimationCallback> {
-    if (group.sequence !== null) {
-      return group.sequence.next();
-    }
-
-    if (group.generator === null) {
-      if (group.generatorFactory === null) {
-        throw new Error("Animation group has no callback source");
-      }
-
-      try {
-        group.generator = group.generatorFactory();
-      } catch (error) {
-        console.error("AnimationEngine generator factory failed", error);
-        group.generator = null;
-        return { done: true, value: undefined };
-      }
-    }
-
     try {
-      return group.generator.next();
+      return group.sequence.next();
     } catch (error) {
-      console.error("AnimationEngine generator failed", error);
-
-      if (group.generatorFactory === null) {
-        this.removeGroup(group.node.groupId);
-      } else {
-        group.generator = null;
-        group.eligibleStep = this.currentStep + 1;
-        this.startedGroups.enqueue(group.node);
-      }
-
+      console.error("AnimationEngine sequence failed", error);
       return { done: true, value: undefined };
     }
   }
