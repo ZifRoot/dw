@@ -22,13 +22,6 @@ export class RepulsionAlgorithm extends BaseAlgorithm {
   }
 
   public applyPair1(p1: Point, p2: Point) {
-    const force = this.applyPair1Internal(p1, p2);
-    if (!force) return null;
-
-    return force;
-  }
-
-  private applyPair1Internal(p1: Point, p2: Point) {
     const targetDistance = this.config.targetDistance;
     const minDistance = this.config.minDistance;
     if (p1.fixed && p2.fixed) return null;
