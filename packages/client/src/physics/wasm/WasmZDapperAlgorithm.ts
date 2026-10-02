@@ -1,5 +1,4 @@
 import { AppMediator } from "@core/AppMediator";
-import { PointGraphManager } from "@core/collections/PointGraphManager";
 import { BaseAlgorithm } from "@core/Engines/BaseAlgorithm";
 import { WasmBackend } from "@core/Backends/WasmBackend";
 import { ZDampingConfig } from "../ZDapperAlgorithm";
@@ -12,12 +11,11 @@ export class WasmZDapperAlgorithm extends BaseAlgorithm {
 
   public constructor(
     mediator: AppMediator,
-    pointGraphManager: PointGraphManager,
     public readonly config: ZDampingConfig,
     private readonly backend: WasmBackend,
     private readonly transformer: WasmPointsTransformer,
   ) {
-    super(mediator, pointGraphManager);
+    super(mediator);
   }
 
   public async initialize(sourceUrl: URL): Promise<void> {
