@@ -72,38 +72,41 @@ function PointGraphManager(b: Way, mediator: AppMediator, animationEngine: Anima
 }
 
 async function connectWasmZDampingPipeline(
+  pipeline: EnginePipeline,
   mediator: AppMediator,
-  animationEngine: AnimationEngine,
   pointGraphManager: NonNullable<ReturnType<typeof PointGraphManager>>,
-): Promise<EnginePipeline> {
-  const moduleUrl = new URL("./physics/wasm/z-damping.wasm", import.meta.url);
-  const sourceUrl = new URL("./physics/wasm/z-damping.cpp", import.meta.url);
+): Promise<void> {
   const backend = await WasmBackend.create();
   const transformer = new WasmPointsTransformer(pointGraphManager, backend);
-  const algorithm = new WasmZDapperAlgorithm(mediator, new ZDampingConfig(), backend, transformer);
-  await algorithm.initialize(sourceUrl);
-  const pipeline = new EnginePipeline(mediator, animationEngine);
+  const algorithm = new WasmZDapperAlgorithm(
+    mediator,
+    new ZDampingConfig(),
+    backend,
+    transformer,
+  );
+
+  await algorithm.initialize();
 
   pipeline.setConfiguration([{ name: "Затухание по Z", algorithm }]);
-
-  return pipeline;
 }
 
 async function connectWebGpuZDampingPipeline(
+  pipeline: EnginePipeline,
   mediator: AppMediator,
-  animationEngine: AnimationEngine,
   pointGraphManager: NonNullable<ReturnType<typeof PointGraphManager>>,
-): Promise<EnginePipeline> {
-  const sourceUrl = new URL("./physics/webgpu/z-damping.wgsl", import.meta.url);
+): Promise<void> {
   const backend = await WebGpuBackend.create();
   const transformer = new WebGpuPointsTransformer(pointGraphManager, backend);
-  const algorithm = new WebGpuZDapperAlgorithm(mediator, new ZDampingConfig(), backend, transformer);
-  await algorithm.initialize(sourceUrl);
-  const pipeline = new EnginePipeline(mediator, animationEngine);
+  const algorithm = new WebGpuZDapperAlgorithm(
+    mediator,
+    new ZDampingConfig(),
+    backend,
+    transformer,
+  );
+
+  await algorithm.initialize();
 
   pipeline.setConfiguration([{ name: "Затухание по Z", algorithm }]);
-
-  return pipeline;
 }
 
 function start(way: Way) {
@@ -141,21 +144,48 @@ function start(way: Way) {
 
     const enginePipeline = new EnginePipeline(mediator, animationEngine);
 
-    enginePipeline.setConfiguration([
-      { name: "Отталкивание", algorithm: repulsionAlgorithm },
-      { name: "Связи", algorithm: graphAlgorithm },
-      { name: "Затухание по Z", algorithm: zdampingAlgorithm },
-    ]);
+    const configureDefaultPipeline = () => {
+      enginePipeline.setConfiguration([
+        { name: "Отталкивание", algorithm: repulsionAlgorithm },
+        { name: "Связи", algorithm: graphAlgorithm },
+        { name: "Затухание по Z", algorithm: zdampingAlgorithm },
+      ]);
+    };
+
+    const tryConfigureExperimentalBackend = async (): Promise<void> => {
+      try {
+        await connectWasmZDampingPipeline(
+          enginePipeline,
+          mediator,
+          physicsPointGraphManager,
+        );
+        return;
+      } catch (error: unknown) {
+        console.warn("WASM physics backend is unavailable.", error);
+      }
+
+      try {
+        await connectWebGpuZDampingPipeline(
+          enginePipeline,
+          mediator,
+          physicsPointGraphManager,
+        );
+        return;
+      } catch (error: unknown) {
+        console.warn("WebGPU physics backend is unavailable.", error);
+      }
+
+      configureDefaultPipeline();
+    };
+
+    configureDefaultPipeline();
     createControlPanel(controlPanelDiv, mediator);
     createInfoPanel(infoPanelDiv, mediator);
 
     // Экспериментальные backend pipelines пока намеренно не подключаются.
-    // Чтобы проверить один из прототипов, замените false на true.
+    // Чтобы включить fallback WASM → WebGPU → default, вызовите функцию ниже.
     if (false) {
-      void connectWasmZDampingPipeline(mediator, animationEngine, physicsPointGraphManager);
-
-      // Для WebGPU замените вызов выше на:
-      void connectWebGpuZDampingPipeline(mediator, animationEngine, physicsPointGraphManager);
+      void tryConfigureExperimentalBackend();
     }
   }
 }
