@@ -1,8 +1,10 @@
+#include <cstdint>
+
 struct PointState {
   float x;
   float y;
   float z;
-  float fixed;
+  int32_t fixed;
 };
 
 extern "C" {
@@ -13,7 +15,7 @@ float z_damping(PointState* points, int length, float dampingFactor, float thres
   for (int i = 0; i < length; ++i) {
     PointState& point = points[i];
 
-    if (point.fixed != 0.0f || __builtin_fabsf(point.z) <= threshold) {
+    if (point.fixed != 0 || __builtin_fabsf(point.z) <= threshold) {
       continue;
     }
 
