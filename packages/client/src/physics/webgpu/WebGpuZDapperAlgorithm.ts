@@ -66,7 +66,25 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     );
   }
 
-  protected async applyStep(_deltaTime: number): Promise<number> {
+  /**
+   * Асинхронный шаг, который будет использован после добавления async
+   * callback contract в AnimationEngine.
+   */
+  public async executeAsyncStep(_deltaTime: number): Promise<number> {
+    return this.executeGpuStep();
+  }
+
+  /**
+   * Текущий синхронный BaseAlgorithm не может ожидать WebGPU readback.
+   * Реальный GPU шаг намеренно вынесен в executeAsyncStep().
+   */
+  protected applyStep(_deltaTime: number): number {
+    throw new Error(
+      "WebGPU Z-damping requires async AnimationEngine support.",
+    );
+  }
+
+  private async executeGpuStep(): Promise<number> {
     const updatePipeline = this.getUpdatePipeline();
     const reductionPipeline = this.getReductionPipeline();
 
