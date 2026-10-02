@@ -1,5 +1,11 @@
 export type AnimationCallback = (deltaTime: number) => void;
 
+/** Источник callback'ов, создаваемый Generator API. */
+export interface AnimationGenerator extends Iterator<AnimationCallback> {}
+
+/** Фабрика, создающая новый Generator для следующего прохода. */
+export type AnimationGeneratorFactory = () => AnimationGenerator;
+
 /** Последовательность callback'ов, которую можно перезапустить. */
 export interface Sequence<T> extends Iterator<T> {
   /**
@@ -125,25 +131,30 @@ class GroupQueue {
     }
 
     node.queue = this;
-    node.next = this.startedHead;
 
     if (this.startedHead === null) {
       node.previous = this.tail;
+      node.next = null;
 
       if (this.tail === null) this.head = node;
       else this.tail.next = node;
 
       this.tail = node;
-    } else {
-      node.previous = this.startedHead.previous;
-
-      if (node.previous === null) this.head = node;
-      else node.previous.next = node;
-
+      this.pendingTail = node;
+    } else if (this.pendingTail === null) {
+      node.previous = null;
+      node.next = this.startedHead;
+      this.head = node;
       this.startedHead.previous = node;
+      this.pendingTail = node;
+    } else {
+      node.previous = this.pendingTail;
+      node.next = this.startedHead;
+      this.pendingTail.next = node;
+      this.startedHead.previous = node;
+      this.pendingTail = node;
     }
 
-    this.pendingTail = node;
     this.count++;
   }
 
@@ -178,13 +189,25 @@ class GroupQueue {
     return node;
   }
 
-  /** Взять старейшую уже запускавшуюся группу. */
-  public dequeueStarted(): GroupQueueNode | null {
-    const node = this.startedHead;
-    if (node === null) return null;
+  /** Взять started-группу с минимальным временем последнего завершения callback. */
+  public dequeueStarted(
+    getLastCompletedAt: (node: GroupQueueNode) => number,
+  ): GroupQueueNode | null {
+    let selected: GroupQueueNode | null = null;
+    let selectedTime = Infinity;
 
-    this.remove(node);
-    return node;
+    for (let node = this.startedHead; node !== null; node = node.next) {
+      const completedAt = getLastCompletedAt(node);
+      if (completedAt < selectedTime) {
+        selected = node;
+        selectedTime = completedAt;
+      }
+    }
+
+    if (selected === null) return null;
+
+    this.remove(selected);
+    return selected;
   }
 
   public peekPending(): GroupQueueNode | null {
@@ -264,8 +287,11 @@ export class AnimationEngine {
   constructor() {}
 
   /** Добавить один callback как отдельную группу. */
-  public addCallback(callback: AnimationCallback): () => void {
-    return this.addCallbacks([callback]);
+  public addCallback(
+    callback: AnimationCallback,
+    options: SequenceOptions = {},
+  ): () => void {
+    return this.addCallbacks([callback], options);
   }
 
   /** Добавить последовательную группу callback'ов. */
@@ -394,9 +420,9 @@ export class AnimationEngine {
   /**
    * Выполнить один кадр.
    *
-   * Группы конкурируют между собой. Сначала обслуживаются никогда
-   * не запускавшиеся группы в порядке регистрации, затем группы
-   * в порядке времени последнего завершения callback.
+   * Группы конкурируют между собой. Новые группы получают первый запуск
+   * в порядке регистрации. После первого callback группа возвращается
+   * в конкуренцию по времени последнего завершения callback.
    */
   public step(timestamp = performance.now()): void {
     if (!this.isRunning || this.frameBudgetMs === null) return;
@@ -436,7 +462,9 @@ export class AnimationEngine {
       return this.groups.get(pendingNode.groupId) ?? null;
     }
 
-    const startedNode = this.groupsQueue.dequeueStarted();
+    const startedNode = this.groupsQueue.dequeueStarted(
+      (node) => this.groups.get(node.groupId)?.lastCompletedAt ?? Infinity,
+    );
     if (startedNode === null) return null;
 
     return this.groups.get(startedNode.groupId) ?? null;
@@ -446,12 +474,11 @@ export class AnimationEngine {
     const next = this.getNextCallback(group);
 
     if (next.done) {
-      if (group.generatorFactory === null) {
+      if (!group.sequence.reset()) {
         this.removeGroup(group.node.groupId);
       } else {
-        group.generator = null;
         group.eligibleStep = this.currentStep + 1;
-        this.groupsQueue.enqueueStarted(group.node);
+        this.groupsQueue.enqueuePending(group.node);
       }
 
       return false;
