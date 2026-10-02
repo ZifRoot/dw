@@ -178,15 +178,16 @@ function start(way: Way) {
       configureDefaultPipeline();
     };
 
-    configureDefaultPipeline();
-    createControlPanel(controlPanelDiv, mediator);
-    createInfoPanel(infoPanelDiv, mediator);
-
     // Экспериментальные backend pipelines пока намеренно не подключаются.
-    // Чтобы включить fallback WASM → WebGPU → default, вызовите функцию ниже.
+    // При включении используется fallback WASM → WebGPU → default.
     if (false) {
       void tryConfigureExperimentalBackend();
+    } else {
+      configureDefaultPipeline();
     }
+
+    createControlPanel(controlPanelDiv, mediator);
+    createInfoPanel(infoPanelDiv, mediator);
   }
 }
 
