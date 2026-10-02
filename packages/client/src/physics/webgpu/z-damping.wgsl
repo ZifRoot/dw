@@ -9,7 +9,7 @@ struct PointState {
   x: f32,
   y: f32,
   z: f32,
-  fixed: f32,
+  fixed: i32,
 };
 
 const WORKGROUP_SIZE: u32 = 256u;
@@ -40,7 +40,7 @@ fn updatePoints(
   if (index < parameters.count) {
     let point = points[index];
 
-    if (point.fixed == 0.0 && abs(point.z) > parameters.threshold) {
+    if (point.fixed == 0 && abs(point.z) > parameters.threshold) {
       let oldZ = point.z;
       var newZ = oldZ * (1.0 - parameters.dampingFactor);
 
