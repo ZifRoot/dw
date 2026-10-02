@@ -72,24 +72,93 @@ function GetPointGraphManager(b: Way, mediator: AppMediator, animationEngine: An
   return X[b](mediator, animationEngine);
 }
 
-async function connectWasmZDampingPipeline(pipeline: EnginePipeline, mediator: AppMediator, pointGraphManager: PointGraphManager): Promise<void> {
-  const backend = await WasmBackend.create();
-  const transformer = new WasmPointsTransformer(pointGraphManager, backend);
-  const algorithm = new WasmZDapperAlgorithm(mediator, new ZDampingConfig(), backend, transformer);
-
-  await algorithm.initialize();
-
-  pipeline.setConfiguration([{ name: "Затухание по Z", algorithm }]);
+interface PhysicsConfigurations {
+  repulsion: RepulsionEngineConfig;
+  graph: GraphEngineConfig;
+  zdamping: ZDampingConfig;
 }
 
-async function connectWebGpuZDampingPipeline(pipeline: EnginePipeline, mediator: AppMediator, pointGraphManager: PointGraphManager): Promise<void> {
-  const backend = await WebGpuBackend.create();
-  const transformer = new WebGpuPointsTransformer(pointGraphManager, backend);
-  const algorithm = new WebGpuZDapperAlgorithm(mediator, new ZDampingConfig(), backend, transformer);
+async function connectWasmZDampingPipeline(
+  pipeline: EnginePipeline,
+  mediator: AppMediator,
+  pointGraphManager: PointGraphManager,
+  configurations: PhysicsConfigurations,
+): Promise<void> {
+  const backend = await WasmBackend.create();
+  const transformer = new WasmPointsTransformer(pointGraphManager, backend);
+  const algorithm = new WasmZDapperAlgorithm(mediator, configurations.zdamping, backend, transformer);
 
   await algorithm.initialize();
 
-  pipeline.setConfiguration([{ name: "Затухание по Z", algorithm }]);
+  pipeline.setConfiguration([
+    { name: "Отталкивание", algorithm: new RepulsionAlgorithm(mediator, pointGraphManager, configurations.repulsion) },
+    { name: "Связи", algorithm: new GraphAlgorithm(mediator, pointGraphManager, configurations.graph) },
+    { name: "Затухание по Z", algorithm },
+  ]);
+}
+
+async function connectWebGpuZDampingPipeline(
+  pipeline: EnginePipeline,
+  mediator: AppMediator,
+  pointGraphManager: PointGraphManager,
+  configurations: PhysicsConfigurations,
+): Promise<void> {
+  const backend = await WebGpuBackend.create();
+  const transformer = new WebGpuPointsTransformer(pointGraphManager, backend);
+  const algorithm = new WebGpuZDapperAlgorithm(mediator, configurations.zdamping, backend, transformer);
+
+  await algorithm.initialize();
+
+  pipeline.setConfiguration([
+    { name: "Отталкивание", algorithm: new RepulsionAlgorithm(mediator, pointGraphManager, configurations.repulsion) },
+    { name: "Связи", algorithm: new GraphAlgorithm(mediator, pointGraphManager, configurations.graph) },
+    { name: "Затухание по Z", algorithm },
+  ]);
+}
+
+function configureDefaultPipeline(
+  pipeline: EnginePipeline,
+  mediator: AppMediator,
+  pointGraphManager: PointGraphManager,
+  configurations: PhysicsConfigurations,
+): void {
+  pipeline.setConfiguration([
+    {
+      name: "Отталкивание",
+      algorithm: new RepulsionAlgorithm(mediator, pointGraphManager, configurations.repulsion),
+    },
+    {
+      name: "Связи",
+      algorithm: new GraphAlgorithm(mediator, pointGraphManager, configurations.graph),
+    },
+    {
+      name: "Затухание по Z",
+      algorithm: new ZDapperAlgorithm(mediator, pointGraphManager, configurations.zdamping),
+    },
+  ]);
+}
+
+async function tryConfigureExperimentalBackend(
+  pipeline: EnginePipeline,
+  mediator: AppMediator,
+  pointGraphManager: PointGraphManager,
+  configurations: PhysicsConfigurations,
+): Promise<void> {
+  try {
+    await connectWasmZDampingPipeline(pipeline, mediator, pointGraphManager, configurations);
+    return;
+  } catch (error: unknown) {
+    console.warn("WASM physics backend is unavailable.", error);
+  }
+
+  try {
+    await connectWebGpuZDampingPipeline(pipeline, mediator, pointGraphManager, configurations);
+    return;
+  } catch (error: unknown) {
+    console.warn("WebGPU physics backend is unavailable.", error);
+  }
+
+  configureDefaultPipeline(pipeline, mediator, pointGraphManager, configurations);
 }
 
 async function start(way: Way) {
@@ -121,42 +190,28 @@ async function start(way: Way) {
     const edgesScene = new EdgesScene(mediator, svgEngine, pointGraphManager);
 
     const enginePipeline = new EnginePipeline(mediator, animationEngine);
-
-    const configureDefaultPipeline = (_enginePipeline: EnginePipeline) => {
-      const zdampingAlgorithm = new ZDapperAlgorithm(mediator, pointGraphManager, new ZDampingConfig());
-      const graphAlgorithm = new GraphAlgorithm(mediator, pointGraphManager, new GraphEngineConfig());
-      const repulsionAlgorithm = new RepulsionAlgorithm(mediator, pointGraphManager, new RepulsionEngineConfig());
-      _enginePipeline.setConfiguration([
-        { name: "Отталкивание", algorithm: repulsionAlgorithm },
-        { name: "Связи", algorithm: graphAlgorithm },
-        { name: "Затухание по Z", algorithm: zdampingAlgorithm },
-      ]);
-    };
-
-    const tryConfigureExperimentalBackend = async (_enginePipeline: EnginePipeline): Promise<void> => {
-      try {
-        await connectWasmZDampingPipeline(_enginePipeline, mediator, pointGraphManager);
-        return;
-      } catch (error: unknown) {
-        console.warn("WASM physics backend is unavailable.", error);
-      }
-
-      try {
-        await connectWebGpuZDampingPipeline(_enginePipeline, mediator, pointGraphManager);
-        return;
-      } catch (error: unknown) {
-        console.warn("WebGPU physics backend is unavailable.", error);
-      }
-
-      configureDefaultPipeline(_enginePipeline);
+    const configurations: PhysicsConfigurations = {
+      repulsion: new RepulsionEngineConfig(),
+      graph: new GraphEngineConfig(),
+      zdamping: new ZDampingConfig(),
     };
 
     // Экспериментальные backend pipelines пока намеренно не подключаются.
     // При включении используется fallback WASM → WebGPU → default.
     if (false) {
-      await tryConfigureExperimentalBackend(enginePipeline);
+      await tryConfigureExperimentalBackend(
+        enginePipeline,
+        mediator,
+        pointGraphManager,
+        configurations,
+      );
     } else {
-      configureDefaultPipeline(enginePipeline);
+      configureDefaultPipeline(
+        enginePipeline,
+        mediator,
+        pointGraphManager,
+        configurations,
+      );
     }
 
     createControlPanel(controlPanelDiv, mediator);
