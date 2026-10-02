@@ -53,7 +53,8 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     );
   }
 
-  public async initialize(sourceUrl: URL): Promise<void> {
+  public async initialize(): Promise<void> {
+    const sourceUrl = new URL("./z-damping.wgsl", import.meta.url);
     const instanceId = await this.backend.createInstance(sourceUrl);
     this.instanceId = instanceId;
     this.updatePipeline = this.backend.createComputePipeline(
