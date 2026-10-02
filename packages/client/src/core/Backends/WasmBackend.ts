@@ -83,6 +83,16 @@ export class WasmBackend extends Backend {
     target.set(values);
   }
 
+  public writeBytes(
+    instanceId: number,
+    pointer: number,
+    values: Uint8Array,
+  ): void {
+    const memory = this.getInstance(instanceId).memory;
+    const target = new Uint8Array(memory.buffer, pointer, values.byteLength);
+    target.set(values);
+  }
+
   public readFloat32(
     instanceId: number,
     pointer: number,
