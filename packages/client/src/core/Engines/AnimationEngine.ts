@@ -58,10 +58,6 @@ class ArraySequence implements Sequence<AnimationCallback> {
 
     return true;
   }
-
-  public isEmpty(): boolean {
-    return this.callbacks.length === 0;
-  }
 }
 
 /** Обёртка над уже созданным Generator. Generator по определению одноразовый. */
@@ -350,10 +346,6 @@ export class AnimationEngine {
       const sequence = group.sequence;
       if (!(sequence instanceof ArraySequence)) continue;
       if (!sequence.remove(callback)) continue;
-
-      if (sequence.isEmpty()) {
-        this.removeGroup(groupId);
-      }
 
       return;
     }
