@@ -2,6 +2,7 @@ import { PointGraphManager } from "@core/collections/PointGraphManager";
 import { WasmBackend } from "@core/Backends/WasmBackend";
 
 const POINT_STRIDE = 4;
+const POINT_BYTES = POINT_STRIDE * Float32Array.BYTES_PER_ELEMENT;
 
 export interface WasmPointData {
   pointer: number;
@@ -27,14 +28,22 @@ export class WasmPointsTransformer {
   public load(): WasmPointData {
     const instanceId = this.getInstanceId();
     const points = this.pointGraphManager.getPointsArray();
-    const values = new Float32Array(points.length * POINT_STRIDE);
+    const values = new ArrayBuffer(points.length * POINT_BYTES);
+    const floats = new Float32Array(values);
+    const statuses = new Int32Array(values);
 
     for (let index = 0; index < points.length; index++) {
-      this.writePointToValues(values, index);
+      const point = points[index];
+      const offset = index * POINT_STRIDE;
+
+      floats[offset] = point.x;
+      floats[offset + 1] = point.y;
+      floats[offset + 2] = point.z;
+      statuses[offset + 3] = point.fixed ? 1 : 0;
     }
 
-    this.ensureCapacity(instanceId, values.length);
-    this.backend.writeFloat32(instanceId, this.pointer!, values);
+    this.ensureCapacity(instanceId, values.byteLength);
+    this.backend.writeBytes(instanceId, this.pointer!, new Uint8Array(values));
 
     return {
       pointer: this.pointer!,
@@ -51,18 +60,21 @@ export class WasmPointsTransformer {
       throw new Error(`Point index "${index}" does not exist.`);
     }
 
-    this.ensureCapacity(instanceId, points.length * POINT_STRIDE);
+    this.ensureCapacity(instanceId, points.length * POINT_BYTES);
 
-    const values = new Float32Array(POINT_STRIDE);
-    values[0] = point.x;
-    values[1] = point.y;
-    values[2] = point.z;
-    values[3] = point.fixed ? 1 : 0;
+    const values = new ArrayBuffer(POINT_BYTES);
+    const floats = new Float32Array(values);
+    const statuses = new Int32Array(values);
 
-    this.backend.writeFloat32(
+    floats[0] = point.x;
+    floats[1] = point.y;
+    floats[2] = point.z;
+    statuses[3] = point.fixed ? 1 : 0;
+
+    this.backend.writeBytes(
       instanceId,
-      this.pointer! + index * POINT_STRIDE * Float32Array.BYTES_PER_ELEMENT,
-      values,
+      this.pointer! + index * POINT_BYTES,
+      new Uint8Array(values),
     );
   }
 
@@ -81,7 +93,12 @@ export class WasmPointsTransformer {
     );
 
     for (let index = 0; index < points.length; index++) {
-      this.writeValuesToPoint(values, index);
+      const point = points[index];
+      const offset = index * POINT_STRIDE;
+
+      point.x = values[offset];
+      point.y = values[offset + 1];
+      point.z = values[offset + 2];
     }
   }
 
@@ -96,7 +113,7 @@ export class WasmPointsTransformer {
 
     const values = this.backend.readFloat32(
       instanceId,
-      this.pointer! + index * POINT_STRIDE * Float32Array.BYTES_PER_ELEMENT,
+      this.pointer! + index * POINT_BYTES,
       POINT_STRIDE,
     );
 
@@ -115,35 +132,13 @@ export class WasmPointsTransformer {
     this.instanceId = null;
   }
 
-  private writePointToValues(values: Float32Array, index: number): void {
-    const point = this.pointGraphManager.getPointsArray()[index];
-    const offset = index * POINT_STRIDE;
-
-    values[offset] = point.x;
-    values[offset + 1] = point.y;
-    values[offset + 2] = point.z;
-    values[offset + 3] = point.fixed ? 1 : 0;
-  }
-
-  private writeValuesToPoint(values: Float32Array, index: number): void {
-    const point = this.pointGraphManager.getPointsArray()[index];
-    const offset = index * POINT_STRIDE;
-
-    point.x = values[offset];
-    point.y = values[offset + 1];
-    point.z = values[offset + 2];
-  }
-
-  private ensureCapacity(instanceId: number, valueCount: number): void {
-    if (this.pointer !== null && this.capacity >= valueCount) {
+  private ensureCapacity(instanceId: number, byteLength: number): void {
+    if (this.pointer !== null && this.capacity >= byteLength) {
       return;
     }
 
-    this.pointer = this.backend.allocate(
-      instanceId,
-      valueCount * Float32Array.BYTES_PER_ELEMENT,
-    );
-    this.capacity = valueCount;
+    this.pointer = this.backend.allocate(instanceId, byteLength);
+    this.capacity = byteLength;
   }
 
   private getInstanceId(): number {
