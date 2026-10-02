@@ -41,7 +41,7 @@ class ArraySequence implements Sequence<AnimationCallback> {
   }
 
   public reset(): boolean {
-    if (this.oneShot) return false;
+    if (this.oneShot || this.callbacks.length === 0) return false;
     this.cursor = 0;
     return true;
   }
