@@ -1,5 +1,4 @@
 import { AppMediator } from "@core/AppMediator";
-import { PointGraphManager } from "@core/collections/PointGraphManager";
 import { BaseAlgorithm } from "@core/Engines/BaseAlgorithm";
 import {
   WebGpuBackend,
@@ -28,12 +27,11 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
 
   public constructor(
     mediator: AppMediator,
-    pointGraphManager: PointGraphManager,
     public readonly config: ZDampingConfig,
     private readonly backend: WebGpuBackend,
     transformer: WebGpuPointsTransformer,
   ) {
-    super(mediator, pointGraphManager);
+    super(mediator);
 
     this.transformer = transformer;
     this.temperatureBuffer = backend.createBuffer(
@@ -69,16 +67,17 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
   }
 
   protected async applyStep(_deltaTime: number): Promise<number> {
-    this.getInstanceId();
     const updatePipeline = this.getUpdatePipeline();
     const reductionPipeline = this.getReductionPipeline();
-    const data = this.transformer.load();
 
-    if (data.count === 0) {
+    this.transformer.load();
+
+    const count = this.transformer.getCount();
+    if (count === 0) {
       return 0;
     }
 
-    const workgroupCount = Math.ceil(data.count / WORKGROUP_SIZE);
+    const workgroupCount = Math.ceil(count / WORKGROUP_SIZE);
 
     if (workgroupCount > MAX_WORKGROUP_COUNT) {
       throw new Error(
@@ -86,46 +85,16 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
       );
     }
 
-    const parameters = new ArrayBuffer(PARAMETER_BUFFER_SIZE);
-    const floatParameters = new Float32Array(parameters);
-    const uintParameters = new Uint32Array(parameters);
+    this.writeParameters(count, workgroupCount);
 
-    floatParameters[0] = this.config.dampingFactor;
-    floatParameters[1] = this.config.threshold;
-    uintParameters[2] = data.count;
-    uintParameters[3] = workgroupCount;
-
-    this.backend.writeBuffer(
+    const pointsBuffer = this.transformer.getPointBuffer();
+    const readbackBuffer = this.transformer.getReadbackBuffer();
+    const bindGroup = this.backend.createBindGroup(updatePipeline, [
+      pointsBuffer,
+      this.workgroupMaximaBuffer,
+      this.temperatureBuffer,
       this.parametersBuffer,
-      new Uint8Array(parameters),
-    );
-
-    const bindGroup = this.backend.createBindGroup(
-      updatePipeline,
-      [
-        data.buffer,
-        this.workgroupMaximaBuffer,
-        this.temperatureBuffer,
-        this.parametersBuffer,
-      ],
-    );
-
-    const copyCommands = [
-      {
-        source: data.buffer,
-        sourceOffset: 0,
-        destination: data.readback,
-        destinationOffset: 0,
-        size: data.byteLength,
-      },
-      {
-        source: this.temperatureBuffer,
-        sourceOffset: 0,
-        destination: this.temperatureReadbackBuffer,
-        destinationOffset: 0,
-        size: TEMPERATURE_BYTES,
-      },
-    ];
+    ]);
 
     this.backend.submit(
       [
@@ -140,12 +109,27 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
           workgroupCount: 1,
         },
       ],
-      copyCommands,
+      [
+        {
+          source: pointsBuffer,
+          sourceOffset: 0,
+          destination: readbackBuffer,
+          destinationOffset: 0,
+          size: this.transformer.getByteLength(),
+        },
+        {
+          source: this.temperatureBuffer,
+          sourceOffset: 0,
+          destination: this.temperatureReadbackBuffer,
+          destinationOffset: 0,
+          size: TEMPERATURE_BYTES,
+        },
+      ],
     );
 
     try {
       const [, temperatureData] = await Promise.all([
-        this.transformer.save(data.readback),
+        this.transformer.save(),
         this.backend.readBuffer(this.temperatureReadbackBuffer),
       ]);
 
@@ -174,12 +158,17 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     }
   }
 
-  private getInstanceId(): number {
-    if (this.instanceId === null) {
-      throw new Error("WebGPU Z-damping algorithm is not initialized.");
-    }
+  private writeParameters(count: number, workgroupCount: number): void {
+    const parameters = new ArrayBuffer(PARAMETER_BUFFER_SIZE);
+    const floatParameters = new Float32Array(parameters);
+    const uintParameters = new Uint32Array(parameters);
 
-    return this.instanceId;
+    floatParameters[0] = this.config.dampingFactor;
+    floatParameters[1] = this.config.threshold;
+    uintParameters[2] = count;
+    uintParameters[3] = workgroupCount;
+
+    this.backend.writeBuffer(this.parametersBuffer, new Uint8Array(parameters));
   }
 
   private getUpdatePipeline(): WebGpuComputePipeline {
