@@ -351,7 +351,7 @@ export class AnimationEngine {
       if (!(sequence instanceof ArraySequence)) continue;
       if (!sequence.remove(callback)) continue;
 
-      if (group.sequence.isEmpty()) {
+      if (sequence.isEmpty()) {
         this.removeGroup(groupId);
       }
 
