@@ -38,7 +38,7 @@ export class WebGpuRepulsionAlgorithm extends BaseAlgorithm {
     this.reductionPipeline = this.backend.createComputePipeline(this.instanceId, "reduceTemperature");
   }
 
-  public async executeAsyncStep(_deltaTime: number): Promise<number> {
+  protected async applyStepAsync(_deltaTime: number): Promise<number> {
     if (!this.pipeline || !this.reductionPipeline) {
       throw new Error("WebGPU Repulsion algorithm is not initialized.");
     }
@@ -82,10 +82,6 @@ export class WebGpuRepulsionAlgorithm extends BaseAlgorithm {
 
     const data = await this.backend.readBuffer(this.temperatureReadback);
     return new Float32Array(data)[0];
-  }
-
-  protected applyStep(): number {
-    throw new Error("WebGPU Repulsion requires async AnimationEngine support.");
   }
 
   public getStopTemperature(): number { return this.config.stopTemperature; }
