@@ -9,7 +9,7 @@ test("constructor accepts a plain object and creates an ObservableObject", () =>
     temperature: 20,
   };
 
-  const observable = new ObservableObject(source);
+  const observable = new ObservableObject(source) as any;
 
   assert.equal(source instanceof Object, true);
   assert.equal(source instanceof ObservableObject, false);
@@ -21,7 +21,7 @@ test("constructor accepts a plain object and creates an ObservableObject", () =>
 test("constructor rejects an ObservableObject as input", () => {
   const observable = new ObservableObject({
     temperature: 20,
-  });
+  }) as any;
 
   assert.throws(
     () => new ObservableObject(observable),
