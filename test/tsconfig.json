@@ -1,23 +1,13 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "module": "commonjs",
-    "baseUrl": ".",
     "paths": {
-      "@utils/*": [
-        "../packages/shared/src/utils/*"
-      ]
+      "@utils/*": ["../packages/shared/src/utils/*"]
     },
     "noEmit": true,
-    "lib": [
-      "ES2020",
-      "esnext.typedarrays"
-    ]
+    "lib": ["ES2020", "esnext.typedarrays"]
   },
-  "include": [
-    "utils/**/*.test.ts"
-  ]
+  "include": ["utils/**/*.test.ts"]
 }

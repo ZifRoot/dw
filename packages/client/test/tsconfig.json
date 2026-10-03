@@ -1,14 +1,11 @@
 {
   "extends": "../../../test/tsconfig.json",
   "compilerOptions": {
-    "lib": [
-      "ES2020",
-      "DOM",
-      "DOM.Iterable",
-      "esnext.typedarrays"
-    ]
+    "lib": ["ES2020", "DOM", "DOM.Iterable", "esnext.typedarrays"],
+    "paths": {
+      "*": ["../../../test/*"]
+    }
   },
-  "include": [
-    "**/*.test.ts"
-  ]
+
+  "include": ["**/*.test.ts"]
 }
