@@ -45,9 +45,11 @@ deepseek-w/
 ```
 
 **Путь имён (alias) — критично для сборки:**
-- Server `tsconfig.base.json`: `@embedder`→`src/clients/embedder/axios`, `@utils/*`→`src/shared/utils/*`, `@models/*`→`src/db/models/*`, `@shared/*`→`../shared/src/*`. Release-сборка: `tsc -p tsconfig.release.json && tsc-alias` (tsc сам alias'ы в JS не переписывает — **tsc-alias обязателен**).
+- Server `tsconfig.base.json`: `@embedder`→`src/clients/embedder/axios`, `@utils/*`→`src/shared/utils/*`, `@models/*`→`src/db/models/*`. Release-сборка: `tsc -p tsconfig.release.json && tsc-alias` (tsc сам alias'ы в JS не переписывает — **tsc-alias обязателен**).
 - Client `tsconfig.base.json`: `@utils/*`→`src/shared/utils/*`, `@clients/*`→`src/clients/*`; в рантайме резолвит `vite-tsconfig-paths`.
-- **НОВЫЙ alias надо прописывать во всех трёх местах:** tsconfig (server/client) + tsc-alias покрывает server автоматически, vite-tsconfig-paths — client автоматически; но если добавляется новый пакет — см. грабли по shared.
+
+**Принцип именования shared-утилит:** алиаса `@shared/*` в server/client/test-коде **не должно быть**. Shared-код подключается через алиас `@utils/*`, потому что имя алиаса описывает функциональную роль импортируемого кода, а не физическую структуру монорепозитория. Папка `shared` — деталь организации исходников (`packages/shared/src`), а `utils` — стабильная семантическая граница используемых утилит. Это принципиально: перенос, переименование или изменение физической структуры shared-слоя не должен заставлять менять смысл импортов. Поэтому для shared utilities везде используется `@utils/*`; `@shared/*` не добавлять даже для тестов.
+- **НОВЫЙ alias надо прописывать там, где он нужен:** для server/client — в соответствующем `tsconfig`; server release дополнительно обрабатывается `tsc-alias`, client — `vite-tsconfig-paths`. Для shared utilities новый alias не создавать: используется существующий `@utils/*`.
 
 
 ### Shared: почему это source layer, а не библиотека
@@ -256,7 +258,7 @@ Schema of record: `**drizzle-schema.ts**` → `drizzle-kit generate` (скрип
 
 **Надо учитывать при правках:**
 - **`import "@utils/array-extensions";`** — сайд-эффект, без него нет `uniqueBy/groupBy/mapAsync` на прототипе (в `Map` встроенного `groupBy` Node 22+ конфликтует по сигнатуре — кастомный не ставится, если есть нативный).
-- Новый alias → в `tsconfig.base.json` (server И/или client); для server release обязателен `tsc-alias`.
+- Новый alias → в соответствующем `tsconfig.base.json` (server И/или client); для shared utilities всегда использовать существующий `@utils/*`; для server release обязателен `tsc-alias`.
 - `Embedding`-модель: `embedding` хранится как `number[]` в `jsonb`-колонке `embedding_vector`; `dimension` — длина.
 - `bytea` = hex-строка в JS-слое (customType **types.ts**); `MessageFile.content` — hex или `null`.
 - `deepseek.ts` — credentials из `user.credentials` расширяют «браузерные» заголовки; порядок spread важен.

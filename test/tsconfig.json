@@ -5,7 +5,7 @@
     "module": "commonjs",
     "baseUrl": ".",
     "paths": {
-      "@shared/*": ["../packages/shared/src/*"]
+      "@utils/*": ["../packages/shared/src/utils/*"]
     },
     "noEmit": true
   },
