@@ -67,10 +67,7 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     );
   }
 
-  /**
-   * Асинхронный шаг, который будет использован после добавления async
-   * callback contract в AnimationEngine.
-   */
+  /** Выполнить GPU шаг через общий async contract AnimationEngine. */
   protected async applyStepAsync(_deltaTime: number): Promise<number> {
     return this.executeGpuStep();
   }
