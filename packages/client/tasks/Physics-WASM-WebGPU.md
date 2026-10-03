@@ -867,9 +867,8 @@ Composition root может перейти к следующему backend ил�
 ## 29. Ограничения текущего prototype
 
 Сейчас:
-- backend реализован только для Z-damping;
-- Repulsion и Graph остаются JS;
-- WebGPU execution требует async AnimationEngine support;
+- backend реализован для Repulsion, Graph и Z-damping;
+- WebGPU execution подключён через async AnimationEngine contract;
 - WebGPU reduction ограничен 65 536 точками;
 - synchronization вынесена в отдельные pipeline Load/Save steps;
 - algorithms могут последовательно работать на одном backend storage без промежуточного readback/upload;
@@ -895,11 +894,9 @@ Composition root может перейти к следующему backend ил�
 
 ## 31. Следующие этапы
 
-1. Завершить generic async callback contract в AnimationEngine.
-2. Подключить WebGPU Z-damping к основному pipeline.
-3. Сравнить JS/WASM/WebGPU на одинаковом workload.
-4. Переносить Repulsion.
-5. Переносить Graph после решения accumulation.
+1. Сравнить JS/WASM/WebGPU на одинаковом workload.
+2. Оптимизировать upload/readback.
+3. Измерить полный pipeline.
 6. Оптимизировать upload/readback.
 7. Измерить полный pipeline.
 
@@ -930,10 +927,10 @@ Composition root может перейти к следующему backend ил�
 [x] source ownership внутри algorithms
 [x] backend fallback composition
 [x] async boundary для WebGPU
-[ ] async callback support в AnimationEngine
-[ ] включение WebGPU Z-damping в основной pipeline
-[ ] backend Repulsion
-[ ] backend Graph
+[x] async callback support в AnimationEngine
+[x] включение WebGPU Z-damping в основной pipeline
+[x] backend Repulsion
+[x] backend Graph
 [ ] performance comparison
 
 Документ является одновременно архитектурной документацией и задачей на дальнейшую реализацию/исследование. Он отражает текущее состояние исходников и принятые решения.
