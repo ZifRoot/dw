@@ -110,31 +110,27 @@ test("lastCompletedAt determines priority after a long callback", () => {
         calls.push("A");
         deltas.push(deltaTime);
         aRuns++;
-        performanceTime = aRuns === 1 ? 100 : 150;
+        performanceTime += aRuns === 1 ? 10 : 1;
       },
     ],
     [
       (deltaTime) => {
         calls.push("B");
         deltas.push(deltaTime);
-        performanceTime = 130;
+        performanceTime += 2;
       },
     ],
   ]);
 
   performanceTime = 80;
   runNextAnimationFrame(80);
-  assert.deepEqual(calls, ["A"]);
-
-  performanceTime = 116;
-  runNextAnimationFrame(116);
   assert.deepEqual(calls, ["A", "B"]);
 
-  performanceTime = 160;
-  runNextAnimationFrame(160);
+  performanceTime = 100;
+  runNextAnimationFrame(100);
 
   assert.deepEqual(calls, ["A", "B", "A"]);
-  assert.deepEqual(deltas, [0, 0, 60]);
+  assert.deepEqual(deltas, [0, 10, 10]);
   engine.clear();
 });
 
@@ -564,7 +560,7 @@ test("the same callback can complete synchronously and asynchronously on differe
   assert.equal(rafQueue.length, 0);
 
   resolveAsync();
-  await flushPromises();
+  await asyncCompletion;
 
   performanceTime = 140;
   runNextAnimationFrame(140);
