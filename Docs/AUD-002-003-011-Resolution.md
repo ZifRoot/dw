@@ -96,8 +96,9 @@
 
 В рамках решения добавлены:
 
+- `test/index.ts` — единая точка входа для всех исполняемых тестов; порядок `await import(...)` задаёт порядок регистрации test-модулей;
+- `npm test` в корневом `package.json` — единая команда запуска тестов;
 - `packages/shared/src/utils/logger-singleRunner.test.ts` — тесты семантики logger и SingleRunner;
-- `test:shared:utils` в корневом `package.json` — отдельная команда запуска тестов;
 - расширенная документация методов и декораторов в `packages/shared/src/utils/logger.ts`;
 - исключение `src/**/*.test.ts` из client TypeScript compilation, поскольку shared-тесты используют Node.js API и не должны попадать в браузерную компиляцию клиента.
 
