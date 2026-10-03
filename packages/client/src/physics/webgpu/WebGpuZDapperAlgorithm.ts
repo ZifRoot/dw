@@ -89,8 +89,6 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     const updatePipeline = this.getUpdatePipeline();
     const reductionPipeline = this.getReductionPipeline();
 
-    this.transformer.load();
-
     const count = this.transformer.getCount();
     if (count === 0) {
       return 0;
@@ -147,11 +145,7 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     );
 
     try {
-      const [, temperatureData] = await Promise.all([
-        this.transformer.save(),
-        this.backend.readBuffer(this.temperatureReadbackBuffer),
-      ]);
-
+      const temperatureData = await this.backend.readBuffer(this.temperatureReadbackBuffer);
       return new Float32Array(temperatureData)[0];
     } catch (error: unknown) {
       console.error("WebGPU Z-damping execution failed.", error);
@@ -169,8 +163,6 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     this.workgroupMaximaBuffer.destroy();
     this.parametersBuffer.destroy();
     this.temperatureReadbackBuffer.destroy();
-    this.transformer.destroy();
-
     if (this.instanceId !== null) {
       this.backend.destroyInstance(this.instanceId);
       this.instanceId = null;
