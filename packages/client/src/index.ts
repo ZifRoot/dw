@@ -130,26 +130,16 @@ class Backends {
     configurations: PhysicsConfigurations,
   ) {
     const backend = await WebGpuBackend.create();
-    const pointsTransformer = new WebGpuPointsTransformer(pointGraphManager, backend);
-    const edgesTransformer = new WebGpuEdgesTransformer(pointGraphManager, backend);
-    const repulsion = new WebGpuRepulsionAlgorithm(mediator, configurations.repulsion, backend, pointsTransformer);
-    const graph = new WebGpuGraphAlgorithm(mediator, configurations.graph, backend, pointsTransformer, edgesTransformer);
-    const algorithm = new WebGpuZDapperAlgorithm(mediator, configurations.zdamping, backend, pointsTransformer);
+    const transformer = new WebGpuPointsTransformer(pointGraphManager, backend);
+    const algorithm = new WebGpuZDapperAlgorithm(mediator, configurations.zdamping, backend, transformer);
 
-    await repulsion.initialize();
-    await graph.initialize();
     await algorithm.initialize();
 
-    const synchronization: EnginePipelineSynchronization = {
-      load: () => pointsTransformer.load(),
-      save: () => { void pointsTransformer.save(); },
-    };
-
     pipeline.setConfiguration([
-      { name: "Отталкивание", algorithm: repulsion },
-      { name: "Связи", algorithm: graph },
+      { name: "Отталкивание", algorithm: new RepulsionAlgorithm(mediator, pointGraphManager, configurations.repulsion) },
+      { name: "Связи", algorithm: new GraphAlgorithm(mediator, pointGraphManager, configurations.graph) },
       { name: "Затухание по Z", algorithm },
-    ], synchronization);
+    ]);
     return true;
   }
 }
@@ -184,7 +174,7 @@ async function configurePipeline(
 ): Promise<void> {
   const backends = new Backends();
 
-  {
+  if (false) {
     if (await backends.connectWebGpuPipeline(pipeline, mediator, pointGraphManager, configurations)) return;
 
     if (await backends.connectWasmPipeline(pipeline, mediator, pointGraphManager, configurations)) return;
