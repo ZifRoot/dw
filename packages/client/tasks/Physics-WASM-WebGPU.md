@@ -293,6 +293,30 @@ Source:
 packages/client/src/physics/wasm/z-damping.cpp
 ~~~
 
+Runtime module:
+
+~~~text
+packages/client/src/physics/wasm/z-damping.wasm
+~~~
+
+The `.wasm` file is a generated build artifact and is intentionally not stored in Git.
+
+The client build has an on-demand WASM compilation step:
+
+~~~text
+z-damping.wasm exists
+        ↓
+use existing module
+
+z-damping.wasm missing
+        ↓
+clang++ --target=wasm32 ...
+        ↓
+z-damping.wasm
+~~~
+
+The build script is `packages/client/scripts/build-wasm.mjs`. It runs before client debug and release builds. A clean checkout therefore does not require a committed binary, while an already generated module is reused.
+
 Export:
 
 ~~~text
@@ -735,6 +759,8 @@ Composition root может перейти к следующему backend ил�
 [x] общий point layout
 [x] fixed: int32
 [x] WASM Z-damping prototype
+[x] reproducible on-demand WASM compilation
+[x] generated WASM excluded from Git
 [x] WebGPU Z-damping prototype
 [x] source ownership внутри algorithms
 [x] backend fallback composition
