@@ -33,10 +33,13 @@ fn repulsion(
   @builtin(workgroup_id) workgroupId: vec3<u32>,
 ) {
   let index = globalId.x;
-  var result = points[index];
+  var result = PointState(0.0, 0.0, 0.0, 0);
   var maxTemperature = 0.0;
 
-  if (index < parameters.count && result.fixed == 0) {
+  if (index < parameters.count) {
+    result = points[index];
+
+    if (result.fixed == 0) {
     let targetSquared = parameters.targetDistance * parameters.targetDistance;
     var shift = vec3<f32>(0.0);
 
@@ -68,12 +71,13 @@ fn repulsion(
       }
     }
 
-    result.x += shift.x;
-    result.y += shift.y;
-    result.z += shift.z;
-  }
+      result.x += shift.x;
+      result.y += shift.y;
+      result.z += shift.z;
+    }
 
-  outputPoints[index] = result;
+    outputPoints[index] = result;
+  }
   localMaxima[localId.x] = select(0.0, maxTemperature, index < parameters.count);
   workgroupBarrier();
 
