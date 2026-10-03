@@ -55,13 +55,14 @@ ZDampingConfig
 
 ## 4. Source принадлежит algorithm
 
-index.ts не содержит source URL z-damping.cpp или z-damping.wgsl.
+index.ts не содержит source URL z-damping.wasm или z-damping.wgsl.
 
 Source URL создаёт сам algorithm.
 
 ~~~text
 WasmZDapperAlgorithm
-    → z-damping.cpp
+    → z-damping.wasm
+    → generated from z-damping.cpp
 
 WebGpuZDapperAlgorithm
     → z-damping.wgsl
@@ -122,6 +123,14 @@ Source:
 ~~~text
 packages/client/src/physics/wasm/z-damping.cpp
 ~~~
+
+Runtime module:
+
+~~~text
+packages/client/src/physics/wasm/z-damping.wasm
+~~~
+
+The `.wasm` module is generated and ignored by Git. `packages/client/scripts/build-wasm.mjs` reuses it when present and compiles it with `clang++ --target=wasm32` when absent.
 
 Export:
 
