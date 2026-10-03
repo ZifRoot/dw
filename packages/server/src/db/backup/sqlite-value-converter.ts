@@ -1,6 +1,8 @@
 import type { BackupColumnType } from "./sqlite-backup-schema";
 
-export function toSqliteValue(type: BackupColumnType, value: unknown): unknown {
+type SqliteValue = null | number | string | Buffer;
+
+export function toSqliteValue(type: BackupColumnType, value: unknown): SqliteValue {
   if (value == null) return null;
   switch (type) {
     case "uuid": return String(value);
