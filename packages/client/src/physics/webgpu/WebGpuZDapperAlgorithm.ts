@@ -95,7 +95,6 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     this.writeParameters(count, workgroupCount);
 
     const pointsBuffer = this.transformer.getPointBuffer();
-    const readbackBuffer = this.transformer.getReadbackBuffer();
     const bindGroup = this.backend.createBindGroup(updatePipeline, [
       pointsBuffer,
       this.workgroupMaximaBuffer,
@@ -117,13 +116,6 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
         },
       ],
       [
-        {
-          source: pointsBuffer,
-          sourceOffset: 0,
-          destination: readbackBuffer,
-          destinationOffset: 0,
-          size: this.transformer.getByteLength(),
-        },
         {
           source: this.temperatureBuffer,
           sourceOffset: 0,
