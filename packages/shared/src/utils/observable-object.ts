@@ -36,6 +36,10 @@ export class ObservableObject<
   TConfig extends Record<string, unknown> = Record<string, unknown>,
 > {
   public constructor(config: TConfig) {
+    if (config instanceof ObservableObject) {
+      throw new TypeError("ObservableObject cannot be wrapped in another ObservableObject.");
+    }
+
     if (!isPlainObject(config)) {
       throw new TypeError("ObservableObject configuration must be a plain object.");
     }
