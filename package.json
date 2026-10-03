@@ -33,8 +33,6 @@
     "typecheck:server": "npm --workspace server run typecheck",
     "typecheck:client": "npm --workspace client run typecheck",
     "typecheck": "npm run typecheck:client && npm run typecheck:server",
-    "test:shared:utils:fast": "tsx --tsconfig test/tsconfig.json --test test/shared/utils/observable-array.test.ts",
-    "test:shared:utils": "tsx --tsconfig test/tsconfig.json --test test/shared/utils/logger-singleRunner.test.ts test/shared/utils/observable-array.test.ts",
     "db:generate": "npm --workspace server run db:generate",
     "db:migrate": "npm --workspace server run db:migrate",
     "db:push": "npm --workspace server run db:push",
@@ -47,8 +45,8 @@
     "preview:client": "npm --workspace client run preview",
     "typecheck-file:client": "npm --workspace client run typecheck-file",
     "format:client": "npm --workspace client run format",
-    "test:client:animation-engine": "tsx --test packages/client/src/core/Engines/AnimationEngine.test.ts",
-    "typecheck:tests": "tsc -p test/tsconfig.json"
+    "typecheck:tests": "tsc -p test/tsconfig.json",
+    "test": "tsx --tsconfig test/tsconfig.json --test test/index.ts"
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.7.0",
