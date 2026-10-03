@@ -36,7 +36,11 @@ export class WasmBackend extends Backend {
     const response = await fetch(moduleUrl);
     if (!response.ok) throw new Error(`Unable to load WebAssembly module: HTTP ${response.status}.`);
     const bytes = await response.arrayBuffer();
-    const imports = memory ? { env: { memory } } : {};
+
+    const imports: WebAssembly.Imports = memory
+      ? { env: { memory } }
+      : {};
+
     const { instance } = await WebAssembly.instantiate(bytes, imports);
     const exports = instance.exports as unknown as WasmModuleExports;
     const instanceMemory = memory ?? exports.memory;
@@ -79,6 +83,7 @@ export class WasmBackend extends Backend {
   public destroyInstance(instanceId: number): void {
     this.instances.delete(instanceId);
   }
+
   public destroy(): void {
     this.instances.clear();
   }
@@ -90,7 +95,9 @@ export class WasmBackend extends Backend {
   }
 
   private findAllocator(memory: WebAssembly.Memory): WasmAllocator | null {
-    for (const state of this.instances.values()) if (state.memory === memory) return state.allocator;
+    for (const state of this.instances.values()) {
+      if (state.memory === memory) return state.allocator;
+    }
     return null;
   }
 
