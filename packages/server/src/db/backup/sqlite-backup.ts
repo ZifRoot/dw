@@ -124,14 +124,12 @@ export async function createSqliteBackup(
             placeholders +
             ")",
         );
-        try {
-          for (const row of result.rows) {
-            insert.run(
-              ...table.columns.map((column) =>
-                toSqliteValue(column.type, row[column.name]),
-              ),
-            );
-          }
+        for (const row of result.rows) {
+          insert.run(
+            ...table.columns.map((column) =>
+              toSqliteValue(column.type, row[column.name]),
+            ),
+          );
         }
       }
       db.exec("COMMIT");
