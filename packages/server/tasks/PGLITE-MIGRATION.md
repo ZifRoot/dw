@@ -1,20 +1,103 @@
-# Task: перейти с Docker PostgreSQL на встроенный PGlite
+# Task: постепенный переход runtime БД с PostgreSQL на PGlite
 
 ## Цель
 
-Убрать необходимость запуска отдельного PostgreSQL-сервиса через Docker Compose и перевести `packages/server` на **PGlite + Drizzle ORM**.
+Постепенно перевести `packages/server` на **PGlite + Drizzle ORM** как основной runtime database, не разрушая существующую PostgreSQL/Docker систему до тех пор, пока новый путь не будет проверен на реальных SQLite backup.
 
-После выполнения сервер должен работать с PostgreSQL-совместимой БД, встроенной непосредственно в Node.js-процесс, а данные должны сохраняться в локальном data directory без Docker.
-
-Целевая архитектура:
+Целевая runtime-архитектура:
 
     Server
       ↓
     Drizzle ORM
       ↓
-    PGlite
+    PGlite (in-memory)
       ↓
-    локальный data directory
+    application
+
+При этом:
+
+- **PGlite** — основной runtime database, работающий в памяти;
+- **SQLite** — persistent snapshot / backup / interchange format;
+- **Docker PostgreSQL** — существующий рабочий backend, fallback и источник восстановления на переходном этапе.
+
+SQLite **не является runtime database**. После загрузки snapshot в PGlite обычные запросы приложения идут только в PGlite.
+
+## Ключевые архитектурные правила
+
+### 1. Миграция должна быть постепенной
+
+Нельзя начинать задачу с удаления Docker PostgreSQL lifecycle.
+
+Существующая PostgreSQL система содержит рабочие данные и должна оставаться полностью работоспособной на переходном этапе.
+
+Порядок:
+
+    Existing PostgreSQL/Docker
+            ↓
+    PostgreSQL → SQLite backup
+            ↓
+    проверка нескольких backup-файлов
+            ↓
+    SQLite → PGlite (in-memory)
+            ↓
+    Drizzle + PGlite
+            ↓
+    реальная эксплуатация
+            ↓
+    только после подтверждения стабильности
+    постепенное отключение PostgreSQL/Docker
+
+Удаление или отключение PostgreSQL lifecycle является **финальной отдельной вехой**, а не частью первой реализации.
+
+### 2. PGlite всегда создаётся in-memory
+
+PGlite в целевой архитектуре не должен использовать persistent PostgreSQL data directory.
+
+Не создавать основной runtime storage вида:
+
+    ./data/pglite
+
+Persistent состояние хранится в SQLite backup.
+
+При запуске:
+
+    create PGlite in memory
+            ↓
+    restore SQLite backup
+            ↓
+    Drizzle + PGlite
+
+После завершения работы приложения состояние должно сохраняться в SQLite в соответствии с определённой стратегией snapshot.
+
+### 3. Drizzle — единый ORM для обоих backend
+
+Drizzle не должен быть привязан к конкретному сценарию миграции.
+
+До создания ORM выбирается database backend:
+
+    PGlite
+       ↓
+    drizzle-orm/pglite
+       ↓
+    Drizzle ORM
+
+или:
+
+    PostgreSQL
+       ↓
+    pg Pool / существующий PostgreSQL connection
+       ↓
+    drizzle-orm/node-postgres
+       ↓
+    Drizzle ORM
+
+Repository и application code должны использовать единый Drizzle-facing database layer.
+
+Если PGlite restore успешен, создаётся Drizzle поверх PGlite.
+
+Если PGlite restore не удался, PGlite закрывается, запускается/используется существующий PostgreSQL lifecycle, после чего создаётся Drizzle поверх PostgreSQL.
+
+Нельзя оставлять приложение в смешанном состоянии, где часть запросов идёт через PGlite, а часть через PostgreSQL.
 
 ## Текущее состояние
 
@@ -31,94 +114,276 @@
 - `packages/server/src/db/drizzle/drizzle-db.ts` создаёт `pg.Pool` по `DATABASE_URL`;
 - Drizzle подключён через `drizzle-orm/node-postgres`.
 
-То есть уже сейчас постоянные данные фактически находятся в локальном каталоге проекта. Нужно заменить внешний PostgreSQL-процесс на embedded PGlite.
+Эта система является **рабочим fallback/backend источником** и не должна удаляться до завершения переходных проверок.
 
-## Режимы хранения и плавный переход
+## Целевая схема запуска
 
-Миграция не должна быть одношаговой заменой Docker PostgreSQL на PGlite. Database layer должен поддерживать три состояния:
+### Успешный SQLite restore
 
-1. **Docker PostgreSQL** — текущий режим и источник существующих данных;
-2. **PGlite** — целевой основной режим работы сервера без отдельного PostgreSQL-сервиса;
-3. **SQLite backup** — переносимый формат резервной копии, из которого данные можно сохранить и восстановить независимо от основного режима.
+    START SERVER
+          ↓
+    Create PGlite in memory
+          ↓
+    Find SQLite backup
+          ↓
+    Restore SQLite → PGlite
+          ↓
+    Restore successful
+          ↓
+    Create Drizzle(PGlite)
+          ↓
+    APPLICATION
 
-SQLite в этом пункте не является заменой PGlite как основной БД. Он используется именно как **backup/import/export format**, чтобы данные можно было сохранить в один переносимый файл и восстановить после смены backend storage.
+SQLite загружается в PGlite **один раз при старте**. После этого обычные reads/writes не обращаются к SQLite.
 
-Основной переход:
+### SQLite backup отсутствует или restore завершился ошибкой
+
+    START SERVER
+          ↓
+    Create PGlite in memory
+          ↓
+    SQLite backup missing/invalid/incompatible/restore failed
+          ↓
+    Close PGlite
+          ↓
+    Existing PostgreSQL/Docker lifecycle
+          ↓
+    PostgreSQL
+          ↓
+    Create Drizzle(PostgreSQL)
+          ↓
+    APPLICATION
+
+Не продолжать работу с частично восстановленным PGlite.
+
+Fallback должен быть полным: неудачный PGlite instance закрывается, после чего приложение работает через существующий PostgreSQL backend.
+
+### Первый backup после fallback
+
+Если SQLite backup отсутствовал или оказался непригодным:
+
+    PostgreSQL
+          ↓
+    create SQLite backup
+          ↓
+    validate backup
+          ↓
+    create fresh PGlite in memory
+          ↓
+    restore SQLite → PGlite
+          ↓
+    Create Drizzle(PGlite)
+
+Точный момент переключения текущего процесса с PostgreSQL на PGlite должен быть реализован безопасно: не использовать одновременно повреждённый/частично восстановленный PGlite.
+
+## SQLite backup
+
+SQLite является **persistent snapshot**, а не database runtime.
+
+Backup должен:
+
+- содержать логические данные приложения;
+- быть независимым от внутренних файлов PostgreSQL;
+- быть независимым от внутренних файлов PGlite;
+- иметь явно определённый и версионированный формат;
+- проверяться перед restore;
+- позволять повторно восстановить данные в чистый PGlite;
+- сохраняться атомарно, чтобы не потерять последний рабочий snapshot при сбое во время записи.
+
+Рекомендуемая схема записи:
+
+    new snapshot
+         ↓
+    temporary SQLite file
+         ↓
+    validate
+         ↓
+    atomic replace
+         ↓
+    current SQLite backup
+
+Не перезаписывать единственный рабочий backup напрямую.
+
+### Когда создаётся backup
+
+Backup создаётся после завершения двух крупных операций проекта:
+
+1. **action update** — получение/обновление данных с сервера;
+2. **action embedding** — выполнение embedding для данных.
+
+Обе операции могут выполняться редко, например раз в несколько дней, и являются крупными длительными операциями.
+
+После успешного завершения соответствующей операции:
+
+    action update
+          ↓
+    database updated
+          ↓
+    SQLite backup
+
+или:
+
+    action embedding
+          ↓
+    embeddings updated
+          ↓
+    SQLite backup
+
+Backup не является обычным периодическим cron backup.
+
+Важно: snapshot должен отражать завершённое согласованное состояние базы после соответствующей операции.
+
+### Стратегия сохранения после runtime-записи
+
+Точный механизм сохранения SQLite snapshot для других операций записи должен быть определён отдельно, если такие операции существуют.
+
+Не предполагать заранее автоматическое сохранение после каждой записи: рабочая нагрузка проекта характеризуется большим количеством чтений и крайне редкими записями.
+
+## Этапы миграции
+
+### Этап 1 — PostgreSQL остаётся полностью рабочим
+
+Не менять существующий Docker/PostgreSQL lifecycle.
+
+Проверить и зафиксировать текущий путь:
 
     Docker PostgreSQL
           ↓
-    export
+    pg Pool
           ↓
+    Drizzle
+          ↓
+    Repository
+
+На этом этапе задача не должна удалять `DbManager`, Docker Compose или PostgreSQL data directory.
+
+### Этап 2 — PostgreSQL → SQLite backup
+
+Добавить надёжный механизм создания SQLite backup из текущего PostgreSQL.
+
+Проверить:
+
+- все таблицы;
+- все данные;
+- UUID;
+- composite primary keys;
+- foreign keys;
+- `ON DELETE CASCADE`;
+- timestamps/timezone;
+- JSON/JSONB;
+- BYTEA;
+- numeric/integer/real/double precision/varchar;
+- indexes, если они являются частью backup contract;
+- embeddings;
+- необходимые metadata/version information.
+
+На этом этапе PostgreSQL продолжает оставаться рабочим runtime.
+
+### Этап 3 — Несколько независимых SQLite backup
+
+До переключения runtime необходимо получить **несколько SQLite backup-файлов**, созданных в разные моменты после реальных операций проекта.
+
+Для каждого backup проверить:
+
+- файл открывается;
+- формат/version валиден;
+- schema совместима;
+- количество и состав данных ожидаемы;
+- ключевые repository queries дают корректные результаты после restore;
+- embeddings восстанавливаются;
+- foreign keys и связи сохраняются;
+- backup можно повторно использовать для restore.
+
+Критерий перехода дальше:
+
+> На руках должны находиться несколько реально созданных SQLite backup, и каждый из них должен быть успешно проверен восстановлением.
+
+Одного успешно созданного backup недостаточно для решения об отключении PostgreSQL.
+
+### Этап 4 — SQLite → PGlite in-memory
+
+Добавить PGlite как runtime backend:
+
     SQLite backup
           ↓
-    import
+    PGlite in memory
           ↓
-    PGlite
-
-Необходимо поддержать операции:
-
-    Docker PostgreSQL → SQLite backup
-    SQLite backup → Docker PostgreSQL
-    PGlite → SQLite backup
-    SQLite backup → PGlite
-
-Прямой перенос каталога data/postgres в каталог PGlite запрещён: это разные форматы хранения. Переход выполняется через логический export/import.
-
-Backup должен содержать данные приложения, а не внутренние файлы PostgreSQL/PGlite. Формат SQLite должен быть определён явно: таблицы, типы данных, ключи, связи и правила преобразования embedding vectors должны быть частью контракта backup.
-
-Необходимо определить версию формата backup. Восстановление должно проверять версию и совместимость схемы до изменения целевой БД.
-
-## Требуемое решение
-
-### 1. PGlite + Drizzle
-
-Использовать официальные пакеты `@electric-sql/pglite` и `drizzle-orm/pglite`.
-
-Новый database layer должен иметь один общий экземпляр PGlite на процесс сервера и один экземпляр Drizzle поверх него. Repository не должен создавать собственные PGlite instances.
-
-Не использовать `pg.Pool` для нового подключения и не создавать connection pool.
-
-Пример целевой зависимости:
-
-    PGlite instance
-         ↓
     Drizzle
-         ↓
-    DrizzleRepository
-         ↓
-    IRepository
+          ↓
+    Repository
 
-### 2. Data directory
+Проверить restore каждого подготовленного SQLite backup в новый чистый PGlite instance.
 
-Выбрать отдельный каталог PGlite, например `./data/pglite`.
+Каждый тест должен начинаться с нового PGlite instance, чтобы исключить случайное использование состояния предыдущего запуска.
 
-Важно: PGlite хранит PostgreSQL data directory, а не один SQLite-подобный `.db` файл.
+### Этап 5 — Runtime selection и fallback
 
-Путь должен задаваться конфигурацией, а не быть зашит в repository-код.
+Реализовать startup decision:
 
-### 3. Docker больше не участвует в lifecycle БД
+    create PGlite in memory
+             ↓
+    attempt SQLite restore
+          /       \
+       success    failure
+         ↓          ↓
+    Drizzle      close PGlite
+    (PGlite)          ↓
+                  PostgreSQL
+                      ↓
+                  Drizzle
+                  (PostgreSQL)
 
-После миграции сервер не должен:
+Ошибки отсутствующего, повреждённого или несовместимого backup должны приводить к PostgreSQL fallback.
 
-- запускать Docker;
-- генерировать PostgreSQL Compose-файл;
-- выполнять `pg_isready`;
-- останавливать контейнер PostgreSQL при завершении;
-- зависеть от наличия Docker для запуска.
+Не использовать частично восстановленный PGlite.
 
-Текущий `DbManager` следует удалить или заменить небольшим компонентом конфигурации/lifecycle PGlite, если такой компонент действительно нужен. Не сохранять Docker-логику без потребности.
+### Этап 6 — Реальная эксплуатация PGlite
 
-### 4. Конфигурация
+После успешной проверки нескольких backup сервер может использовать PGlite как основной runtime.
 
-Сейчас `DATABASE_URL` имеет вид PostgreSQL connection string с `localhost:6000`.
+При этом PostgreSQL/Docker ещё **не удаляется**.
 
-Для PGlite сетевой URL не нужен. Рассмотреть однозначную переменную `PGLITE_DATA_DIR`, например `./data/pglite`.
+PostgreSQL остаётся аварийным fallback и источником данных до тех пор, пока PGlite + SQLite путь не будет подтверждён эксплуатацией.
 
-Если `DATABASE_URL` сохраняется ради совместимости, нужно явно определить новую семантику как путь к data directory. В рабочей конфигурации не должно оставаться ложного `localhost:6000`, если Docker PostgreSQL больше не используется.
+### Этап 7 — Постепенное отключение PostgreSQL
 
-## Проверка совместимости схемы
+Только после выполнения всех предыдущих этапов и подтверждения стабильности:
 
-До полного удаления PostgreSQL проверить существующую Drizzle-схему и реальные repository queries.
+- сначала перестать использовать PostgreSQL в обычном startup path;
+- затем оставить его как явно включаемый fallback;
+- затем отдельно оценить необходимость Docker lifecycle;
+- только после этого удалить/отключить ненужный Docker/PostgreSQL code.
+
+Это отдельная задача/веха, а не скрытая часть первоначальной миграции.
+
+## Требования к backup/restore
+
+Определить и реализовать:
+
+- операцию создания SQLite backup;
+- операцию проверки backup;
+- операцию восстановления SQLite → PGlite;
+- версию формата backup;
+- schema compatibility check;
+- атомарность создания backup;
+- правила преобразования PostgreSQL/PGlite типов в SQLite и обратно;
+- обработку UUID;
+- timestamps/timezone;
+- JSON/JSONB;
+- BYTEA;
+- embedding vectors;
+- composite keys;
+- foreign keys;
+- поведение при конфликте с существующими данными;
+- поведение при повреждённом backup;
+- поведение при несовместимой версии;
+- проверку backup до изменения целевой БД.
+
+Restore должен быть безопасным относительно частичного выполнения. При ошибке нельзя оставлять приложение работающим на частично восстановленных данных.
+
+## Проверка совместимости схемы и запросов
+
+До переключения runtime проверить существующую Drizzle-схему и реальные repository queries.
 
 Особенно проверить:
 
@@ -135,95 +400,112 @@ Backup должен содержать данные приложения, а н�
 - существующие PostgreSQL views;
 - PostgreSQL-specific functions и casts.
 
-Текущая схема содержит PostgreSQL-specific views, включая `percentile_cont`, `format`, casts и `FULL JOIN`. Для каждого view определить: оставить, адаптировать или перенести вычисление в repository/service.
+Текущая схема содержит PostgreSQL-specific views, включая `percentile_cont`, `format`, casts и `FULL JOIN`. Для каждого view определить, может ли он работать в PGlite или должен быть адаптирован/перенесён на уровень repository/service.
 
-Не переводить схему на SQLite-синтаксис: целевая БД остаётся PostgreSQL-compatible через PGlite.
+Не переводить рабочую database schema на SQLite-синтаксис. SQLite используется только как backup/interchange format.
 
 ## Embeddings
 
 Сейчас embedding vectors хранятся как `jsonb`.
 
-Проверить два варианта:
+На первом этапе сохранить существующий формат для минимальной миграции.
 
-1. сохранить текущий `jsonb` для минимальной миграции;
-2. отдельно исследовать бинарное хранение (`bytea` / Float32Array serialization).
+Отдельно исследовать:
 
-Также проверить доступность и целесообразность `pgvector` в используемой версии PGlite.
+1. бинарное хранение (`bytea` / Float32Array serialization);
+2. доступность и целесообразность `pgvector` в используемой версии PGlite.
 
-Не менять формат embedding vectors без необходимости: сначала добиться эквивалентной работы текущего функционала.
+Не менять формат embeddings без необходимости для этой миграции.
 
-## Миграции Drizzle
+## Drizzle
 
-Сохранить workflow Drizzle и проверить:
+Drizzle должен поддерживать два database initialization paths:
+
+    Drizzle(PGlite)
+    
+и:
+
+    Drizzle(PostgreSQL)
+
+Использовать:
+
+- `drizzle-orm/pglite` для PGlite;
+- существующий `drizzle-orm/node-postgres` для PostgreSQL fallback.
+
+Schema и repository API не должны дублироваться только из-за выбора backend.
+
+Проверить:
 
 - `drizzle-kit generate`;
 - `drizzle-kit migrate`;
 - `drizzle-kit push`;
-- `drizzle-kit studio`, если поддерживаемый сценарий останется нужен.
+- `drizzle-kit studio`, если необходимый сценарий поддерживается;
+- transactions;
+- реальные repository queries.
 
-Для PGlite использовать конфигурацию с `driver: "pglite"` и `dialect: "postgresql"`.
+## PostgreSQL fallback
+
+Существующий `DbManager` и Docker lifecycle должны оставаться рабочими до отдельной финальной вехи отключения.
+
+Fallback должен:
+
+- запускать существующий PostgreSQL backend;
+- дождаться `pg_isready`;
+- создать PostgreSQL connection;
+- создать Drizzle(PostgreSQL);
+- продолжить работу приложения без изменения HTTP API.
+
+Не удалять PostgreSQL fallback только потому, что PGlite стал основным runtime.
 
 ## Существующие данные
 
-Нельзя открывать существующий `./data/postgres` как data directory PGlite.
+Нельзя открывать существующий `./data/postgres` как PGlite data directory.
 
-Переход существующих данных должен выполняться через логический backup:
+Существующие PostgreSQL данные переходят через логический backup:
 
-    Docker PostgreSQL
-          ↓
-    export
-          ↓
-    SQLite backup
-          ↓
-    import
-          ↓
-    PGlite
+    PostgreSQL
+        ↓
+    SQLite
+        ↓
+    PGlite in memory
 
-SQLite backup должен быть пригоден не только для миграции Docker → PGlite, но и для восстановления PGlite → SQLite → PGlite. При необходимости возврата на Docker PostgreSQL тот же backup используется для обратного import.
-
-Новый чистый запуск должен создавать новый PGlite data directory и применять актуальную схему/migrations.
-
-### Требования к backup
-
-Определить и реализовать:
-
-- команду/операцию создания SQLite backup;
-- команду/операцию восстановления из SQLite backup;
-- атомарность создания backup;
-- проверку версии формата;
-- проверку совместимости схемы;
-- правила преобразования PostgreSQL/PGlite типов в SQLite и обратно;
-- обработку UUID, timestamps, JSON/JSONB, BYTEA и embedding vectors;
-- сохранение composite keys и foreign keys;
-- поведение при конфликте с уже существующими данными;
-- возможность проверить backup до восстановления;
-- понятную ошибку при повреждённом или несовместимом backup.
-
-Backup не должен зависеть от внутренних файлов Docker PostgreSQL или PGlite.
+Текущий PostgreSQL data directory должен оставаться нетронутым на переходном этапе.
 
 ## Инициализация сервера
 
-Сейчас:
+Целевой startup должен учитывать оба пути.
+
+Успех PGlite:
 
     InitDbAsync
       ↓
-    DbManager.startAndWaitAsync
+    create PGlite in memory
       ↓
-    Docker Compose
+    restore SQLite
       ↓
-    pg_isready
+    create Drizzle(PGlite)
       ↓
-    DrizzleRepository
+    Repository
+      ↓
+    Application
 
-После:
+Fallback:
 
     InitDbAsync
       ↓
-    create/open PGlite
+    create PGlite in memory
       ↓
-    Drizzle
+    restore failed
       ↓
-    DrizzleRepository
+    close PGlite
+      ↓
+    DbManager / PostgreSQL lifecycle
+      ↓
+    create Drizzle(PostgreSQL)
+      ↓
+    Repository
+      ↓
+    Application
 
 Проверить порядок инициализации относительно `Program`, `EmbedderLmStudio`, HTTP API, repository и migrations.
 
@@ -231,30 +513,36 @@ Backup не должен зависеть от внутренних файлов
 
 Проверить все места использования Drizzle transactions.
 
-Особенно убедиться, что код не предполагает:
+PGlite должен использоваться как один общий database instance процесса.
 
-- несколько независимых PostgreSQL connections;
-- connection pooling;
+Проверить, что код не предполагает:
+
+- несколько независимых PGlite instances;
+- PostgreSQL connection pooling внутри PGlite runtime;
 - параллельные транзакции через разные pool connections;
-- PostgreSQL-specific locking semantics.
+- PostgreSQL-specific locking semantics, отсутствующие или отличающиеся в PGlite.
 
-PGlite должен быть общим экземпляром для database/repository слоя процесса.
+PostgreSQL fallback может продолжать использовать существующий `pg.Pool`.
 
 ## Зависимости и команды
 
-После успешной миграции проверить:
+На переходном этапе не удалять зависимости, необходимые PostgreSQL fallback.
+
+После финального отключения PostgreSQL отдельно проверить:
 
 - `packages/server/package.json`;
 - `package-lock.json`;
-- `pg` — удалить, если больше нигде не используется;
-- добавить `@electric-sql/pglite`;
-- `npm run docker:up` / `docker:down` — удалить или переопределить, если они больше не нужны;
+- `pg`;
+- `@electric-sql/pglite`;
+- Docker scripts;
 - `DbManager`;
-- `Initdb.ts`;
+- `InitDb.ts`;
 - `drizzle-db.ts`;
 - `drizzle.config.*`;
 - `.env`;
 - CI/CD.
+
+Удаление PostgreSQL/Docker dependencies выполняется только после финального решения об отключении fallback.
 
 ## Обратная совместимость
 
@@ -268,102 +556,169 @@ PGlite должен быть общим экземпляром для database/r
 - repository operations;
 - существующих API endpoints.
 
+Особенно проверить `action update` и `action embedding`, поскольку после их завершения создаётся новый SQLite snapshot.
+
 ## Проверки
 
-Минимальный набор:
+### PostgreSQL → SQLite
 
-### TypeScript
+1. Запустить существующую PostgreSQL систему.
+2. Создать SQLite backup.
+3. Проверить backup.
+4. Сохранить несколько backup-файлов, созданных после разных реальных состояний данных.
 
-    npm run typecheck:server
+### SQLite → PGlite
 
-### Чистая БД
+Для каждого сохранённого backup:
 
-1. удалить/выбрать новый пустой PGlite data directory;
-2. запустить сервер;
-3. убедиться, что PGlite создаётся;
-4. применить schema/migrations;
-5. выполнить базовые CRUD и реальные repository queries.
+1. создать новый PGlite instance в памяти;
+2. выполнить restore;
+3. проверить schema;
+4. проверить ключевые данные;
+5. выполнить реальные repository queries;
+6. проверить embeddings;
+7. закрыть PGlite.
 
-### Перезапуск
+### Fallback
 
-    server start
-      ↓
-    write data
-      ↓
-    server stop
-      ↓
-    server start
-      ↓
-    data remains
+Проверить отдельно:
 
-### Docker independence
+- backup отсутствует;
+- backup повреждён;
+- backup имеет неизвестную версию;
+- backup несовместим со schema;
+- restore завершается ошибкой.
 
-Запустить сервер при недоступном/остановленном Docker и отсутствии PostgreSQL. Сервер должен работать.
+Во всех случаях:
 
-### Drizzle
+    failed PGlite
+         ↓
+    close
+         ↓
+    PostgreSQL
+         ↓
+    Drizzle(PostgreSQL)
+         ↓
+    application
 
-Проверить queries и migrations на PGlite.
+### Runtime PGlite
 
-### Embeddings
+После подтверждения backup/restore:
 
-Проверить чтение и запись существующих embedding vectors.
+- запустить сервер с валидным SQLite backup;
+- убедиться, что используется PGlite;
+- выполнить реальные repository queries;
+- выполнить `action update`;
+- выполнить `action embedding`;
+- создать новый SQLite backup;
+- перезапустить сервер;
+- снова восстановить backup;
+- проверить сохранение данных.
+
+### Финальная проверка перед отключением PostgreSQL
+
+До удаления/отключения PostgreSQL необходимо иметь:
+
+- несколько SQLite backup, созданных в разные моменты;
+- успешный restore каждого backup в чистый PGlite;
+- успешную работу реального приложения на PGlite;
+- проверенный fallback на PostgreSQL;
+- проверенный цикл update → backup → restart → restore;
+- проверенный цикл embedding → backup → restart → restore;
+- отсутствие потери данных при backup failure;
+- подтверждение, что SQLite snapshot действительно является достаточным persistent state.
+
+Только после этого разрешается переходить к постепенному отключению PostgreSQL/Docker.
 
 ## README и документация
 
-После реализации обновить README:
+Документацию обновлять поэтапно.
 
-- убрать требование Docker для PostgreSQL;
-- убрать PostgreSQL port `6000` из описания БД;
-- описать PGlite;
-- указать data directory;
-- обновить quick start;
-- обновить database architecture diagram;
-- описать процедуру переноса существующих данных, если она будет реализована.
+До финального отключения PostgreSQL **не удалять из документации информацию о PostgreSQL fallback**, если она нужна для запуска/восстановления переходной системы.
+
+После фактического отключения PostgreSQL отдельно обновить:
+
+- требования Docker;
+- PostgreSQL port `6000`;
+- PGlite runtime;
+- SQLite backup;
+- startup fallback;
+- процедуру восстановления;
+- database architecture diagram.
 
 ## Ограничения
 
 Не делать без отдельного обоснования:
 
 - переход на другую ORM;
-- переход на SQLite;
+- переход приложения на SQLite как runtime database;
 - переписывание repository API;
 - изменение HTTP API;
 - изменение клиентской части;
+- удаление Docker/PostgreSQL lifecycle до прохождения всех переходных вех;
+- создание persistent PGlite data directory вместо требуемого in-memory runtime;
 - одновременную переработку unrelated database code.
 
-Цель — заменить внешний PostgreSQL service на embedded PGlite с минимальным изменением существующей архитектуры.
+Цель — **мягко добавить PGlite in-memory runtime и SQLite persistent snapshot, сохранив существующий PostgreSQL/Docker fallback до полного подтверждения нового пути**.
 
 ## Критерии готовности
 
-### Три состояния хранения
+### Архитектура
 
-- [ ] Docker PostgreSQL остаётся рабочим режимом на время перехода;
-- [ ] PGlite становится рабочим embedded-режимом;
-- [ ] SQLite backup создаётся и восстанавливается независимо от текущего backend storage;
-- [ ] определён переход Docker PostgreSQL → SQLite backup → PGlite;
-- [ ] определён переход PGlite → SQLite backup → PGlite;
-- [ ] при необходимости поддержан обратный переход SQLite backup → Docker PostgreSQL;
-- [ ] backup не использует внутренний формат PostgreSQL/PGlite;
-- [ ] формат backup версионирован и проверяется перед restore;
+- [ ] PGlite используется только как in-memory runtime;
+- [ ] SQLite используется как persistent snapshot/backup;
+- [ ] PostgreSQL/Docker остаётся рабочим fallback;
+- [ ] Drizzle может быть создан поверх PGlite;
+- [ ] Drizzle может быть создан поверх PostgreSQL;
+- [ ] repository code не зависит от выбранного backend;
+- [ ] нет смешанного runtime PGlite/PostgreSQL.
 
-### PGlite
+### Backup
 
-- [ ] сервер запускается без Docker;
-- [ ] PGlite инициализируется внутри Node.js процесса;
-- [ ] Drizzle использует `drizzle-orm/pglite`;
-- [ ] используется один общий PGlite instance;
-- [ ] данные сохраняются между перезапусками;
-- [ ] текущие repository операции работают;
-- [ ] migrations/schema workflow работает;
-- [ ] transactions проверены;
-- [ ] embedding storage проверен;
-- [ ] Docker PostgreSQL больше не требуется;
-- [ ] старый `pg` driver удалён, если больше не нужен;
-- [ ] Docker lifecycle code удалён/заменён;
-- [ ] README и конфигурация обновлены;
-- [ ] typecheck проходит;
-- [ ] проверен запуск с чистым data directory;
-- [ ] определена стратегия переноса данных из `./data/postgres`.
+- [ ] PostgreSQL → SQLite backup реализован;
+- [ ] SQLite backup имеет версию формата;
+- [ ] backup проходит validation;
+- [ ] backup записывается атомарно;
+- [ ] SQLite → PGlite реализован;
+- [ ] restore не допускает частично используемую БД;
+- [ ] UUID/composite keys/foreign keys проверены;
+- [ ] JSON/JSONB проверены;
+- [ ] timestamps проверены;
+- [ ] BYTEA/embeddings проверены;
+- [ ] несколько реальных backup-файлов созданы;
+- [ ] каждый из нескольких backup-файлов успешно восстановлен в чистый PGlite.
+
+### Runtime
+
+- [ ] PGlite успешно создаётся в памяти;
+- [ ] валидный SQLite backup загружается один раз при старте;
+- [ ] после restore приложение работает через Drizzle(PGlite);
+- [ ] обычные queries не требуют SQLite;
+- [ ] `action update` работает;
+- [ ] после `action update` создаётся backup;
+- [ ] `action embedding` работает;
+- [ ] после `action embedding` создаётся backup;
+- [ ] restart → SQLite restore → PGlite проверен.
+
+### Fallback
+
+- [ ] отсутствие backup приводит к PostgreSQL fallback;
+- [ ] повреждённый backup приводит к PostgreSQL fallback;
+- [ ] несовместимый backup приводит к PostgreSQL fallback;
+- [ ] failed PGlite instance закрывается;
+- [ ] PostgreSQL fallback использует существующий lifecycle;
+- [ ] PostgreSQL fallback создаёт Drizzle(PostgreSQL).
+
+### PostgreSQL deprecation gate
+
+- [ ] несколько независимых SQLite backup успешно проверены;
+- [ ] каждый backup успешно восстановлен в PGlite;
+- [ ] реальные update/embedding циклы проверены;
+- [ ] PGlite runtime стабильно работает;
+- [ ] fallback проверен;
+- [ ] persistent state через SQLite подтверждён;
+- [ ] только после этого принято отдельное решение о постепенном отключении PostgreSQL;
+- [ ] Docker lifecycle удаляется только отдельным последующим этапом.
 
 ## Справочные материалы
 
