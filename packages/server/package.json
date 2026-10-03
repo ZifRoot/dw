@@ -13,7 +13,7 @@
     "debug": "tsx watch --inspect=5858 -r tsconfig-paths/register src/index.ts",
     "release": "npm run build:release && npm run run:release",
     "build:release": "tsc -p tsconfig.release.json && tsc-alias -p tsconfig.release.json",
-    "typecheck": "tsc --noEmit --noUnusedLocals false --noUnusedParameters false",
+    "typecheck": "tsc --noEmit",
     "run:release": "node dist/index.js"
   },
   "dependencies": {
