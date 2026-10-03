@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { createSqliteBackup, validateSqliteBackup } from "./backup/sqlite-backup";
 import { restoreSqliteBackup } from "./backup/pglite-restore";
 import { DbManager } from "./db-manager";
-import { getPostgresPool } from "./drizzle/drizzle-db";
+import { getPostgresPool, initPostgresDrizzle } from "./drizzle/drizzle-db";
 
 export type DatabaseBackend = "pglite" | "postgres";
 
@@ -71,6 +71,7 @@ export async function initializeDatabaseRuntime(): Promise<DatabaseRuntime> {
     throw new Error("Failed to initialize PostgreSQL fallback");
   }
 
+  initPostgresDrizzle();
   const pglite = await bootstrapPGliteFromPostgres(backupPath);
   if (pglite) {
     runtime = { backend: "pglite", pglite };
