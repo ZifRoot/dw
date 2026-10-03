@@ -49,6 +49,80 @@ deepseek-w/
 - Client `tsconfig.base.json`: `@utils/*`→`src/shared/utils/*`, `@clients/*`→`src/clients/*`; в рантайме резолвит `vite-tsconfig-paths`.
 - **НОВЫЙ alias надо прописывать во всех трёх местах:** tsconfig (server/client) + tsc-alias покрывает server автоматически, vite-tsconfig-paths — client автоматически; но если добавляется новый пакет — см. грабли по shared.
 
+
+### Shared: почему это source layer, а не библиотека
+
+~packages/shared~ **намеренно не является самостоятельной TypeScript/npm-библиотекой**. Это канонический исходный код, который одновременно потребляется клиентом и сервером через ссылки на ~packages/shared/src~.
+
+Ключевая архитектурная причина — **TypeScript compilation context принадлежит потребителю shared**.
+
+~~~
+                         shared source
+                              │
+                   ┌──────────┴──────────┐
+                   │                     │
+                   ▼                     ▼
+                CLIENT                SERVER
+                   │                     │
+             ESNext / bundler        CommonJS / Node
+             DOM-oriented types      Node-oriented types
+~~~
+
+Для shared нельзя заранее выбрать один универсальный контекст без изменения архитектуры. В частности, необходимо сохранять возможность определить на стороне потребителя:
+- доступен ли ~DOM~;
+- доступны ли типы Node.js;
+- какой ~module~ используется;
+- какой ~moduleResolution~ используется;
+- какие глобальные типы и библиотеки TypeScript доступны.
+
+Поэтому **отсутствие ~packages/shared/tsconfig.json~ не является пропуском конфигурации**. Production-код shared проверяется в составе TypeScript-проекта, который его потребляет.
+
+Аналогично, **отсутствие root ~tsconfig.json~ намеренно**: корень репозитория является orchestration/workspace layer, а не самостоятельным TypeScript-проектом. Корневой ~tsconfig.base.json~ — общая конфигурационная база, а не compilation project.
+
+#### Почему нельзя просто «сделать shared библиотекой»
+
+Предложение «в root нет ~tsconfig.json~, значит нужно превратить shared в библиотеку» является неверным архитектурным выводом.
+
+Сам файл ~tsconfig.json~ в ~shared~ добавить технически возможно. Невозможно без изменения архитектуры другое: одновременно оставить shared source layer, где compilation context задаётся client/server, и сделать его самостоятельной библиотекой с одним собственным compilation context.
+
+Если shared превратить в библиотеку, появится необходимость определить её собственную модель сборки и окружение: например, DOM/Node, module/moduleResolution, формат выходных файлов и границу публичного API. Это уже означает, что ответственность за compilation context переносится с потребителей на сам shared.
+
+Таким образом:
+
+~~~
+Текущая модель:
+
+          client ──────┐
+                       ▼
+                     shared
+                       ▲
+          server ──────┘
+
+client/server определяют compilation context.
+~~~
+
+~~~
+Модель самостоятельной библиотеки:
+
+             client
+                │
+                ▼
+          shared library
+                ▲
+                │
+             server
+
+shared должен иметь собственный compilation/build context.
+~~~
+
+Это не косметическая правка ~tsconfig~, а изменение архитектуры.
+
+### ⚠️ Отдельный случай: ~packages/shared/tsconfig.test.json~
+
+~packages/shared/tsconfig.test.json~ **не является production-конфигурацией shared и не превращает shared в самостоятельный TS-проект**. Это специальный изолированный compilation context для проверки ~*.test.ts~.
+
+Его наличие объясняется необходимостью отдельно typecheck-ить тесты shared. Поэтому этот файл нельзя использовать как аргумент в пользу того, что «у shared должен быть обычный ~tsconfig.json~».
+
 ### ⚠️ Грабли и «костыли» (знать ОБЯЗАТЕЛЬНО)
 
 1. **`packages/shared` — НЕ npm-пакет** (нет `package.json`), но root `workspaces: ["packages/*"]` его перечисляет. В server/client он доступен через **Windows-джанкшены** `packages/{server,client}/src/shared` → `packages/shared/src`, создаваемые **`link-shared.cmd`** (`mklink /J`). Эти папки **в .gitignore** ([.gitignore:156-157](.gitignore)). **Свежий clone без запуска `link-shared.cmd` НЕ СОБЁРЁТСЯ** (пропадут `@utils/*`). Джанкшен — живая ссылка: новые файлы в `packages/shared/src` видны сразу.
