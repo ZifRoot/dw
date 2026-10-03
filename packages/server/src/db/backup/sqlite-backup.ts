@@ -102,8 +102,16 @@ export async function createSqliteBackup(
     db.exec("BEGIN");
     try {
       for (const table of BACKUP_TABLES) {
+        const selectColumns = table.columns
+          .map((column) => {
+            const identifier = quoteIdentifier(column.name);
+            return column.type === "timestamp"
+              ? identifier + "::text AS " + identifier
+              : identifier;
+          })
+          .join(", ");
         const result = await queryClient.query(
-          "SELECT * FROM " + quoteIdentifier(table.name),
+          "SELECT " + selectColumns + " FROM " + quoteIdentifier(table.name),
         );
         const columns = table.columns.map((column) => quoteIdentifier(column.name)).join(", ");
         const placeholders = table.columns.map(() => "?").join(", ");
