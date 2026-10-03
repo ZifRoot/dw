@@ -155,6 +155,8 @@ export class EnginePipeline {
       return;
     }
 
+    this.synchronization?.load();
+
     this.running = true;
     this.lastPointsUpdatedAt = 0;
     this.startCheckpointTimer();
@@ -342,6 +344,7 @@ export class EnginePipeline {
 
     this.running = false;
     this.stopCheckpointTimer();
+    this.synchronization?.save();
     this.publishTemperature();
     this.temperatureCoagulator.flush();
     this.emitPointsUpdated();
