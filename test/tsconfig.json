@@ -2,6 +2,7 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
+    "module": "commonjs",
     "noEmit": true
   },
   "include": ["**/*.test.ts"]

@@ -1,17 +1,17 @@
 {
   "name": "dw",
   "version": "1.0.0",
-  "description": "To make it easy for you to get started with GitLab, here's a list of recommended next steps.",
-  "homepage": "https://gitlab.com/yakov.norev/deepseek-w#readme",
+  "description": "DW — client, server and shared source project.",
+  "homepage": "https://github.com/ZifRoot/dw#readme",
   "bugs": {
-    "url": "https://gitlab.com/yakov.norev/deepseek-w/issues"
+    "url": "https://github.com/ZifRoot/dw/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@gitlab.com/yakov.norev/deepseek-w.git"
+    "url": "git+https://github.com/ZifRoot/dw.git"
   },
   "license": "ISC",
-  "author": "",
+  "author": "ZifRoot",
   "private": true,
   "workspaces": [
     "packages/client",
@@ -33,6 +33,7 @@
     "typecheck:server": "npm --workspace server run typecheck",
     "typecheck:client": "npm --workspace client run typecheck",
     "typecheck": "npm run typecheck:client && npm run typecheck:server",
+    "test:shared:utils:fast": "tsx --test test/shared/utils/observable-array.test.ts",
     "test:shared:utils": "tsx --test test/shared/utils/logger-singleRunner.test.ts test/shared/utils/observable-array.test.ts",
     "db:generate": "npm --workspace server run db:generate",
     "db:migrate": "npm --workspace server run db:migrate",
@@ -52,18 +53,8 @@
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.7.0",
     "@types/node": "^25.9.1",
-    "dotenv": "^17.4.2",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
-  },
-  "dependencies": {
-    "@hono/node-server": "^2.0.4",
-    "@hono/swagger-ui": "^0.6.1",
-    "@hono/zod-openapi": "^1.4.0",
-    "@scalar/hono-api-reference": "^0.10.19",
-    "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.23",
-    "zod": "^4.4.3"
   },
   "allowScripts": {
     "esbuild": true,
