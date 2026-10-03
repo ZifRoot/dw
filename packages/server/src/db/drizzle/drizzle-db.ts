@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { drizzle as drizzlePostgres } from "drizzle-orm/node-postgres";
-import { AnyPgDatabase } from "drizzle-orm/pg-core";
+import type { AnyPgDatabase } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
 import * as schema from "./drizzle-schema";
 
