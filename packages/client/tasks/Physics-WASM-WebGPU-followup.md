@@ -445,5 +445,5 @@ Save
 
 Алгоритмы не выполняют промежуточный save.
 
-WebGPU Repulsion и Graph также реализованы с async execution contract. Их подключение к текущему synchronous AnimationEngine остаётся отдельной границей AnimationEngine-async-callbacks.md.
+WebGPU Repulsion, Graph и Z-damping подключены к общему async contract AnimationEngine. Pipeline ожидает завершение каждого backend step перед переходом к следующему algorithm, а финальный Save ожидается перед завершением physics run.
 
