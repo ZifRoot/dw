@@ -21,14 +21,8 @@ interface WebGpuAdapter {
 interface WebGpuDevice {
   createBuffer(descriptor: { size: number; usage: number }): WebGpuBuffer;
   createShaderModule(descriptor: { code: string }): unknown;
-  createComputePipeline(descriptor: {
-    layout: "auto";
-    compute: { module: unknown; entryPoint: string };
-  }): WebGpuComputePipeline;
-  createBindGroup(descriptor: {
-    layout: unknown;
-    entries: Array<{ binding: number; resource: { buffer: WebGpuBuffer } }>;
-  }): WebGpuBindGroup;
+  createComputePipeline(descriptor: { layout: "auto"; compute: { module: unknown; entryPoint: string } }): WebGpuComputePipeline;
+  createBindGroup(descriptor: { layout: unknown; entries: Array<{ binding: number; resource: { buffer: WebGpuBuffer } }> }): WebGpuBindGroup;
   createCommandEncoder(): WebGpuCommandEncoder;
   queue: WebGpuQueue;
 }
@@ -51,23 +45,13 @@ export interface WebGpuComputePipeline {
 export interface WebGpuBindGroup {}
 
 interface WebGpuQueue {
-  writeBuffer(
-    buffer: WebGpuBuffer,
-    bufferOffset: number,
-    data: ArrayBufferView,
-  ): void;
+  writeBuffer(buffer: WebGpuBuffer, bufferOffset: number, data: ArrayBufferView): void;
   submit(commandBuffers: unknown[]): void;
 }
 
 interface WebGpuCommandEncoder {
   beginComputePass(): WebGpuComputePass;
-  copyBufferToBuffer(
-    source: WebGpuBuffer,
-    sourceOffset: number,
-    destination: WebGpuBuffer,
-    destinationOffset: number,
-    size: number,
-  ): void;
+  copyBufferToBuffer(source: WebGpuBuffer, sourceOffset: number, destination: WebGpuBuffer, destinationOffset: number, size: number): void;
   finish(): unknown;
 }
 
@@ -96,9 +80,7 @@ export class WebGpuBackend extends Backend {
   private nextInstanceId = 1;
   private readonly instances = new Map<number, WebGpuAlgorithmInstance>();
 
-  private constructor(
-    private readonly device: WebGpuDevice,
-  ) {
+  private constructor(private readonly device: WebGpuDevice) {
     super();
   }
 
@@ -123,9 +105,7 @@ export class WebGpuBackend extends Backend {
     const response = await fetch(sourceUrl);
 
     if (!response.ok) {
-      throw new Error(
-        `Unable to load WebGPU shader source: HTTP ${response.status}.`,
-      );
+      throw new Error(`Unable to load WebGPU shader source: HTTP ${response.status}.`);
     }
 
     const sourceCode = await response.text();
@@ -140,25 +120,15 @@ export class WebGpuBackend extends Backend {
     return this.device.createBuffer({ size, usage });
   }
 
-  public writeBuffer(
-    buffer: WebGpuBuffer,
-    data: ArrayBufferView,
-  ): void {
+  public writeBuffer(buffer: WebGpuBuffer, data: ArrayBufferView): void {
     this.writeBufferAt(buffer, 0, data);
   }
 
-  public writeBufferAt(
-    buffer: WebGpuBuffer,
-    offset: number,
-    data: ArrayBufferView,
-  ): void {
+  public writeBufferAt(buffer: WebGpuBuffer, offset: number, data: ArrayBufferView): void {
     this.device.queue.writeBuffer(buffer, offset, data);
   }
 
-  public createComputePipeline(
-    instanceId: number,
-    entryPoint: string,
-  ): WebGpuComputePipeline {
+  public createComputePipeline(instanceId: number, entryPoint: string): WebGpuComputePipeline {
     const instance = this.getInstance(instanceId);
 
     return this.device.createComputePipeline({
@@ -170,10 +140,7 @@ export class WebGpuBackend extends Backend {
     });
   }
 
-  public createBindGroup(
-    pipeline: WebGpuComputePipeline,
-    buffers: WebGpuBuffer[],
-  ): WebGpuBindGroup {
+  public createBindGroup(pipeline: WebGpuComputePipeline, buffers: WebGpuBuffer[]): WebGpuBindGroup {
     return this.device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
       entries: buffers.map((buffer, binding) => ({
@@ -183,10 +150,7 @@ export class WebGpuBackend extends Backend {
     });
   }
 
-  public submit(
-    computeCommands: WebGpuComputeCommand[],
-    copyCommands: WebGpuCopyCommand[],
-  ): void {
+  public submit(computeCommands: WebGpuComputeCommand[], copyCommands: WebGpuCopyCommand[]): void {
     const encoder = this.device.createCommandEncoder();
 
     for (const command of computeCommands) {
@@ -198,13 +162,7 @@ export class WebGpuBackend extends Backend {
     }
 
     for (const command of copyCommands) {
-      encoder.copyBufferToBuffer(
-        command.source,
-        command.sourceOffset,
-        command.destination,
-        command.destinationOffset,
-        command.size,
-      );
+      encoder.copyBufferToBuffer(command.source, command.sourceOffset, command.destination, command.destinationOffset, command.size);
     }
 
     this.device.queue.submit([encoder.finish()]);

@@ -4,14 +4,24 @@ const WASM_PAGE_SIZE = 65536;
 const FLOAT_ALIGNMENT = Float32Array.BYTES_PER_ELEMENT;
 const INITIAL_DATA_POINTER = WASM_PAGE_SIZE;
 
-interface WasmModuleExports { memory?: WebAssembly.Memory; }
-interface WasmAllocator { nextPointer: number; }
-interface WasmInstanceState { instance: WebAssembly.Instance; memory: WebAssembly.Memory; allocator: WasmAllocator; }
+interface WasmModuleExports {
+  memory?: WebAssembly.Memory;
+}
+interface WasmAllocator {
+  nextPointer: number;
+}
+interface WasmInstanceState {
+  instance: WebAssembly.Instance;
+  memory: WebAssembly.Memory;
+  allocator: WasmAllocator;
+}
 
 export class WasmBackend extends Backend {
   private nextInstanceId = 1;
   private readonly instances = new Map<number, WasmInstanceState>();
-  private constructor() { super(); }
+  private constructor() {
+    super();
+  }
 
   public static async create(): Promise<WasmBackend> {
     if (typeof WebAssembly === "undefined") throw new Error("WebAssembly is not supported by this browser.");
@@ -66,8 +76,12 @@ export class WasmBackend extends Backend {
     return typeof result === "number" ? result : 0;
   }
 
-  public destroyInstance(instanceId: number): void { this.instances.delete(instanceId); }
-  public destroy(): void { this.instances.clear(); }
+  public destroyInstance(instanceId: number): void {
+    this.instances.delete(instanceId);
+  }
+  public destroy(): void {
+    this.instances.clear();
+  }
 
   private getInstance(instanceId: number): WasmInstanceState {
     const state = this.instances.get(instanceId);
