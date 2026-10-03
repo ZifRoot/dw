@@ -160,6 +160,7 @@ export class AnimationEngine {
     const groupId = this.nextGroupId++;
 
     const group: CallbackGroup = {
+      groupId,
       sequence,
       lastCompletedAt: null,
       waitingPromise: null,
