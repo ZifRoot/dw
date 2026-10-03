@@ -9,7 +9,6 @@ struct Parameters {
 };
 
 struct PointState { x: f32, y: f32, z: f32, fixed: i32 };
-
 const WORKGROUP_SIZE: u32 = 256u;
 
 @group(0) @binding(0) var<storage, read> points: array<PointState>;
@@ -35,17 +34,17 @@ fn repulsion(
 ) {
   let index = globalId.x;
   var result = points[index];
+  var maxTemperature = 0.0;
 
   if (index < parameters.count && result.fixed == 0) {
     let targetSquared = parameters.targetDistance * parameters.targetDistance;
     var shift = vec3<f32>(0.0);
-    var maxTemperature = 0.0;
 
     for (var j = 0u; j < parameters.count; j++) {
       if (j == index) { continue; }
 
       let other = points[j];
-      if (result.fixed != 0 && other.fixed != 0) { continue; }
+      if (other.fixed != 0 && result.fixed != 0) { continue; }
 
       let d = vec3<f32>(result.x - other.x, result.y - other.y, result.z - other.z);
       let distSquared = dot(d, d);
@@ -53,11 +52,7 @@ fn repulsion(
 
       if (distSquared < parameters.epsilon) {
         let seed = index * 73856093u ^ j * 19349663u;
-        var random = vec3<f32>(
-          randomUnit(seed),
-          randomUnit(seed + 1u),
-          randomUnit(seed + 2u),
-        );
+        var random = vec3<f32>(randomUnit(seed), randomUnit(seed + 1u), randomUnit(seed + 2u));
         let randomLengthSquared = dot(random, random);
         if (randomLengthSquared > parameters.epsilon) {
           random *= parameters.minDistance / sqrt(randomLengthSquared);
@@ -76,7 +71,6 @@ fn repulsion(
     result.x += shift.x;
     result.y += shift.y;
     result.z += shift.z;
-    maxTemperature = max(maxTemperature, length(shift) / parameters.targetDistance);
   }
 
   outputPoints[index] = result;
@@ -85,20 +79,26 @@ fn repulsion(
 
   var stride = WORKGROUP_SIZE / 2u;
   while (stride > 0u) {
-    if (localId.x < stride) {
-      localMaxima[localId.x] = max(localMaxima[localId.x], localMaxima[localId.x + stride]);
-    }
+    if (localId.x < stride) localMaxima[localId.x] = max(localMaxima[localId.x], localMaxima[localId.x + stride]);
     workgroupBarrier();
     stride /= 2u;
   }
 
   if (localId.x == 0u) workgroupMaxima[workgroupId.x] = localMaxima[0];
+}
 
-  if (workgroupId.x == 0u && localId.x == 0u) {
-    var total = 0.0;
-    for (var i = 0u; i < parameters.workgroupCount; i++) {
-      total = max(total, workgroupMaxima[i]);
-    }
-    temperature[0] = total;
+@compute @workgroup_size(256)
+fn reduceTemperature(@builtin(local_invocation_id) localId: vec3<u32>) {
+  let index = localId.x;
+  localMaxima[index] = select(0.0, workgroupMaxima[index], index < parameters.workgroupCount);
+  workgroupBarrier();
+
+  var stride = WORKGROUP_SIZE / 2u;
+  while (stride > 0u) {
+    if (localId.x < stride) localMaxima[localId.x] = max(localMaxima[localId.x], localMaxima[localId.x + stride]);
+    workgroupBarrier();
+    stride /= 2u;
   }
+
+  if (localId.x == 0u) temperature[0] = localMaxima[0];
 }
