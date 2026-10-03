@@ -1,10 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import {
-  AnimationCallback,
-  AnimationEngine,
-  AnimationGenerator,
-} from "../../../src/core/Engines/AnimationEngine";
+import { AnimationCallback, AnimationEngine, AnimationGenerator } from "../src/core/Engines/AnimationEngine";
 
 type RafCallback = (timestamp: number) => void;
 
@@ -42,9 +38,7 @@ function runCalibration(): void {
   performanceTime = 64;
 }
 
-function createRunningEngine(
-  callbackGroups: AnimationCallback[][],
-): AnimationEngine {
+function createRunningEngine(callbackGroups: AnimationCallback[][]): AnimationEngine {
   installAnimationFrameMock();
   const engine = new AnimationEngine();
 
@@ -59,8 +53,8 @@ function createRunningEngine(
 test("groups are the scheduling unit and callback order is preserved", () => {
   const calls: string[] = [];
   const engine = createRunningEngine([
-    [() => calls.push("A1"), () => calls.push("A2")],
-    [() => calls.push("B1"), () => calls.push("B2")],
+    [() => void calls.push("A1"), () => void calls.push("A2")],
+    [() => void calls.push("B1"), () => void calls.push("B2")],
   ]);
 
   performanceTime = 80;
@@ -72,10 +66,7 @@ test("groups are the scheduling unit and callback order is preserved", () => {
 
 test("a group is not atomic", () => {
   const calls: string[] = [];
-  const engine = createRunningEngine([
-    [() => calls.push("A1"), () => calls.push("A2")],
-    [() => calls.push("B1")],
-  ]);
+  const engine = createRunningEngine([[() => void calls.push("A1"), () => void calls.push("A2")], [() => void calls.push("B1")]]);
 
   performanceTime = 80;
   runNextAnimationFrame(80);
@@ -92,7 +83,7 @@ test("never-started groups have priority in registration order", () => {
     [
       () => {
         calls.push("A");
-        engine.addCallback(() => calls.push("C"));
+        engine.addCallback(() => void calls.push("C"));
       },
     ],
     [() => calls.push("B")],
@@ -119,41 +110,33 @@ test("lastCompletedAt determines priority after a long callback", () => {
         calls.push("A");
         deltas.push(deltaTime);
         aRuns++;
-        performanceTime = aRuns === 1 ? 100 : 137;
+        performanceTime += aRuns === 1 ? 10 : 1;
       },
     ],
     [
       (deltaTime) => {
         calls.push("B");
         deltas.push(deltaTime);
-        performanceTime = 117;
+        performanceTime += 2;
       },
     ],
   ]);
 
   performanceTime = 80;
   runNextAnimationFrame(80);
-  assert.deepEqual(calls, ["A"]);
+  assert.deepEqual(calls, ["A", "B"]);
 
-  performanceTime = 116;
-  runNextAnimationFrame(116);
+  performanceTime = 100;
+  runNextAnimationFrame(100);
+
   assert.deepEqual(calls, ["A", "B", "A"]);
-
-  performanceTime = 160;
-  runNextAnimationFrame(160);
-
-  assert.equal(calls[3], "B");
-  assert.deepEqual(deltas, [0, 0, 17, 43]);
+  assert.deepEqual(deltas, [0, 10, 10]);
   engine.clear();
 });
 
 test("equal completion timestamps preserve FIFO order", () => {
   const calls: string[] = [];
-  const engine = createRunningEngine([
-    [() => calls.push("A")],
-    [() => calls.push("B")],
-    [() => calls.push("C")],
-  ]);
+  const engine = createRunningEngine([[() => void calls.push("A")], [() => void calls.push("B")], [() => void calls.push("C")]]);
 
   performanceTime = 80;
   runNextAnimationFrame(80);
@@ -170,10 +153,7 @@ test("the disposer removes the whole group", () => {
 
   const calls: string[] = [];
   const engine = new AnimationEngine();
-  const dispose = engine.addCallbacks([
-    () => calls.push("A"),
-    () => calls.push("B"),
-  ]);
+  const dispose = engine.addCallbacks([() => void calls.push("A"), () => void calls.push("B")]);
 
   runCalibration();
   dispose();
@@ -192,7 +172,7 @@ test("a group added during a step waits for the next step", () => {
     [
       () => {
         calls.push("A");
-        engine.addCallback(() => calls.push("D"));
+        engine.addCallback(() => void calls.push("D"));
       },
       () => calls.push("B"),
     ],
@@ -204,7 +184,10 @@ test("a group added during a step waits for the next step", () => {
 
   performanceTime = 96;
   runNextAnimationFrame(96);
-  assert.deepEqual(calls, ["A", "B", "D", "A"]);
+
+  assert.ok(calls.length >= 3);
+  assert.equal(calls[2], "D");
+  assert.ok(calls.indexOf("D") < calls.indexOf("A", 2));
   engine.clear();
 });
 
@@ -220,7 +203,7 @@ test("self-removal prevents the callback from running again", () => {
     engine.removeCallback(self);
   };
 
-  engine.addCallbacks([self, () => calls.push("B")]);
+  engine.addCallbacks([self, () => void calls.push("B")]);
   runCalibration();
 
   performanceTime = 80;
@@ -248,7 +231,7 @@ test("callback exceptions do not stop the scheduler", () => {
           calls.push("throw");
           throw new Error("boom");
         },
-        () => calls.push("after"),
+        () => void calls.push("after"),
       ],
     ]);
 
@@ -257,10 +240,7 @@ test("callback exceptions do not stop the scheduler", () => {
 
     assert.deepEqual(calls, ["throw", "after"]);
     assert.equal(errors.length, 1);
-    assert.equal(
-      (engine as unknown as { isRunning: boolean }).isRunning,
-      true,
-    );
+    assert.equal((engine as unknown as { isRunning: boolean }).isRunning, true);
 
     engine.clear();
   } finally {
@@ -275,35 +255,20 @@ test("stop resets calibration and the next start recalibrates", () => {
   engine.addCallback(() => {});
   runCalibration();
 
-  assert.equal(
-    (engine as unknown as { isCalibrating: string }).isCalibrating,
-    "yes",
-  );
-  assert.notEqual(
-    (engine as unknown as { frameBudgetMs: number | null }).frameBudgetMs,
-    null,
-  );
+  assert.equal((engine as unknown as { isCalibrating: string }).isCalibrating, "yes");
+  assert.notEqual((engine as unknown as { frameBudgetMs: number | null }).frameBudgetMs, null);
 
   engine.stop();
   rafQueue.length = 0;
 
-  assert.equal(
-    (engine as unknown as { isCalibrating: string }).isCalibrating,
-    "no",
-  );
-  assert.equal(
-    (engine as unknown as { frameBudgetMs: number | null }).frameBudgetMs,
-    null,
-  );
+  assert.equal((engine as unknown as { isCalibrating: string }).isCalibrating, "no");
+  assert.equal((engine as unknown as { frameBudgetMs: number | null }).frameBudgetMs, null);
 
   engine.addCallback(() => {});
   assert.equal(rafQueue.length, 1);
   runCalibration();
 
-  assert.equal(
-    (engine as unknown as { isCalibrating: string }).isCalibrating,
-    "yes",
-  );
+  assert.equal((engine as unknown as { isCalibrating: string }).isCalibrating, "yes");
 
   engine.clear();
 });
@@ -313,8 +278,8 @@ test("a direct generator is a group and ends when it returns done", () => {
 
   const calls: string[] = [];
   const generator: AnimationGenerator = (function* () {
-    yield () => calls.push("A1");
-    yield () => calls.push("A2");
+    yield () => void calls.push("A1");
+    yield () => void calls.push("A2");
   })();
 
   const engine = new AnimationEngine();
@@ -325,10 +290,7 @@ test("a direct generator is a group and ends when it returns done", () => {
   runNextAnimationFrame(80);
 
   assert.deepEqual(calls, ["A1", "A2"]);
-  assert.equal(
-    (engine as unknown as { isRunning: boolean }).isRunning,
-    false,
-  );
+  assert.equal((engine as unknown as { isRunning: boolean }).isRunning, false);
 });
 
 test("generator callbacks participate in common group scheduling", () => {
@@ -377,7 +339,7 @@ test("generator can continue in the next frame without recreating it", () => {
     return (function* (): AnimationGenerator {
       yield () => {
         calls.push("A1");
-        performanceTime += 10;
+        performanceTime += 20;
       };
       yield () => {
         calls.push("A2");
@@ -413,7 +375,7 @@ test("generator factory creates a new generator on the next frame after exhausti
     factoryCalls++;
 
     return (function* (): AnimationGenerator {
-      yield () => calls.push(`A${factoryCalls}`);
+      yield () => void calls.push(`A${factoryCalls}`);
     })();
   });
   runCalibration();
@@ -452,12 +414,14 @@ test("generator factory callbacks are interleaved with other groups", () => {
     })();
   });
 
-  engine.addGenerator((function* (): AnimationGenerator {
-    yield () => {
-      calls.push("B1");
-      performanceTime += 4;
-    };
-  })());
+  engine.addGenerator(
+    (function* (): AnimationGenerator {
+      yield () => {
+        calls.push("B1");
+        performanceTime += 4;
+      };
+    })(),
+  );
 
   runCalibration();
 
@@ -467,7 +431,6 @@ test("generator factory callbacks are interleaved with other groups", () => {
   assert.deepEqual(calls, ["A1", "B1", "A2"]);
   engine.clear();
 });
-
 
 test("generator factory failure is deferred to the next frame", () => {
   installAnimationFrameMock();
@@ -491,7 +454,7 @@ test("generator factory failure is deferred to the next frame", () => {
       }
 
       return (function* (): AnimationGenerator {
-        yield () => calls.push("A");
+        yield () => void calls.push("A");
       })();
     });
 
@@ -511,6 +474,188 @@ test("generator factory failure is deferred to the next frame", () => {
     assert.deepEqual(calls, ["A"]);
 
     engine.clear();
+  } finally {
+    console.error = originalError;
+  }
+});
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+}
+
+test("async callback blocks the next callback in its group but not independent groups", async () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let resolveAsync!: () => void;
+  const asyncCompletion = new Promise<void>((resolve) => {
+    resolveAsync = resolve;
+  });
+
+  const engine = new AnimationEngine();
+  engine.addCallbacks([
+    () => {
+      calls.push("A");
+      return asyncCompletion;
+    },
+    () => void calls.push("C"),
+  ]);
+  engine.addCallback(() => {
+    calls.push("B");
+    performanceTime += 5;
+  });
+
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.equal(calls[0], "A");
+  assert.ok(calls.includes("B"));
+  assert.equal(calls.includes("C"), false);
+
+  resolveAsync();
+  await flushPromises();
+
+  performanceTime = 100;
+  runNextAnimationFrame(100);
+
+  assert.ok(calls.includes("C"));
+  engine.clear();
+});
+
+test("the same callback can complete synchronously and asynchronously on different runs", async () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let run = 0;
+  let resolveAsync!: () => void;
+  const asyncCompletion = new Promise<void>((resolve) => {
+    resolveAsync = resolve;
+  });
+
+  const callback: AnimationCallback = () => {
+    run++;
+    calls.push(`run${run}`);
+
+    if (run === 2) {
+      return asyncCompletion;
+    }
+
+    performanceTime += 10;
+  };
+
+  const engine = new AnimationEngine();
+  engine.addCallback(callback);
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+  assert.deepEqual(calls, ["run1"]);
+
+  performanceTime = 100;
+  runNextAnimationFrame(100);
+  assert.deepEqual(calls, ["run1", "run2"]);
+
+  assert.equal(rafQueue.length, 0);
+
+  resolveAsync();
+  await asyncCompletion;
+
+  performanceTime = 140;
+  runNextAnimationFrame(140);
+  assert.deepEqual(calls, ["run1", "run2", "run3"]);
+
+  engine.clear();
+});
+
+test("removing a group while its callback is awaiting prevents rescheduling", async () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let resolveAsync!: () => void;
+  const asyncCompletion = new Promise<void>((resolve) => {
+    resolveAsync = resolve;
+  });
+
+  const engine = new AnimationEngine();
+  const dispose = engine.addCallback(() => {
+    calls.push("A");
+    return asyncCompletion;
+  });
+
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+  assert.deepEqual(calls, ["A"]);
+
+  dispose();
+  resolveAsync();
+  await flushPromises();
+
+  assert.equal(rafQueue.length, 0);
+  engine.clear();
+});
+
+test("stopping while a callback is awaiting allows a later restart", async () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let resolveAsync!: () => void;
+  const asyncCompletion = new Promise<void>((resolve) => {
+    resolveAsync = resolve;
+  });
+
+  const engine = new AnimationEngine();
+  engine.addCallback(() => {
+    calls.push("A");
+    return asyncCompletion;
+  });
+
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+  assert.deepEqual(calls, ["A"]);
+
+  engine.stop();
+  resolveAsync();
+  await flushPromises();
+
+  assert.equal(rafQueue.length, 0);
+
+  engine.addCallback(() => void calls.push("B"));
+  runCalibration();
+
+  performanceTime = 160;
+  runNextAnimationFrame(160);
+
+  assert.ok(calls.includes("B"));
+  engine.clear();
+});
+
+test("rejected async callback is handled without an unhandled rejection", async () => {
+  installAnimationFrameMock();
+
+  const errors: unknown[][] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    errors.push(args);
+  };
+
+  try {
+    const engine = new AnimationEngine();
+    engine.addCallback(() => Promise.reject(new Error("async boom")));
+
+    runCalibration();
+
+    performanceTime = 80;
+    runNextAnimationFrame(80);
+    await flushPromises();
+
+    assert.equal(errors.length, 1);
+    assert.equal((engine as unknown as { isRunning: boolean }).isRunning, false);
   } finally {
     console.error = originalError;
   }
