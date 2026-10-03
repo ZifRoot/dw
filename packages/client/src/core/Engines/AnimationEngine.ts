@@ -1,4 +1,4 @@
-export type AnimationCallback = (deltaTime: number) => void;
+export type AnimationCallback = (deltaTime: number) => void | Promise<void>;
 
 /** Источник callback'ов, создаваемый Generator API. */
 export interface AnimationGenerator extends Iterator<AnimationCallback> {}
@@ -264,6 +264,7 @@ interface CallbackGroup {
   lastCompletedAt: number | null;
   node: GroupQueueNode;
   eligibleStep: number;
+  waitingPromise: Promise<void> | null;
 }
 
 const CALIBRATION_FRAMES = 5;
@@ -319,6 +320,7 @@ export class AnimationEngine {
     const group: CallbackGroup = {
       sequence,
       lastCompletedAt: null,
+      waitingPromise: null,
       node: {
         groupId,
         previous: null,
@@ -367,7 +369,20 @@ export class AnimationEngine {
     if (!this.calibrate()) return;
 
     this.isRunning = true;
+    this.enqueueReadyGroups();
     this.scheduleStep();
+  }
+
+  private enqueueReadyGroups(): void {
+    for (const group of this.groups.values()) {
+      if (group.node.queue !== null || group.waitingPromise !== null) continue;
+
+      if (group.lastCompletedAt === null) {
+        this.groupsQueue.enqueuePending(group.node);
+      } else {
+        this.groupsQueue.enqueueStarted(group.node);
+      }
+    }
   }
 
   private scheduleStep(): void {
@@ -441,7 +456,7 @@ export class AnimationEngine {
       this.isStepping = false;
     }
 
-    if (this.isRunning && this.groups.size > 0) {
+    if (this.isRunning && this.groupsQueue.size > 0) {
       this.scheduleStep();
     }
   }
@@ -478,15 +493,55 @@ export class AnimationEngine {
 
     const startedAt = performance.now();
     const deltaTime = group.lastCompletedAt === null ? 0 : Math.max(0, startedAt - group.lastCompletedAt);
-
-    this.executeSafely(next.value, deltaTime);
+    const result = this.executeSafely(next.value, deltaTime);
 
     if (!this.groups.has(group.node.groupId)) return true;
+
+    if (result instanceof Promise) {
+      group.waitingPromise = result;
+      result.then(
+        () => this.completeAsyncCallback(group.node.groupId, result),
+        (error) => this.failAsyncCallback(group.node.groupId, result, error),
+      );
+      return true;
+    }
 
     group.lastCompletedAt = performance.now();
     this.groupsQueue.enqueueStarted(group.node);
 
     return true;
+  }
+
+  private completeAsyncCallback(groupId: number, promise: Promise<void>): void {
+    const group = this.groups.get(groupId);
+    if (group === undefined || group.waitingPromise !== promise) return;
+
+    group.waitingPromise = null;
+    group.lastCompletedAt = performance.now();
+
+    if (this.isRunning) {
+      this.groupsQueue.enqueueStarted(group.node);
+      return;
+    }
+
+    this.scheduleStepAfterAsyncCompletion(group);
+  }
+
+  private failAsyncCallback(groupId: number, promise: Promise<void>, error: unknown): void {
+    const group = this.groups.get(groupId);
+    if (group === undefined || group.waitingPromise !== promise) return;
+
+    console.error("AnimationEngine callback failed", error);
+    this.removeGroup(groupId);
+  }
+
+  private scheduleStepAfterAsyncCompletion(group: CallbackGroup): void {
+    if (group.node.queue !== null || group.waitingPromise !== null || this.groups.size === 0) return;
+
+    if (this.isRunning) {
+      this.groupsQueue.enqueueStarted(group.node);
+      if (this.rafId === null) this.scheduleStep();
+    }
   }
 
   private getNextCallback(group: CallbackGroup): IteratorResult<AnimationCallback> {
@@ -498,11 +553,15 @@ export class AnimationEngine {
     }
   }
 
-  private executeSafely(callback: AnimationCallback, deltaTime: number): void {
+  private executeSafely(
+    callback: AnimationCallback,
+    deltaTime: number,
+  ): void | Promise<void> {
     try {
-      callback(deltaTime);
+      return callback(deltaTime);
     } catch (error) {
       console.error("AnimationEngine callback failed", error);
+      return undefined;
     }
   }
 
