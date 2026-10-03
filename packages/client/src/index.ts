@@ -22,7 +22,7 @@ import { WasmRepulsionAlgorithm } from "./physics/wasm/WasmRepulsionAlgorithm";
 import { WasmGraphAlgorithm } from "./physics/wasm/WasmGraphAlgorithm";
 import { WasmEdgesTransformer } from "./physics/wasm/WasmEdgesTransformer";
 import { WasmPointsTransformer } from "./physics/wasm/WasmPointsTransformer";
-import { WebGpuZDapperAlgorithm } from "./physics/webgpu/WebGpuZDapperAlgorithm";
+import { WebGpuZDapperAlgorithm } from "./physics/webgpu/WebGpuZDapperAlgorithm";\nimport { WebGpuRepulsionAlgorithm } from "./physics/webgpu/WebGpuRepulsionAlgorithm";\nimport { WebGpuGraphAlgorithm } from "./physics/webgpu/WebGpuGraphAlgorithm";\nimport { WebGpuEdgesTransformer } from "./physics/webgpu/WebGpuEdgesTransformer";
 import { WebGpuPointsTransformer } from "./physics/webgpu/WebGpuPointsTransformer";
 import { PointGraphManager } from "@core/collections/PointGraphManager";
 import { LogSafe } from "@utils/logger";
@@ -127,16 +127,26 @@ class Backends {
     configurations: PhysicsConfigurations,
   ) {
     const backend = await WebGpuBackend.create();
-    const transformer = new WebGpuPointsTransformer(pointGraphManager, backend);
-    const algorithm = new WebGpuZDapperAlgorithm(mediator, configurations.zdamping, backend, transformer);
+    const pointsTransformer = new WebGpuPointsTransformer(pointGraphManager, backend);
+    const edgesTransformer = new WebGpuEdgesTransformer(pointGraphManager, backend);
+    const repulsion = new WebGpuRepulsionAlgorithm(mediator, configurations.repulsion, backend, pointsTransformer);
+    const graph = new WebGpuGraphAlgorithm(mediator, configurations.graph, backend, pointsTransformer, edgesTransformer);
+    const algorithm = new WebGpuZDapperAlgorithm(mediator, configurations.zdamping, backend, pointsTransformer);
 
+    await repulsion.initialize();
+    await graph.initialize();
     await algorithm.initialize();
 
+    const synchronization: EnginePipelineSynchronization = {
+      load: () => pointsTransformer.load(),
+      save: () => { void pointsTransformer.save(); },
+    };
+
     pipeline.setConfiguration([
-      { name: "Отталкивание", algorithm: new RepulsionAlgorithm(mediator, pointGraphManager, configurations.repulsion) },
-      { name: "Связи", algorithm: new GraphAlgorithm(mediator, pointGraphManager, configurations.graph) },
+      { name: "Отталкивание", algorithm: repulsion },
+      { name: "Связи", algorithm: graph },
       { name: "Затухание по Z", algorithm },
-    ]);
+    ], synchronization);
     return true;
   }
 }
@@ -171,7 +181,7 @@ async function configurePipeline(
 ): Promise<void> {
   const backends = new Backends();
 
-  if (false) {
+  {
     if (await backends.connectWebGpuPipeline(pipeline, mediator, pointGraphManager, configurations)) return;
 
     if (await backends.connectWasmPipeline(pipeline, mediator, pointGraphManager, configurations)) return;
