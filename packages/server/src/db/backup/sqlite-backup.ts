@@ -132,8 +132,6 @@ export async function createSqliteBackup(
               ),
             );
           }
-        } finally {
-          insert.close();
         }
       }
       db.exec("COMMIT");
