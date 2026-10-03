@@ -162,7 +162,7 @@ test("subscriptions can be disposed", () => {
   });
   const values: number[] = [];
 
-  const dispose = observable.onTemperature((value) => values.push(value));
+  const dispose = observable.onTemperature((value: number) => values.push(value));
 
   observable.temperature = 21;
   dispose();
