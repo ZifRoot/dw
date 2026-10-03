@@ -2,23 +2,23 @@
 
 ## Цель
 
-Постепенно перевести `packages/server` на **PGlite + Drizzle ORM** как основной runtime database, не разрушая существующую PostgreSQL/Docker систему до тех пор, пока новый путь не будет проверен на реальных SQLite backup.
+Постепенно перевести `packages/server` на **PGlite + Drizzle ORM** как основной runtime database, не разрушая существующую PostgreSQL/Docker систему до тех пор, пока новый путь не будет проверен на реальных SQLite snapshot.
 
 Целевая runtime-архитектура:
 
-    Server
-      ↓
-    Drizzle ORM
-      ↓
+    Application
+         ↓
+       Drizzle
+         ↓
     PGlite (in-memory)
-      ↓
-    application
+         ↓
+      Database
 
 При этом:
 
 - **PGlite** — основной runtime database, работающий в памяти;
 - **SQLite** — persistent snapshot / backup / interchange format;
-- **Docker PostgreSQL** — существующий рабочий backend, fallback и источник восстановления на переходном этапе.
+- **Docker PostgreSQL** — существующий рабочий backend, fallback и источник bootstrap на переходном этапе.
 
 SQLite **не является runtime database**. После загрузки snapshot в PGlite обычные запросы приложения идут только в PGlite.
 
@@ -34,9 +34,9 @@ SQLite **не является runtime database**. После загрузки s
 
     Existing PostgreSQL/Docker
             ↓
-    PostgreSQL → SQLite backup
+    current database state → SQLite snapshot
             ↓
-    проверка нескольких backup-файлов
+    проверка нескольких snapshot-файлов
             ↓
     SQLite → PGlite (in-memory)
             ↓
@@ -57,21 +57,19 @@ PGlite в целевой архитектуре не должен использ
 
     ./data/pglite
 
-Persistent состояние хранится в SQLite backup.
+Persistent состояние хранится в SQLite snapshots.
 
 При запуске:
 
     create PGlite in memory
             ↓
-    restore SQLite backup
+    restore SQLite snapshot
             ↓
     Drizzle + PGlite
 
-После завершения работы приложения состояние должно сохраняться в SQLite в соответствии с определённой стратегией snapshot.
-
 ### 3. Drizzle — единый ORM для обоих backend
 
-Drizzle не должен быть привязан к конкретному сценарию миграции.
+Drizzle не должен быть привязан к конкретному сценарию backup/restore.
 
 До создания ORM выбирается database backend:
 
@@ -124,7 +122,7 @@ Repository и application code должны использовать едины�
           ↓
     Create PGlite in memory
           ↓
-    Find SQLite backup
+    Find SQLite snapshot
           ↓
     Restore SQLite → PGlite
           ↓
@@ -136,13 +134,13 @@ Repository и application code должны использовать едины�
 
 SQLite загружается в PGlite **один раз при старте**. После этого обычные reads/writes не обращаются к SQLite.
 
-### SQLite backup отсутствует или restore завершился ошибкой
+### SQLite snapshot отсутствует или restore завершился ошибкой
 
     START SERVER
           ↓
     Create PGlite in memory
           ↓
-    SQLite backup missing/invalid/incompatible/restore failed
+    SQLite snapshot missing/invalid/incompatible/restore failed
           ↓
     Close PGlite
           ↓
@@ -156,17 +154,15 @@ SQLite загружается в PGlite **один раз при старте**.
 
 Не продолжать работу с частично восстановленным PGlite.
 
-Fallback должен быть полным: неудачный PGlite instance закрывается, после чего приложение работает через существующий PostgreSQL backend.
+### Bootstrap snapshot после fallback
 
-### Первый backup после fallback
-
-Если SQLite backup отсутствовал или оказался непригодным:
+Если SQLite snapshot отсутствует или оказался непригодным:
 
     PostgreSQL
           ↓
-    create SQLite backup
+    create snapshot from current database state
           ↓
-    validate backup
+    validate snapshot
           ↓
     create fresh PGlite in memory
           ↓
@@ -174,11 +170,39 @@ Fallback должен быть полным: неудачный PGlite instance 
           ↓
     Create Drizzle(PGlite)
 
-Точный момент переключения текущего процесса с PostgreSQL на PGlite должен быть реализован безопасно: не использовать одновременно повреждённый/частично восстановленный PGlite.
+Здесь PostgreSQL — только конкретный источник текущего состояния. Backup writer не должен содержать отдельную бизнес-реализацию «PostgreSQL backup».
 
-## SQLite backup
+## SQLite snapshot / backup
 
 SQLite является **persistent snapshot**, а не database runtime.
+
+### Источник snapshot
+
+Архитектурно backup создаётся не «из PostgreSQL» и не «из PGlite». Он создаётся из **текущего состояния database runtime**.
+
+Drizzle является ORM/query layer приложения, но не самим хранилищем данных. Поэтому backup layer должен зависеть от минимальной абстракции чтения PostgreSQL-совместимой базы, а не от конкретного backend.
+
+Концептуально:
+
+    PostgreSQL connection ──┐
+                            ├──→ Database snapshot source
+    PGlite connection ──────┘              ↓
+                                  SQLiteBackupWriter
+                                           ↓
+                                     SQLite snapshot
+
+Должна существовать **одна реализация создания SQLite snapshot**. Она не должна дублироваться в виде отдельных `createBackupFromPostgres()` и `createBackupFromPGlite()` с разной логикой.
+
+Различаться может только предоставленный snapshot source:
+
+- PostgreSQL connection — на переходном/fallback этапе;
+- PGlite connection — в целевом runtime.
+
+Таким образом, при переходе на PGlite механизм backup продолжает работать без изменения своей семантики: после успешной крупной операции он снимает snapshot с текущей PGlite database.
+
+Не следует делать backup буквально «из Drizzle». Drizzle должен оставаться ORM для application/repository queries; backup infrastructure должна использовать общий низкоуровневый query source, чтобы явно контролировать PostgreSQL-специфичные преобразования UUID, JSON/JSONB, BYTEA, timestamps и embedding.
+
+### Требования к snapshot
 
 Backup должен:
 
@@ -188,9 +212,30 @@ Backup должен:
 - иметь явно определённый и версионированный формат;
 - проверяться перед restore;
 - позволять повторно восстановить данные в чистый PGlite;
-- сохраняться атомарно, чтобы не потерять последний рабочий snapshot при сбое во время записи.
+- сохраняться атомарно, чтобы не потерять рабочие snapshots при сбое во время записи.
 
-Рекомендуемая схема записи:
+### Rolling snapshots
+
+Snapshot не должен быть единственным постоянно перезаписываемым файлом.
+
+Хранить несколько последних успешных snapshots, например:
+
+    backup/
+        backup-<timestamp-1>.sqlite
+        backup-<timestamp-2>.sqlite
+        backup-<timestamp-3>.sqlite
+        backup-<timestamp-4>.sqlite
+        backup-<timestamp-5>.sqlite
+
+Целевое правило: **хранить максимум 5 последних успешных SQLite snapshots**. После успешной записи и validation нового snapshot удалить более старые файлы.
+
+Критически важно: старые snapshots нельзя удалять до того, как новый snapshot полностью записан и проверен. Если создание нового snapshot завершилось ошибкой, предыдущие рабочие snapshots должны остаться доступными.
+
+При startup необходимо иметь возможность выбрать пригодный snapshot для restore. Если самый свежий snapshot повреждён или несовместим, runtime должен иметь возможность перейти к более старому пригодному snapshot либо использовать PostgreSQL fallback, согласно startup policy.
+
+### Атомарная запись
+
+Рекомендуемая схема записи каждого snapshot:
 
     new snapshot
          ↓
@@ -198,15 +243,17 @@ Backup должен:
          ↓
     validate
          ↓
-    atomic replace
+    atomic rename
          ↓
-    current SQLite backup
+    current snapshot set
+         ↓
+    remove snapshots older than retention limit
 
 Не перезаписывать единственный рабочий backup напрямую.
 
-### Когда создаётся backup
+### Когда создаётся snapshot
 
-Backup создаётся после завершения двух крупных операций проекта:
+Snapshot создаётся после завершения двух крупных операций проекта:
 
 1. **action update** — получение/обновление данных с сервера;
 2. **action embedding** — выполнение embedding для данных.
@@ -219,7 +266,7 @@ Backup создаётся после завершения двух крупны�
           ↓
     database updated
           ↓
-    SQLite backup
+    SQLite snapshot
 
 или:
 
@@ -227,11 +274,11 @@ Backup создаётся после завершения двух крупны�
           ↓
     embeddings updated
           ↓
-    SQLite backup
+    SQLite snapshot
 
 Backup не является обычным периодическим cron backup.
 
-Важно: snapshot должен отражать завершённое согласованное состояние базы после соответствующей операции.
+Snapshot должен отражать завершённое согласованное состояние базы после соответствующей операции.
 
 ### Стратегия сохранения после runtime-записи
 
@@ -257,9 +304,9 @@ Backup не является обычным периодическим cron back
 
 На этом этапе задача не должна удалять `DbManager`, Docker Compose или PostgreSQL data directory.
 
-### Этап 2 — PostgreSQL → SQLite backup
+### Этап 2 — current database → SQLite snapshot
 
-Добавить надёжный механизм создания SQLite backup из текущего PostgreSQL.
+Добавить надёжный механизм создания SQLite snapshot из текущего database source.
 
 Проверить:
 
@@ -273,17 +320,17 @@ Backup не является обычным периодическим cron back
 - JSON/JSONB;
 - BYTEA;
 - numeric/integer/real/double precision/varchar;
-- indexes, если они являются частью backup contract;
+- indexes, если они являются частью snapshot contract;
 - embeddings;
 - необходимые metadata/version information.
 
-На этом этапе PostgreSQL продолжает оставаться рабочим runtime.
+На этом этапе PostgreSQL продолжает оставаться рабочим runtime/fallback.
 
-### Этап 3 — Несколько независимых SQLite backup
+### Этап 3 — Несколько независимых SQLite snapshots
 
-До переключения runtime необходимо получить **несколько SQLite backup-файлов**, созданных в разные моменты после реальных операций проекта.
+До переключения runtime необходимо получить **несколько SQLite snapshot-файлов**, созданных в разные моменты после реальных операций проекта.
 
-Для каждого backup проверить:
+Для каждого snapshot проверить:
 
 - файл открывается;
 - формат/version валиден;
@@ -292,19 +339,19 @@ Backup не является обычным периодическим cron back
 - ключевые repository queries дают корректные результаты после restore;
 - embeddings восстанавливаются;
 - foreign keys и связи сохраняются;
-- backup можно повторно использовать для restore.
+- snapshot можно повторно использовать для restore.
 
 Критерий перехода дальше:
 
-> На руках должны находиться несколько реально созданных SQLite backup, и каждый из них должен быть успешно проверен восстановлением.
+> На руках должны находиться несколько реально созданных SQLite snapshots, и каждый из них должен быть успешно проверен восстановлением.
 
-Одного успешно созданного backup недостаточно для решения об отключении PostgreSQL.
+Одного успешно созданного snapshot недостаточно для решения об отключении PostgreSQL.
 
 ### Этап 4 — SQLite → PGlite in-memory
 
 Добавить PGlite как runtime backend:
 
-    SQLite backup
+    SQLite snapshot
           ↓
     PGlite in memory
           ↓
@@ -312,7 +359,7 @@ Backup не является обычным периодическим cron back
           ↓
     Repository
 
-Проверить restore каждого подготовленного SQLite backup в новый чистый PGlite instance.
+Проверить restore каждого подготовленного SQLite snapshot в новый чистый PGlite instance.
 
 Каждый тест должен начинаться с нового PGlite instance, чтобы исключить случайное использование состояния предыдущего запуска.
 
@@ -323,7 +370,7 @@ Backup не является обычным периодическим cron back
     create PGlite in memory
              ↓
     attempt SQLite restore
-          /       \
+          /       \\
        success    failure
          ↓          ↓
     Drizzle      close PGlite
@@ -333,17 +380,19 @@ Backup не является обычным периодическим cron back
                   Drizzle
                   (PostgreSQL)
 
-Ошибки отсутствующего, повреждённого или несовместимого backup должны приводить к PostgreSQL fallback.
+Ошибки отсутствующего, повреждённого или несовместимого snapshot должны приводить к PostgreSQL fallback, если пригодного snapshot не найдено.
 
 Не использовать частично восстановленный PGlite.
 
 ### Этап 6 — Реальная эксплуатация PGlite
 
-После успешной проверки нескольких backup сервер может использовать PGlite как основной runtime.
+После успешной проверки нескольких snapshots сервер может использовать PGlite как основной runtime.
 
 При этом PostgreSQL/Docker ещё **не удаляется**.
 
 PostgreSQL остаётся аварийным fallback и источником данных до тех пор, пока PGlite + SQLite путь не будет подтверждён эксплуатацией.
+
+При успешных `action update` и `action embedding` создаются новые rolling snapshots уже из текущего PGlite runtime.
 
 ### Этап 7 — Постепенное отключение PostgreSQL
 
@@ -360,12 +409,13 @@ PostgreSQL остаётся аварийным fallback и источником 
 
 Определить и реализовать:
 
-- операцию создания SQLite backup;
-- операцию проверки backup;
+- единую операцию создания SQLite snapshot из абстрагированного текущего database source;
+- операцию проверки snapshot;
 - операцию восстановления SQLite → PGlite;
-- версию формата backup;
+- версию формата snapshot;
 - schema compatibility check;
-- атомарность создания backup;
+- атомарность создания snapshot;
+- rolling retention последних 5 успешных snapshots;
 - правила преобразования PostgreSQL/PGlite типов в SQLite и обратно;
 - обработку UUID;
 - timestamps/timezone;
@@ -375,9 +425,9 @@ PostgreSQL остаётся аварийным fallback и источником 
 - composite keys;
 - foreign keys;
 - поведение при конфликте с существующими данными;
-- поведение при повреждённом backup;
+- поведение при повреждённом snapshot;
 - поведение при несовместимой версии;
-- проверку backup до изменения целевой БД.
+- проверку snapshot до изменения целевой БД.
 
 Restore должен быть безопасным относительно частичного выполнения. При ошибке нельзя оставлять приложение работающим на частично восстановленных данных.
 
@@ -422,7 +472,7 @@ Restore должен быть безопасным относительно ча
 Drizzle должен поддерживать два database initialization paths:
 
     Drizzle(PGlite)
-    
+
 и:
 
     Drizzle(PostgreSQL)
@@ -461,7 +511,7 @@ Fallback должен:
 
 Нельзя открывать существующий `./data/postgres` как PGlite data directory.
 
-Существующие PostgreSQL данные переходят через логический backup:
+Существующие PostgreSQL данные переходят через логический snapshot:
 
     PostgreSQL
         ↓
@@ -560,16 +610,18 @@ PostgreSQL fallback может продолжать использовать с�
 
 ## Проверки
 
-### PostgreSQL → SQLite
+### Current database → SQLite
 
-1. Запустить существующую PostgreSQL систему.
-2. Создать SQLite backup.
-3. Проверить backup.
-4. Сохранить несколько backup-файлов, созданных после разных реальных состояний данных.
+1. Получить текущее согласованное состояние database runtime.
+2. Создать SQLite snapshot через единую snapshot operation.
+3. Проверить snapshot.
+4. Сохранить несколько snapshot-файлов, созданных после разных реальных состояний данных.
+
+На переходном этапе источником может быть PostgreSQL; после переключения runtime источником должен быть PGlite. Логика записи SQLite при этом остаётся одной.
 
 ### SQLite → PGlite
 
-Для каждого сохранённого backup:
+Для каждого сохранённого snapshot:
 
 1. создать новый PGlite instance в памяти;
 2. выполнить restore;
@@ -583,10 +635,10 @@ PostgreSQL fallback может продолжать использовать с�
 
 Проверить отдельно:
 
-- backup отсутствует;
-- backup повреждён;
-- backup имеет неизвестную версию;
-- backup несовместим со schema;
+- snapshot отсутствует;
+- snapshot повреждён;
+- snapshot имеет неизвестную версию;
+- snapshot несовместим со schema;
 - restore завершается ошибкой.
 
 Во всех случаях:
@@ -603,30 +655,31 @@ PostgreSQL fallback может продолжать использовать с�
 
 ### Runtime PGlite
 
-После подтверждения backup/restore:
+После подтверждения snapshot/restore:
 
-- запустить сервер с валидным SQLite backup;
+- запустить сервер с валидным SQLite snapshot;
 - убедиться, что используется PGlite;
 - выполнить реальные repository queries;
 - выполнить `action update`;
 - выполнить `action embedding`;
-- создать новый SQLite backup;
+- создать новый SQLite snapshot из текущего runtime;
 - перезапустить сервер;
-- снова восстановить backup;
-- проверить сохранение данных.
+- снова восстановить snapshot;
+- проверить сохранение данных;
+- проверить rolling retention и наличие не более 5 последних успешных snapshots.
 
 ### Финальная проверка перед отключением PostgreSQL
 
 До удаления/отключения PostgreSQL необходимо иметь:
 
-- несколько SQLite backup, созданных в разные моменты;
-- успешный restore каждого backup в чистый PGlite;
+- несколько SQLite snapshots, созданных в разные моменты;
+- успешный restore каждого snapshot в чистый PGlite;
 - успешную работу реального приложения на PGlite;
 - проверенный fallback на PostgreSQL;
-- проверенный цикл update → backup → restart → restore;
-- проверенный цикл embedding → backup → restart → restore;
-- отсутствие потери данных при backup failure;
-- подтверждение, что SQLite snapshot действительно является достаточным persistent state.
+- проверенный цикл update → snapshot → restart → restore;
+- проверенный цикл embedding → snapshot → restart → restore;
+- отсутствие потери данных при snapshot failure;
+- подтверждение, что SQLite snapshots действительно являются достаточным persistent state.
 
 Только после этого разрешается переходить к постепенному отключению PostgreSQL/Docker.
 
@@ -641,7 +694,7 @@ PostgreSQL fallback может продолжать использовать с�
 - требования Docker;
 - PostgreSQL port `6000`;
 - PGlite runtime;
-- SQLite backup;
+- SQLite snapshots;
 - startup fallback;
 - процедуру восстановления;
 - database architecture diagram.
@@ -659,7 +712,7 @@ PostgreSQL fallback может продолжать использовать с�
 - создание persistent PGlite data directory вместо требуемого in-memory runtime;
 - одновременную переработку unrelated database code.
 
-Цель — **мягко добавить PGlite in-memory runtime и SQLite persistent snapshot, сохранив существующий PostgreSQL/Docker fallback до полного подтверждения нового пути**.
+Цель — **мягко добавить PGlite in-memory runtime и SQLite persistent snapshots, сохранив существующий PostgreSQL/Docker fallback до полного подтверждения нового пути**.
 
 ## Критерии готовности
 
@@ -673,46 +726,49 @@ PostgreSQL fallback может продолжать использовать с�
 - [ ] repository code не зависит от выбранного backend;
 - [ ] нет смешанного runtime PGlite/PostgreSQL.
 
-### Backup
+### Snapshot / Backup
 
-- [ ] PostgreSQL → SQLite backup реализован;
-- [ ] SQLite backup имеет версию формата;
-- [ ] backup проходит validation;
-- [ ] backup записывается атомарно;
+- [ ] единая snapshot operation работает с текущим database source;
+- [ ] backup не дублирует реализацию отдельно для PostgreSQL и PGlite;
+- [ ] SQLite snapshot имеет версию формата;
+- [ ] snapshot проходит validation;
+- [ ] snapshot записывается атомарно;
+- [ ] хранится максимум 5 последних успешных snapshots;
 - [ ] SQLite → PGlite реализован;
 - [ ] restore не допускает частично используемую БД;
 - [ ] UUID/composite keys/foreign keys проверены;
 - [ ] JSON/JSONB проверены;
 - [ ] timestamps проверены;
 - [ ] BYTEA/embeddings проверены;
-- [ ] несколько реальных backup-файлов созданы;
-- [ ] каждый из нескольких backup-файлов успешно восстановлен в чистый PGlite.
+- [ ] несколько реальных snapshot-файлов созданы;
+- [ ] каждый из нескольких snapshot-файлов успешно восстановлен в чистый PGlite.
 
 ### Runtime
 
 - [ ] PGlite успешно создаётся в памяти;
-- [ ] валидный SQLite backup загружается один раз при старте;
+- [ ] валидный SQLite snapshot загружается один раз при старте;
 - [ ] после restore приложение работает через Drizzle(PGlite);
 - [ ] обычные queries не требуют SQLite;
 - [ ] `action update` работает;
-- [ ] после `action update` создаётся backup;
+- [ ] после `action update` создаётся snapshot;
 - [ ] `action embedding` работает;
-- [ ] после `action embedding` создаётся backup;
-- [ ] restart → SQLite restore → PGlite проверен.
+- [ ] после `action embedding` создаётся snapshot;
+- [ ] restart → SQLite restore → PGlite проверен;
+- [ ] rolling retention оставляет не более 5 последних успешных snapshots.
 
 ### Fallback
 
-- [ ] отсутствие backup приводит к PostgreSQL fallback;
-- [ ] повреждённый backup приводит к PostgreSQL fallback;
-- [ ] несовместимый backup приводит к PostgreSQL fallback;
+- [ ] отсутствие пригодного snapshot приводит к PostgreSQL fallback;
+- [ ] повреждённый snapshot приводит к PostgreSQL fallback;
+- [ ] несовместимый snapshot приводит к PostgreSQL fallback;
 - [ ] failed PGlite instance закрывается;
 - [ ] PostgreSQL fallback использует существующий lifecycle;
 - [ ] PostgreSQL fallback создаёт Drizzle(PostgreSQL).
 
 ### PostgreSQL deprecation gate
 
-- [ ] несколько независимых SQLite backup успешно проверены;
-- [ ] каждый backup успешно восстановлен в PGlite;
+- [ ] несколько независимых SQLite snapshots успешно проверены;
+- [ ] каждый snapshot успешно восстановлен в PGlite;
 - [ ] реальные update/embedding циклы проверены;
 - [ ] PGlite runtime стабильно работает;
 - [ ] fallback проверен;
