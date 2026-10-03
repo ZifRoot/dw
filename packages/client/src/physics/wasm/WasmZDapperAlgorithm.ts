@@ -19,7 +19,7 @@ export class WasmZDapperAlgorithm extends BaseAlgorithm {
   }
 
   public async initialize(): Promise<void> {
-    const sourceUrl = new URL("./z-damping.cpp", import.meta.url);
+    const sourceUrl = new URL("./z-damping.wasm", import.meta.url);
     const instanceId = await this.backend.createInstance(sourceUrl);
     this.instanceId = instanceId;
     this.transformer.attachInstance(instanceId);

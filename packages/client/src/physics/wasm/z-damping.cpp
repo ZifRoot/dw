@@ -1,4 +1,4 @@
-#include <cstdint>
+#include <stdint.h>
 
 struct PointState {
   float x;

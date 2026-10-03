@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "debug": "vite --port 3000",
+    "predebug": "npm run build:wasm",
     "release": "npm run build:release && npm run run:release",
+    "build:wasm": "node ./scripts/build-wasm.mjs",
     "build:release": "npm run typecheck && vite build --mode production",
+    "prebuild:release": "npm run build:wasm",
     "run:release": "npm run preview",
     "preview": "vite preview --port 4173",
     "typecheck": "tsc --noEmit",
