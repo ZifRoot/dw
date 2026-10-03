@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "module": "commonjs",
+    "noEmit": true,
+    "lib": ["ES2020", "esnext.typedarrays"]
+  }
+}
