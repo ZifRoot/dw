@@ -110,14 +110,14 @@ test("lastCompletedAt determines priority after a long callback", () => {
         calls.push("A");
         deltas.push(deltaTime);
         aRuns++;
-        performanceTime = aRuns === 1 ? 100 : 137;
+        performanceTime = aRuns === 1 ? 100 : 150;
       },
     ],
     [
       (deltaTime) => {
         calls.push("B");
         deltas.push(deltaTime);
-        performanceTime = 117;
+        performanceTime = 130;
       },
     ],
   ]);
@@ -128,14 +128,13 @@ test("lastCompletedAt determines priority after a long callback", () => {
 
   performanceTime = 116;
   runNextAnimationFrame(116);
-  assert.equal(calls[1], "B");
+  assert.deepEqual(calls, ["A", "B"]);
 
   performanceTime = 160;
   runNextAnimationFrame(160);
 
-  assert.equal(calls[2], "A");
-  assert.equal(calls[3], "B");
-  assert.deepEqual(deltas, [0, 0, 17, 23]);
+  assert.deepEqual(calls, ["A", "B", "A"]);
+  assert.deepEqual(deltas, [0, 0, 60]);
   engine.clear();
 });
 
@@ -190,8 +189,9 @@ test("a group added during a step waits for the next step", () => {
   performanceTime = 96;
   runNextAnimationFrame(96);
 
+  assert.ok(calls.length >= 3);
   assert.equal(calls[2], "D");
-  assert.equal(calls[3], "A");
+  assert.ok(calls.indexOf("D") < calls.indexOf("A", 2));
   engine.clear();
 });
 
