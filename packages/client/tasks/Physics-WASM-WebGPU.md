@@ -454,23 +454,17 @@ Algorithm получает buffer handles только через публичн
 
 GPU execution и readback асинхронны.
 
-Реальный prototype step находится в:
+Реальный prototype step выполняется через общий async contract BaseAlgorithm:
 
 ~~~text
-executeAsyncStep(deltaTime): Promise<number>
+BaseAlgorithm.stepAsync(deltaTime)
+        ↓
+WebGpuZDapperAlgorithm.applyStepAsync(deltaTime)
+        ↓
+GPU compute + readback
 ~~~
 
-Текущий synchronous BaseAlgorithm.applyStep() намеренно не пытается блокировать ожидание GPU и сообщает, что WebGPU Z-damping требует async AnimationEngine support.
-
-Следовательно, WebGPU prototype готов на уровне backend/algorithm execution, но не должен подключаться к существующему synchronous animation loop как обычный synchronous algorithm.
-
-Для этого требуется отдельная задача:
-
-~~~text
-packages/client/tasks/AnimationEngine-async-callbacks.md
-~~~
-
-AnimationEngine не должен знать о WASM или WebGPU. Async contract должен быть generic.
+AnimationEngine не знает о WASM или WebGPU. Async contract является generic, а EnginePipeline последовательно ожидает каждый algorithm step.
 
 ## 18. Backend fallback
 
@@ -897,8 +891,6 @@ Composition root может перейти к следующему backend ил�
 1. Сравнить JS/WASM/WebGPU на одинаковом workload.
 2. Оптимизировать upload/readback.
 3. Измерить полный pipeline.
-6. Оптимизировать upload/readback.
-7. Измерить полный pipeline.
 
 Измерять отдельно:
 - execution time;
