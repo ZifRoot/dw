@@ -84,6 +84,10 @@ export class WebGpuRepulsionAlgorithm extends BaseAlgorithm {
     return new Float32Array(data)[0];
   }
 
+  protected applyStep(_deltaTime: number): number {
+    throw new Error("WebGPU Repulsion requires async AnimationEngine support.");
+  }
+
   public getStopTemperature(): number { return this.config.stopTemperature; }
 
   public destroy(): void {
