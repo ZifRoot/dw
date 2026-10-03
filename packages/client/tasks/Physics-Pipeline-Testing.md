@@ -191,30 +191,33 @@ Temperature для UI должна быть presentation state, а не прям
 
 ## 15. Минимальная структура тестов
 
-Тесты не должны дублировать структуру production-пакетов только ради симметрии. Каталог `test/` является отдельной тестовой средой.
-
-Базовая структура:
+Тестовая инфраструктура разделяется по runtime-контекстам. Общий каталог `test/` содержит только базовую Node.js-конфигурацию и shared utility tests.
 
 ```text
 test/
 ├── index.ts
 ├── tsconfig.json
-├── utils/
-│   ├── observable-array.test.ts
-│   └── logger-singleRunner.test.ts
-└── client/
-    └── core/
-        └── Engines/
-            └── AnimationEngine.test.ts
+└── utils/
+    ├── observable-array.test.ts
+    └── logger-singleRunner.test.ts
+
+packages/
+├── client/
+│   └── test/
+│       ├── tsconfig.json
+│       └── core/
+│           └── Engines/
+│               └── AnimationEngine.test.ts
+└── server/
+    └── test/
+        └── tsconfig.json
 ```
 
-Для Physics Pipeline тесты должны располагаться в клиентском контексте, например:
+Клиентские тесты не должны находиться в общем `test/client`: клиент имеет собственную тестовую среду, собственный `tsconfig.json` и DOM lib.
 
-```text
-test/client/core/Engines/EnginePipeline.test.ts
-```
+Серверная тестовая среда также изолирована собственным `tsconfig.json`. Она наследуется от общего `test/tsconfig.json` без DOM.
 
-Каталог `test/server/` не создаётся заранее: он появляется только при наличии server-specific тестов.
+Базовый `test/tsconfig.json` не содержит DOM и типизирует только shared utility tests. Клиентский `packages/client/test/tsconfig.json` наследуется от него и добавляет DOM libs. Серверский `packages/server/test/tsconfig.json` наследуется от него без DOM.
 
 Смысловые группы тестов должны покрывать:
 
