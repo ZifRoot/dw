@@ -12,6 +12,7 @@ import {
 import { IRepository } from "./IRepository";
 import { FragmentType, MessagesBizData, Role } from "./resp";
 import { PgTransaction } from "drizzle-orm/pg-core";
+import * as schema from "./drizzle/drizzle-schema";
 import type { ExtractTablesWithRelations } from "drizzle-orm";
 import {
   ChatMessage,
