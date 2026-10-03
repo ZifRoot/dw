@@ -1,962 +1,748 @@
 # Задача: Physics — WASM и WebGPU backend
 
-## Цель
+## 1. Цель
 
-Зафиксировать архитектуру для реализации текущей browser physics в двух backend-вариантах:
+Реализовать и исследовать перенос browser physics в backend-варианты JavaScript, WebAssembly и WebGPU compute shaders (WGSL).
 
-- WebAssembly;
-- WebGPU compute shaders (WGSL).
+Исследование обязательно включает оба backend — WASM и WebGPU.
 
-Обе реализации должны сохранять одну математическую семантику и один порядок physics:
+Главный архитектурный принцип: backend меняет способ выполнения конкретного algorithm, но не меняет domain model, общий physics contract и порядок algorithms в EnginePipeline.
 
-1. Repulsion;
-2. Graph physics;
-3. Z-damping.
+Текущий логический порядок:
 
-Это исследовательская задача: WASM и WebGPU реализуются оба, чтобы сравнивать вычисления, синхронизацию и итоговую производительность.
+~~~text
+Repulsion
+    ↓
+Graph
+    ↓
+Z-damping
+~~~
 
----
+На текущем этапе backend-прототип заменяет только Z-damping. Repulsion и Graph остаются JavaScript algorithms. Архитектура должна позволять позднее заменить их без изменения EnginePipeline.
 
-## 1. Текущее состояние
+## 2. Источник истины
 
-Источник истины для набора точек:
+Источник истины для domain state:
 
-```text
+~~~text
 PointGraphManager
     ↓
-EntityCollection<Point>
-    ↓
 Point[]
-```
+~~~
 
-`Point[]` имеет стабильную ссылку и изменяется in-place. Текущие physics работают непосредственно с JavaScript-моделью точек.
+Point[] сохраняет существующую семантику: стабильная ссылка на массив, изменение объектов Point in-place.
 
-Рендеринг остаётся JavaScript/D3/SVG, поэтому после physics актуальные координаты должны возвращаться в существующие `Point`.
+WASM и WebGPU не становятся вторым domain source of truth.
 
----
+Backend storage является рабочей копией physics state:
 
-## 2. Хранители памяти и единый логический state
-
-Архитектура вводит три сущности, которые владеют состоянием соответствующего уровня:
-
-- `PointGraphManager` — хранитель domain state и источник истины для `Point`/`Edge`;
-- `WasmPhysicsMemory` — хранитель physics state в WASM linear memory;
-- `WebGpuPhysicsMemory` — хранитель physics state в WebGPU `GPUBuffer`.
-
-WASM и WebGPU holders получают `PointGraphManager` в конструкторе. Они не получают копию массива точек и не становятся вторым domain source of truth.
-
-Концептуально:
-
-```text
-                    PointGraphManager
-                  domain source of truth
+~~~text
+                 PointGraphManager
+                 domain source of truth
                          │
              ┌───────────┴───────────┐
              │                       │
              ▼                       ▼
-   WasmPhysicsMemory         WebGpuPhysicsMemory
-      PointGraphManager          PointGraphManager
-      + WASM state               + GPU state
+       WASM memory              GPUBuffer
              │                       │
-       WASM physics              WebGPU physics
-```
+       WASM algorithm           WebGPU algorithm
+             │                       │
+             └───────────┬───────────┘
+                         ▼
+                 PointGraphManager
+~~~
 
-Каждый holder:
+Синхронизацию выполняет соответствующий transformer.
 
-1. хранит ссылку на `PointGraphManager`;
-2. владеет своим backend-compatible physics state;
-3. при активации подписывается на необходимые события `AppMediator`;
-4. при необходимости самостоятельно читает актуальные данные из `PointGraphManager`;
-5. при необходимости самостоятельно записывает результат обратно в существующие `Point` через `PointGraphManager`;
-6. не зависит от второго backend holder.
+## 3. Один EnginePipeline
 
-Таким образом, WASM и WebGPU являются **независимыми хранителями состояния и независимыми execution cores**, работающими с одним domain source of truth.
+Не создаются JsPhysicsPipeline, WasmPhysicsPipeline или WebGpuPhysicsPipeline.
 
----
+Существующий EnginePipeline остаётся общей архитектурой:
 
-## 3. Один логический state, два физических storage
-
-Логически существует одно состояние physics, но у backend разные физические области памяти:
-
-```text
-                         PointGraphManager
-                                │
-                         logical domain state
-                                │
-                  ┌─────────────┴─────────────┐
-                  │                           │
-                  ▼                           ▼
-        WasmPhysicsMemory             WebGpuPhysicsMemory
-                  │                           │
-          WASM linear memory             GPUBuffer
-                  │                           │
-        ┌─────────┴─────────┐       ┌─────────┴─────────┐
-        │        │          │       │        │          │
-   Repulsion   Graph   Z-damping  Repulsion  Graph   Z-damping
-        │        │          │       │        │          │
-        └────────┴──────────┘       └────────┴──────────┘
-                  │                           │
-                  └─────────────┬─────────────┘
-                                ▼
-                         PointGraphManager
-                                │
-                              Point[]
-                                │
-                              D3/SVG
-```
-
-WASM `WebAssembly.Memory` и WebGPU `GPUBuffer` не следует считать одним физическим объектом памяти. Обычный browser WebGPU API не даёт архитектуры, на которую можно надёжно опереться для прямого aliasing этих областей.
-
-Поэтому backend имеют два физических storage, но используют единый логический physics contract.
-
----
-
-## 4. Holder является не только памятью
-
-Название «хранитель памяти» не означает пассивный контейнер.
-
-Каждый backend holder является одновременно:
-
-- владельцем backend physics state;
-- адаптером между `PointGraphManager` и backend;
-- подписчиком на необходимые mediator events;
-- координатором загрузки/выгрузки состояния;
-- execution core соответствующего backend;
-- владельцем набора реализаций physics algorithms;
-- владельцем backend-specific механизма запуска вычислений.
-
-То есть `WasmPhysicsMemory` и `WebGpuPhysicsMemory` концептуально ближе к **Physics Backend Engine**, чем к простому массиву/буферу.
-
-При этом они не заменяют `PointGraphManager`: domain state остаётся в `PointGraphManager`.
-
----
-
-## 5. Physics algorithms: 3 × 2 реализации
-
-Для каждого backend существуют три physics algorithm implementations:
-
-```text
-                    Physics
-                       │
-          ┌────────────┴────────────┐
-          │                         │
-        WASM                      WebGPU
-          │                         │
-    ┌─────┼─────┐             ┌─────┼─────┐
-    │     │     │             │     │     │
-Repulsion Graph Z-damping   Repulsion Graph Z-damping
-```
-
-Итого:
-
-- 3 логических physics algorithms;
-- 2 backend-specific реализации;
-- 6 concrete algorithm implementations.
-
-Каждый алгоритм принимает **свой совместимый holder**.
-
-Например, концептуально:
-
-```text
-WasmRepulsionAlgorithm(WasmPhysicsMemory)
-WasmGraphAlgorithm(WasmPhysicsMemory)
-WasmZDampingAlgorithm(WasmPhysicsMemory)
-
-WebGpuRepulsionAlgorithm(WebGpuPhysicsMemory)
-WebGpuGraphAlgorithm(WebGpuPhysicsMemory)
-WebGpuZDampingAlgorithm(WebGpuPhysicsMemory)
-```
-
-Алгоритм не работает напрямую с `PointGraphManager`. Он работает через backend-specific holder, который предоставляет ему совместимый physics state и необходимые операции.
-
-Это позволяет сохранить одинаковый physics contract при полностью разной реализации вычислений.
-
----
-
-## 6. Аналогия с EnginePipeline
-
-Архитектурно backend holder похож на небольшой специализированный `EnginePipeline`.
-
-Текущий `EnginePipeline`:
-
-```text
+~~~text
 AnimationEngine
       │
       ▼
 EnginePipeline
       │
-      ├── algorithm 1
-      ├── algorithm 2
-      └── algorithm 3
-```
+      ├── Repulsion
+      ├── Graph
+      └── Z-damping
+~~~
 
-Новый backend:
+Используется один экземпляр EnginePipeline. Backend selection меняет его configuration через setConfiguration(...).
 
-```text
-WasmPhysicsMemory
+Backend не создаёт собственный pipeline.
+
+## 4. Composition root
+
+Composition root находится в:
+
+~~~text
+packages/client/src/index.ts
+~~~
+
+Он отвечает за связывание AppMediator, AnimationEngine, PointGraphManager, EnginePipeline, algorithms, backend и transformers.
+
+При этом index.ts не должен знать backend-specific source code.
+
+Source URL для z-damping.cpp и z-damping.wgsl создаётся непосредственно внутри соответствующего algorithm.
+
+То есть composition root знает, какой algorithm подключить, но не знает, из какого source file он реализован.
+
+## 5. Конфигурации создаются один раз
+
+Конфигурации являются общими для логических algorithms и не зависят от backend.
+
+В index.ts создаётся один набор:
+
+~~~text
+PhysicsConfigurations
+ ├── repulsion: RepulsionEngineConfig
+ ├── graph: GraphEngineConfig
+ └── zdamping: ZDampingConfig
+~~~
+
+Этот набор передаётся при построении любого варианта pipeline.
+
+Даже если текущий backend использует только zdamping, он получает весь набор из трёх конфигураций.
+
+Это единая точка будущих настроек и расширения. Конфигурации не должны дублироваться для JS/WASM/WebGPU.
+
+## 6. Generic backend
+
+Текущие backend находятся в:
+
+~~~text
+packages/client/src/core/Backends/WasmBackend.ts
+packages/client/src/core/Backends/WebGpuBackend.ts
+~~~
+
+Backend отвечает только за технологический уровень.
+
+WasmBackend:
+- проверяет WebAssembly;
+- загружает .wasm;
+- создаёт WebAssembly.Instance;
+- хранит несколько instance по ID;
+- предоставляет работу с WebAssembly.Memory;
+- выполняет allocation;
+- читает/пишет memory;
+- вызывает exported function;
+- уничтожает instance.
+
+WebGpuBackend:
+- проверяет navigator.gpu;
+- получает adapter и device;
+- загружает WGSL;
+- создаёт shader module;
+- создаёт compute pipeline;
+- создаёт bind group;
+- создаёт, записывает и читает GPUBuffer;
+- отправляет compute commands;
+- выполняет readback;
+- уничтожает backend resources.
+
+Backend не знает PointGraphManager, Repulsion, Graph, Z-damping и physics semantics.
+
+## 7. Backend algorithm
+
+Конкретный algorithm получает generic backend и transformer.
+
+~~~text
+WasmZDapperAlgorithm
       │
-      ├── WasmRepulsion
-      ├── WasmGraph
-      └── WasmZDamping
+      ├── WasmBackend
+      └── WasmPointsTransformer
 
-WebGpuPhysicsMemory
+WebGpuZDapperAlgorithm
       │
-      ├── WebGpuRepulsion
-      ├── WebGpuGraph
-      └── WebGpuZDamping
-```
+      ├── WebGpuBackend
+      └── WebGpuPointsTransformer
+~~~
 
-Разница в ответственности:
+Algorithm отвечает за:
+- свою physics semantics;
+- выбор backend operation;
+- создание backend instance;
+- создание необходимых execution resources;
+- вызов backend execution;
+- получение temperature;
+- lifecycle своего backend instance.
 
-- `AnimationEngine` отвечает за **когда** выполнять callback;
-- backend holder отвечает за **как** хранить state и **как** выполнить backend physics;
-- algorithm отвечает за конкретную физическую операцию.
+Algorithm не отвечает за domain storage и renderer.
 
-Поэтому backend holder содержит собственный порядок выполнения:
+## 8. Source URL принадлежит algorithm
 
-```text
-Repulsion
-    ↓
-Graph
-    ↓
-Z-damping
-```
+WASM algorithm сам создаёт URL z-damping.cpp.
 
-и собственный backend-specific механизм dispatch/kernel execution.
+WebGPU algorithm сам создаёт URL z-damping.wgsl.
 
----
+index.ts не передаёт source URL backend connector-у.
 
-## 7. Factory / общий physics contract
+Это сохраняет границу:
 
-Количество реализаций естественным образом образует две семьи backend-алгоритмов:
-
-```text
-             Physics contract
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-        WASM                WebGPU
-          │                   │
-    ┌─────┼─────┐       ┌─────┼─────┐
-    │     │     │       │     │     │
- Repulsion Graph Z     Repulsion Graph Z
-```
-
-Это допускает применение фабричного подхода для создания согласованного набора алгоритмов одного backend.
-
-Однако сама структура не является буквально классическим **Abstract Factory**: главная ответственность находится не в factory, а в backend holder, который владеет состоянием и жизненным циклом выполнения. Abstract Factory может использоваться как механизм создания семейства backend-specific algorithms.
-
-Главный архитектурный контракт:
-
-> Выбор backend меняет конкретные реализации алгоритмов и механизм выполнения, но не меняет порядок и математическую семантику physics.
-
----
-
-## 8. Выбор активного backend и защита от конфликтов
-
-WASM и WebGPU не должны одновременно выполнять physics для одного PointGraphManager.
-
-В приложении может существовать два созданных backend holder:
-
-`Index
-  │
-  ├── WasmPhysicsMemory
-  └── WebGpuPhysicsMemory`
-
-но в каждый момент времени существует ровно один **active physics backend**.
-
-`text
-             Physics Backend
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-        WASM                WebGPU
-          │                   │
-       ACTIVE              INACTIVE
-`
-
-Неактивный backend:
-
-- не регистрирует physics callbacks в AnimationEngine;
-- не выполняет physics algorithms;
-- не обрабатывает physics-related mediator events;
-- не записывает координаты обратно в PointGraphManager.
-
-Это основной механизм предотвращения конфликта двух backend.
-
-### Backend interface
-
-Оба backend предоставляют единый публичный интерфейс, например концептуально:
-
-`text
-PhysicsBackend
-    ├── initialize()
-    ├── activate()
-    ├── deactivate()
-    ├── syncFromPointGraph()
-    ├── syncToPointGraph()
-    └── destroy()
-`
-
-Конкретный TypeScript API будет определён на этапе реализации.
-
-`activate()` означает, что backend становится единственным владельцем текущего physics execution cycle.
-
-`deactivate()` должен остановить execution и снять все подписки/регистрации, относящиеся к активному physics backend.
-
-Переключение не должно просто менять enum или флаг. Оно должно менять **активный execution owner**.
-
-### Static factory
-
-Создание каждого backend выполняется через статическую factory.
-
-Концептуально:
-
-`text
-WasmPhysicsMemory.create(...)
-WebGpuPhysicsMemory.create(...)
-`
-
-или через соответствующие backend factories.
-
-Factory обязана проверить возможность создания backend и выбросить ошибку, если backend невозможно создать.
-
-Проверки включают как минимум:
-
-- наличие требуемого browser API;
-- возможность инициализации backend runtime;
-- возможность создания необходимых backend resources;
-- корректность обязательных возможностей устройства/окружения.
-
-Для WebGPU это означает проверку доступности WebGPU и успешного получения необходимых GPU resources.
-
-Для WASM это означает проверку возможности загрузки/инициализации WASM runtime и требуемого модуля.
-
-Ошибка factory является **ошибкой создания конкретного backend**, а не обязательно ошибкой всего приложения.
-
-Поэтому Index создаёт backend независимо:
-
-`text
-try create WASM
-       │
-       ├── success → backend available
-       └── failure → backend unavailable
-
-try create WebGPU
-       │
-       ├── success → backend available
-       └── failure → backend unavailable
-`
-
-Если один backend недоступен, это не должно блокировать использование другого.
-
-### Переключатель находится в Index
-
-Index является composition root приложения и поэтому владеет связыванием:
-
-`text
-React UI
+~~~text
+index.ts
    │
-   ▼
-AppMediator
-   │
-   │ physics-backend-changed
-   ▼
-Index
-   │
-   ├── activate WASM
-   └── activate WebGPU
-`
+   └── выбирает и связывает algorithm
+          │
+          ▼
+backend-specific algorithm
+          │
+          └── знает свой source
+~~~
 
-React UI не должен напрямую создавать WasmPhysicsMemory или WebGpuPhysicsMemory.
+## 9. Transformer
 
-UI знает только публичный интерфейс выбора backend и вызывает метод медиатора, например концептуально:
+Transformer является границей между domain state и backend memory.
 
-`text
-mediator.physicsBackendChanged("wasm")
-mediator.physicsBackendChanged("webgpu")
-`
+Текущие transformers:
 
-Index подписывается на это событие и выполняет фактическое переключение.
+~~~text
+packages/client/src/physics/wasm/WasmPointsTransformer.ts
+packages/client/src/physics/webgpu/WebGpuPointsTransformer.ts
+~~~
 
-Это сохраняет границы:
+Transformer получает PointGraphManager и соответствующий backend.
 
-- React — отображает переключатель;
-- AppMediator — передаёт команду;
-- Index — управляет composition/runtime wiring;
-- backend holder — выполняет physics;
-- PointGraphManager — хранит domain state.
+Он знает:
+- как прочитать PointGraphManager;
+- как преобразовать Point в backend layout;
+- где находится backend storage;
+- как записать state в backend;
+- как вернуть результат обратно в PointGraphManager.
 
-### Безопасное переключение
+Transformer не знает physics semantics.
 
-Переключение выполняется последовательно:
+## 10. Полная и частичная синхронизация
 
-`text
-active backend
-      │
-      ▼
-deactivate()
-      │
-      ▼
-sync current result if required
-      │
-      ▼
-new backend
-      │
-      ▼
-syncFromPointGraph()
-      │
-      ▼
-activate()
-`
+Полная:
 
-Новый backend перед активацией получает актуальное состояние из PointGraphManager.
-
-Поэтому backend не должен продолжать вычисление со старым состоянием после переключения.
-
-Критический инвариант:
-
-> В каждый момент времени только один backend имеет право выполнять physics и записывать physics result обратно в PointGraphManager.
-
-### Состояние переключателя в UI
-
-UI-переключатель должен показывать только backend, которые успешно созданы и доступны.
-
-Например:
-
-`text
-Physics backend:
-  ○ WASM
-  ○ WebGPU
-`
-
-Если WebGPU factory завершилась ошибкой, UI получает состояние вида:
-
-`text
-WASM    available
-WebGPU  unavailable
-`
-
-и не предлагает выполнить переключение на недоступный backend.
-
-Причина ошибки может быть доступна для diagnostics, но UI не должен самостоятельно проверять WebGPU/WASM capabilities.
-
-### Создание и переключение не смешиваются
-
-Важно различать две операции:
-
-1. **Factory creation** — можно ли вообще создать backend.
-2. **Activation** — какой из уже созданных backend сейчас выполняет physics.
-
-Factory отвечает за первое. Index отвечает за второе.
-
-Это позволяет иметь оба backend созданными для исследовательского сравнения, но исключает их одновременное выполнение.
-
----
-
-## 9. Взаимодействие с AppMediator
-
-Активный backend holder подписывается на необходимые события `AppMediator`. Неактивный holder не обрабатывает physics events.
-
-Особенно важно событие изменения позиции точки.
-
-Holder **не должен знать, что изменение произошло из-за drag**. Drag — это ответственность `PointsScene`/UI.
-
-Для backend это всего лишь событие:
-
-```text
-AppMediator
-    │
-    │ point-updating / point-updated
-    │ { pointId }
-    ▼
-active backend holder
-```
-
-Payload mediator event содержит идентификатор точки, а не полную структуру `Point`.
-
-Получив `pointId`, активный holder:
-
-1. определяет соответствующий backend buffer index;
-2. самостоятельно получает актуальное состояние точки из своего `PointGraphManager`;
-3. обновляет только необходимую область backend state.
-
-То есть поток выглядит так:
-
-```text
-PointsScene
-    │
-    ▼
-AppMediator.point-updating(pointId)
-    │
-    ├──────────────────────┐
-    ▼                      ▼
-WasmPhysicsMemory    WebGpuPhysicsMemory
-    │                      │
-    │ read PointGraphManager
-    │                      │
-    ▼                      ▼
-update WASM state     update GPU state
-```
-
-Backend holders не должны зависеть друг от друга и не должны пересылать друг другу изменения.
-
----
-
-## 9. Holder читает PointGraphManager по необходимости
-
-`PointGraphManager` передаётся holder в конструкторе как основной domain source.
-
-Это не означает постоянную синхронизацию всего массива.
-
-Holder самостоятельно определяет, когда ему требуется чтение:
-
-### Полная синхронизация
-
-Используется при:
-
-- первоначальной инициализации backend;
-- добавлении/удалении большого набора данных;
-- полном rebuild;
-- явном запросе полной синхронизации.
-
-Поток:
-
-```text
+~~~text
 PointGraphManager
-       │
-       │ read current state
-       ▼
-Backend holder
-       │
-       ▼
-backend physics state
-```
+      ↓
+transformer.load()
+      ↓
+backend memory
+~~~
 
-### Точечная синхронизация
+После вычисления:
 
-Используется при изменении одной точки:
-
-```text
-pointId
-   │
-   ▼
+~~~text
+backend memory
+      ↓
+transformer.save()
+      ↓
 PointGraphManager
-   │
-   │ read current Point
-   ▼
-Backend holder
-   │
-   ▼
-buffer[index]
-```
+~~~
 
-### Выгрузка результата
+Для будущих событий изменения отдельной точки предусмотрены loadPoint(index) и savePoint(index).
 
-После выполнения physics holder при необходимости переносит актуальные координаты обратно в `PointGraphManager`:
+Это позволяет позднее обновлять backend state без полной перезагрузки массива.
 
-```text
-backend state
-    │
-    │ download / readback
-    ▼
+## 11. Point layout
+
+Backend state использует фиксированный stride:
+
+~~~text
+x       float32
+y       float32
+z       float32
+fixed   int32
+----------------
+16 bytes
+~~~
+
+fixed намеренно является int32, а не float32.
+
+Причины:
+- сохраняется 16-byte layout;
+- это дискретное состояние;
+- поле можно расширить до bit flags;
+- C++ и WGSL получают одинаковое представление.
+
+WASM:
+
+~~~cpp
+struct PointState {
+  float x;
+  float y;
+  float z;
+  int32_t fixed;
+};
+~~~
+
+WGSL:
+
+~~~wgsl
+struct PointState {
+  x: f32,
+  y: f32,
+  z: f32,
+  fixed: i32,
+};
+~~~
+
+## 12. WASM implementation
+
+Source:
+
+~~~text
+packages/client/src/physics/wasm/z-damping.cpp
+~~~
+
+Export:
+
+~~~text
+z_damping
+~~~
+
+Lifecycle:
+
+~~~text
+WasmZDapperAlgorithm
+      ↓
+WasmPointsTransformer.load()
+      ↓
+WebAssembly.Memory
+      ↓
+z_damping(...)
+      ↓
+WasmPointsTransformer.save()
+      ↓
 PointGraphManager
-    │
-    ▼
-existing Point objects
-```
+~~~
 
-Таким образом, holder сам управляет частотой и объёмом синхронизации. Нет требования постоянно копировать `Point[]`.
+WASM module загружается через fetch и создаётся WebAssembly.Instance.
 
----
+Браузер не компилирует C++ непосредственно при запуске. C++ должен быть заранее собран в WASM module.
 
-## 10. Полный physics pass
+Текущий C++ алгоритм:
+- fixed points не изменяются;
+- точки с abs(z) <= threshold не изменяются;
+- z' = z * (1 - dampingFactor);
+- значения около нуля обнуляются;
+- temperature = максимум abs(z' - z).
 
-Для backend выполняется:
+## 13. WASM memory
 
-```text
-PointGraphManager
-        │
-        │ read/upload when required
-        ▼
-backend holder
-        │
-        ├── Repulsion
-        ├── Graph physics
-        └── Z-damping
-        │
-        │ write back when required
-        ▼
-PointGraphManager
-        │
-        ▼
-D3 / SVG
-```
+Каждый WASM module instance имеет собственную exported WebAssembly.Memory.
 
-Между отдельными physics запрещены промежуточные:
+WasmBackend хранит instance state по ID.
 
-- backend → JavaScript;
-- JavaScript → backend.
+После initialize:
 
-Таким образом, не должно быть цепочки `JS → GPU → JS → GPU → JS` между отдельными алгоритмами.
+~~~text
+backend.createInstance(...)
+        ↓
+instanceId
+        ↓
+transformer.attachInstance(instanceId)
+~~~
 
----
+Allocation выполняется внутри memory соответствующего instance.
 
-## 11. Явные операции синхронизации
+Это позволяет поддерживать несколько algorithm instances без смешивания memory state.
 
-Backend holder должен концептуально предоставлять операции:
+## 14. WebGPU implementation
 
-```text
-syncFromPointGraph()
-    ↓
-backend physics state
-    ↓
-runPhysicsStep(...)
-    ↓
-syncToPointGraph()
-```
+Source:
 
-Для частичного изменения:
+~~~text
+packages/client/src/physics/webgpu/z-damping.wgsl
+~~~
 
-```text
-pointId
-    ↓
-syncPointFromPointGraph(pointId)
-    ↓
-backend buffer
-```
+Entry points:
 
-Названия методов являются концептуальными и не фиксируют окончательный TypeScript API.
+~~~text
+updatePoints
+reduceTemperature
+~~~
 
-### Upload / sync from
+Lifecycle:
 
-Первичная синхронизация переносит необходимые данные из `PointGraphManager` в backend state.
-
-Полная повторная загрузка требуется только тогда, когда holder считает её необходимой или получена команда полной синхронизации.
-
-### Download / sync to
-
-Синхронизация обратно обновляет существующие `Point` in-place.
-
-Новый `Point[]` не создаётся. После синхронизации существующие D3/SVG сцены продолжают работать с теми же объектами.
-
----
-
-## 12. Изменение одной точки
-
-Для изменения одной точки не требуется повторно загружать весь массив.
-
-Концептуально:
-
-```text
-AppMediator.point-updating(pointId)
-            │
-            ▼
-backend holder
-            │
-            ├── PointGraphManager.get(pointId)
-            │
-            ▼
-updatePoint(index, state)
-            │
-            ▼
-backend buffer
-```
-
-Это одинаковый логический контракт для WASM и WebGPU, хотя конкретный механизм записи различается.
-
----
-
-## 13. Mapping Point → buffer index
-
-Backend работает с индексами, а domain-модель идентифицирует точки через `Point.id`.
-
-Нужен явный контракт:
-
-```text
-Point.id ↔ physics buffer index
-```
-
-Нельзя считать индекс неизменным навсегда: `EntityCollection` использует swap-with-last при удалении.
-
-Поэтому mapping должен корректно обновляться при:
-
-- добавлении точки;
-- удалении точки;
-- обновлении одной точки;
-- передаче graph edges в backend.
-
-Mapping является частью ответственности backend holder, а не mediator.
-
----
-
-## 14. Physics state layout
-
-Минимально state должен представлять:
-
-- `x`;
-- `y`;
-- `z`;
-- fixed/non-fixed состояние;
-- соответствие point index.
-
-Для Graph physics нужны индексы:
-
-```text
-edge → source index + target index
-```
-
-Точный layout пока не фиксируется. Возможны AoS и SoA. Выбор должен быть сделан после анализа требований WASM и WGSL, а не случайно вслед за первой реализацией.
-
----
-
-## 15. Physics algorithms
-
-Backend сохраняет математическую семантику текущих алгоритмов.
-
-### Repulsion
-
-Текущая реализация имеет сложность порядка `O(N²)`. Первая WASM/WebGPU версия не должна одновременно менять математический алгоритм: иначе сравнение backend будет смешивать изменение backend и изменение алгоритма.
-
-Оптимизация алгоритма, например spatial grid или Barnes-Hut, является отдельным исследованием.
-
-### Graph physics
-
-Текущая сложность порядка `O(E)`.
-
-На GPU наивный edge-parallel kernel с одновременной записью обоих endpoint может создать race condition. Поэтому GPU-реализация должна использовать безопасную схему накопления/агрегации изменений.
-
-### Z-damping
-
-Z-damping остаётся отдельным pass и использует тот же backend state.
-
----
-
-## 16. Порядок physics
-
-Для обоих backend:
-
-```text
-Repulsion
-    ↓
-Graph physics
-    ↓
-Z-damping
-```
-
-Все три алгоритма используют один state соответствующего holder.
-
----
-
-## 17. WebGPU
-
-Целевой GPU backend — именно WebGPU Compute + WGSL:
-
-```text
-WebGPU
-    ↓
-WebGpuPhysicsMemory
-    ↓
+~~~text
+WebGpuZDapperAlgorithm
+      ↓
+WebGpuPointsTransformer.load()
+      ↓
 GPUBuffer
-    ↓
-Compute Pipeline
-    ↓
-WGSL kernels
-```
-
-WebGL не является целевым backend.
-
-WebGPU holder отвечает за backend-specific:
-
-- `GPUBuffer`;
-- bind groups;
-- compute pipelines;
-- command encoding;
-- dispatch;
-- synchronization/readback.
-
-Все physics kernels используют общий GPU state. Объединение kernels или иные dispatch-оптимизации рассматриваются после получения корректной базовой реализации и измерений.
-
----
-
-## 18. WASM
-
-WASM backend использует собственную linear memory:
-
-```text
+      ↓
+updatePoints
+      ↓
+reduceTemperature
+      ↓
+copy/readback
+      ↓
+WebGpuPointsTransformer.save()
+      ↓
 PointGraphManager
-    ↓
-WasmPhysicsMemory
-    ↓
-WASM linear memory
-    ↓
-WASM kernels/functions
-    ↓
-Repulsion
-    ↓
-Graph
-    ↓
-Z-damping
-    ↓
-WasmPhysicsMemory
-    ↓
-PointGraphManager
-```
+~~~
 
-WASM holder отвечает за backend-specific:
+## 15. WebGPU temperature reduction
 
-- выделение и управление linear memory;
-- layout physics state;
-- передачу данных в WASM;
-- вызов WASM functions/kernels;
-- получение результатов;
-- lifecycle WASM instance.
+Temperature — максимум displacement.
 
-Реализация может быть выполнена, например, на Rust или C++. Выбор языка не должен менять physics contract.
+Первый pass:
 
----
+~~~text
+point displacement
+      ↓
+local workgroup reduction
+      ↓
+workgroupMaxima
+~~~
 
-## 19. JavaScript и D3/SVG
+Второй pass:
 
-Пока renderer остаётся SVG/D3, WebGPU physics неизбежно требует GPU → CPU → JavaScript readback для передачи актуальных координат SVG.
+~~~text
+workgroupMaxima
+      ↓
+single workgroup reduction
+      ↓
+temperature[0]
+~~~
 
-Поэтому benchmark должен отделять:
+Текущий prototype использует workgroup size 256 и максимум 256 workgroups, то есть максимум 65 536 точек для этого двухпроходного reduction.
 
-- время GPU physics;
-- GPU readback;
-- обновление `Point[]`;
-- D3/SVG update;
-- полный pass/frame.
+Это ограничение prototype, а не общий предел WebGPU.
 
-Нельзя оценивать backend только по времени compute kernels.
+## 16. WebGPU buffers
 
----
+WebGpuPointsTransformer владеет:
+- point storage buffer;
+- full readback buffer;
+- one-point readback buffer;
+- capacity;
+- count.
 
-## 20. Численная точность
+Поэтому transformer.save() не получает внешний readback buffer: transformer использует собственный storage.
 
-JavaScript `number` и backend `float32` могут давать небольшие расхождения.
+Algorithm получает buffer handles только через публичные методы transformer, когда они необходимы для bind group и copy commands.
 
-До реализации необходимо определить:
+## 17. WebGPU async boundary
 
-- формат координат;
-- допустимую абсолютную/относительную погрешность;
-- правила сравнения WASM/WebGPU с reference implementation.
+GPU execution и readback асинхронны.
 
-Побитовое совпадение не следует требовать при различающейся floating-point precision.
+Реальный prototype step находится в:
 
----
+~~~text
+executeAsyncStep(deltaTime): Promise<number>
+~~~
 
-## 21. Граница ответственности
+Текущий synchronous BaseAlgorithm.applyStep() намеренно не пытается блокировать ожидание GPU и сообщает, что WebGPU Z-damping требует async AnimationEngine support.
 
-`PointGraphManager` не должен знать детали Rust/WASM или WebGPU.
+Следовательно, WebGPU prototype готов на уровне backend/algorithm execution, но не должен подключаться к существующему synchronous animation loop как обычный synchronous algorithm.
 
-Он остаётся domain storage и источником истины.
+Для этого требуется отдельная задача:
 
-```text
+~~~text
+packages/client/tasks/AnimationEngine-async-callbacks.md
+~~~
+
+AnimationEngine не должен знать о WASM или WebGPU. Async contract должен быть generic.
+
+## 18. Backend fallback
+
+В composition root создаётся один EnginePipeline.
+
+На текущем состоянии ветки experimental configuration пытается:
+
+~~~text
+create EnginePipeline once
+        ↓
+try WebGPU
+        │
+        ├── success → setConfiguration(...)
+        │
+        └── failure
+              ↓
+         try WASM
+              │
+              ├── success → setConfiguration(...)
+              │
+              └── failure
+                    ↓
+              default JS pipeline
+~~~
+
+Таким образом fallback меняет configuration одного pipeline, а не создаёт новый pipeline.
+
+Текущий порядок попыток в index.ts: WebGPU → WASM → default JS.
+
+## 19. Default и experimental pipelines
+
+Default:
+
+~~~text
+JS Repulsion
+JS Graph
+JS Z-damping
+~~~
+
+WASM:
+
+~~~text
+JS Repulsion
+JS Graph
+WASM Z-damping
+~~~
+
+WebGPU:
+
+~~~text
+JS Repulsion
+JS Graph
+WebGPU Z-damping
+~~~
+
+Это промежуточный этап исследования. Конечная цель — иметь backend implementations для всех трёх algorithms при сохранении одного EnginePipeline.
+
+## 20. Shared mathematical semantics
+
+Для Z-damping JavaScript, WASM и WebGPU должны использовать одну математическую семантику:
+
+~~~text
+if fixed:
+    unchanged
+
+if abs(z) <= threshold:
+    unchanged
+
+z' = z * (1 - dampingFactor)
+
+if abs(z') < epsilon:
+    z' = 0
+
+temperature = abs(z' - z)
+
+overall temperature = max(displacement)
+~~~
+
+Floating-point differences допустимы в пределах ожидаемой численной погрешности, но смысл algorithm должен оставаться одинаковым.
+
+Temperature является величиной фактического изменения состояния.
+
+## 21. Будущее расширение до полного backend physics
+
+После Z-damping потенциальная структура:
+
+~~~text
+WASM:
+  WasmRepulsionAlgorithm
+  WasmGraphAlgorithm
+  WasmZDapperAlgorithm
+
+WebGPU:
+  WebGpuRepulsionAlgorithm
+  WebGpuGraphAlgorithm
+  WebGpuZDapperAlgorithm
+~~~
+
+При этом pipeline остаётся один:
+
+~~~text
+EnginePipeline
+    ├── Repulsion
+    ├── Graph
+    └── Z-damping
+~~~
+
+Меняются только конкретные implementations algorithms.
+
+## 22. Graph physics
+
+Graph physics нельзя механически переносить из JavaScript в WGSL.
+
+Возможна конкурентная запись:
+
+~~~text
+edge A ──→ point X
+edge B ──→ point X
+~~~
+
+Поэтому до WebGPU Graph необходимо исследовать:
+- accumulation model;
+- ownership записи координат;
+- промежуточные buffers;
+- atomic operations, если они действительно нужны;
+- количество passes;
+- synchronization cost.
+
+## 23. Repulsion
+
+Repulsion потенциально имеет большую вычислительную стоимость, включая попарные взаимодействия.
+
+Перед переносом необходимо исследовать:
+- memory access pattern;
+- workgroup organization;
+- spatial partitioning, если потребуется;
+- количество dispatch;
+- промежуточные buffers;
+- CPU/GPU synchronization.
+
+Буквальный перенос JavaScript loop не считается автоматически приемлемым GPU algorithm.
+
+## 24. Возможные execution models
+
+Архитектура не фиксирует заранее один способ организации kernels.
+
+WebGPU может использовать:
+- отдельные entry points;
+- один shader module с несколькими entry points;
+- несколько compute passes;
+- объединённые passes, если это оправдано зависимостями и измерениями.
+
+WASM может использовать:
+- один module с несколькими exported functions;
+- несколько modules;
+- общий state;
+- отдельные compiled units.
+
+Решение принимается по:
+1. корректности;
+2. upload/readback cost;
+3. dispatch count;
+4. synchronization cost;
+5. reuse state;
+6. производительности;
+7. сложности сопровождения.
+
+## 25. Domain state и backend state
+
+Логически physics state один, физически storage разный:
+
+~~~text
 PointGraphManager
        │
-       │ domain state
+       ├── WASM storage
        │
- ┌─────┴─────────────────────────┐
- │                               │
- ▼                               ▼
-WasmPhysicsMemory          WebGpuPhysicsMemory
- │                               │
- ├─ state                        ├─ state
- ├─ sync                         ├─ sync
- ├─ algorithms                   ├─ algorithms
- └─ execution core               └─ execution core
- │                               │
- ▼                               ▼
-WASM runtime                 WebGPU runtime
-```
+       └── WebGPU storage
+~~~
 
-Медиатор также не должен знать backend details. Он сообщает события и небольшие идентификаторы/состояния.
+Нельзя предполагать прямой alias между WebAssembly.Memory и обычным WebGPU GPUBuffer.
 
-Backend holder получает domain data напрямую из `PointGraphManager`, когда это необходимо.
+Две физические копии не означают два domain sources of truth.
 
----
+## 26. Partial synchronization
 
-## 22. Что не входит в эту фиксацию
+loadPoint(index) и savePoint(index) подготовлены для будущего уменьшения upload/readback.
 
-Здесь не реализуются:
+Backend не должен знать, почему точка изменилась. Drag является ответственностью UI/scene.
 
-- WASM backend;
-- WebGPU backend;
-- WGSL kernels;
-- новый physics algorithm;
-- перенос SVG/D3 на GPU;
-- автоматические backend-тесты;
-- конкретный WASM ABI;
-- окончательный AoS/SoA layout;
-- окончательный mapping API;
-- benchmark harness.
+Для backend существует только изменение point state.
 
----
+## 27. Renderer synchronization
 
-## 23. Ключевые инварианты
+Renderer остаётся JavaScript/D3/SVG.
 
-1. `PointGraphManager` остаётся domain source of truth.
-2. WASM и WebGPU имеют собственные physical storage.
-3. Каждый backend holder получает `PointGraphManager` в конструкторе.
-4. Backend holders независимы друг от друга.
-5. Holder не является пассивным buffer wrapper: он также является backend execution core.
-6. Три логических physics algorithm имеют шесть backend-specific реализаций.
-7. Каждый algorithm работает со своим совместимым backend holder.
-8. Медиатор передаёт события, а не большие структуры данных.
-9. При изменении точки holder получает `pointId` и сам читает актуальный `Point` из `PointGraphManager`.
-10. Holder самостоятельно определяет необходимость полной или частичной синхронизации.
-11. Drag не является частью backend contract; backend видит только изменение точки.
-12. Один backend выполняет Repulsion → Graph → Z-damping на одном состоянии.
-13. Между алгоритмами одного backend нет промежуточного JS readback/upload.
-14. Существующие `Point` обновляются in-place.
-15. Изменение одной точки не требует полной загрузки.
-16. Graph edges передаются как buffer indices, а не JS object references.
-17. WASM и WebGPU сохраняют одну математическую семантику.
-18. WebGPU использует WebGPU/WGSL, а не WebGL.
-19. GPU readback и D3/SVG учитываются отдельно при benchmark.
-20. Swap-with-last в `EntityCollection` не должен ломать point → buffer index mapping.
-21. `PointGraphManager` не знает деталей конкретного backend.
-22. `AppMediator` не становится транспортом backend state.
-23. В каждый момент времени активен только один physics backend.
-24. Неактивный backend не выполняет physics и не пишет результаты в `PointGraphManager`.
-25. Создание backend выполняется через static factory с обязательной проверкой capabilities.
-26. Ошибка создания одного backend не должна автоматически делать недоступным другой backend.
-27. UI не создаёт backend напрямую.
-28. UI сообщает выбор backend через `AppMediator`.
-29. `Index` является composition root и выполняет фактическое переключение active backend.
-30. Перед активацией нового backend его state синхронизируется из `PointGraphManager`.
+Backend result возвращается в существующие Point:
 
----
+~~~text
+backend physics
+      ↓
+save / savePoint
+      ↓
+PointGraphManager
+      ↓
+Point[]
+      ↓
+D3 / SVG
+~~~
 
-## 24. Следующий этап
+Backend не создаёт отдельную render model.
 
-До реализации необходимо отдельно определить:
+## 28. Lifecycle и ошибки
 
-1. точный physics state layout;
-2. API holder `syncFromPointGraph` / `syncToPointGraph` / `syncPointFromPointGraph`;
-3. lifecycle синхронизации при add/remove;
-4. `Point.id ↔ buffer index`;
-5. представление edges;
-6. безопасный GPU Graph physics;
-7. floating-point contract;
-8. WASM ABI;
-9. WebGPU buffer layout и bind groups;
-10. способ создания согласованного набора из трёх algorithms для каждого backend;
-11. backend public interface: initialize / activate / deactivate / sync / destroy;
-12. static factory и capability checks;
-13. lifecycle переключения active backend;
-14. benchmark contract.
+Backend-specific algorithm должен иметь lifecycle:
 
-После согласования этих решений WASM и WebGPU backend можно реализовывать независимо, сохраняя единый physics contract.
+~~~text
+create backend
+    ↓
+create algorithm
+    ↓
+initialize
+    ↓
+execute
+    ↓
+destroy
+~~~
 
+Ошибка создания конкретного backend означает, что этот backend недоступен для текущей configuration attempt, а не обязательно ошибку всего приложения.
 
----
+Composition root может перейти к следующему backend или default JS pipeline.
 
-> **Продолжение документа**
->
-> Основная предыдущая фиксация сохранена без удаления. Последующие уточнения архитектуры вынесены в отдельный документ:
->
-> **[Physics-WASM-WebGPU-followup.md](./Physics-WASM-WebGPU-followup.md)**
->
-> При реализации необходимо читать оба документа. Этот файл является исторической фиксацией предыдущих решений и не заменяется новым документом.
+При уничтожении должны освобождаться backend instance, GPU buffers, transformer state и остальные ресурсы, которыми владеет конкретный implementation.
+
+## 29. Ограничения текущего prototype
+
+Сейчас:
+- backend реализован только для Z-damping;
+- Repulsion и Graph остаются JS;
+- WebGPU execution требует async AnimationEngine support;
+- WebGPU reduction ограничен 65 536 точками;
+- полная синхронизация остаётся основным execution path;
+- partial synchronization подготовлена;
+- оптимальная организация полного backend pipeline ещё требует измерений.
+
+Это ограничения текущего исследовательского этапа.
+
+## 30. Что не следует делать
+
+Не следует:
+- создавать отдельные Js/Wasm/WebGpu PhysicsPipeline;
+- создавать новый EnginePipeline для каждого backend;
+- передавать source URL из index.ts;
+- хранить PointGraphManager внутри generic backend;
+- смешивать backend runtime с physics semantics;
+- передавать transformer чужие buffer handles для storage, которым он владеет;
+- хранить fixed как float;
+- делать WebGPU synchronous через блокирующее ожидание;
+- переносить Graph в WGSL без решения concurrent writes;
+- считать backend memory новым domain source of truth;
+- дублировать configuration objects для backend.
+
+## 31. Следующие этапы
+
+1. Завершить generic async callback contract в AnimationEngine.
+2. Подключить WebGPU Z-damping к основному pipeline.
+3. Сравнить JS/WASM/WebGPU на одинаковом workload.
+4. Переносить Repulsion.
+5. Переносить Graph после решения accumulation.
+6. Оптимизировать upload/readback.
+7. Измерить полный pipeline.
+
+Измерять отдельно:
+- execution time;
+- upload time;
+- readback time;
+- synchronization cost;
+- total frame cost;
+- temperature;
+- численные расхождения.
+
+## 32. Статус
+
+[x] единый EnginePipeline
+[x] setConfiguration для выбора backend
+[x] единый набор трёх configurations
+[x] generic WASM backend
+[x] generic WebGPU backend
+[x] WASM transformer
+[x] WebGPU transformer
+[x] общий point layout
+[x] fixed: int32
+[x] WASM Z-damping prototype
+[x] WebGPU Z-damping prototype
+[x] source ownership внутри algorithms
+[x] backend fallback composition
+[x] async boundary для WebGPU
+[ ] async callback support в AnimationEngine
+[ ] включение WebGPU Z-damping в основной pipeline
+[ ] backend Repulsion
+[ ] backend Graph
+[ ] performance comparison
+
+Документ является одновременно архитектурной документацией и задачей на дальнейшую реализацию/исследование. Он отражает текущее состояние исходников и принятые решения.
