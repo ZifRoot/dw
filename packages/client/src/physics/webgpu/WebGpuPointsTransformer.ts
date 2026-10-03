@@ -9,7 +9,7 @@ const POINT_BYTES = POINT_STRIDE * Float32Array.BYTES_PER_ELEMENT;
 
 export class WebGpuPointsTransformer {
   private pointsBuffer: WebGpuBuffer | null = null;
-  private readbackBuffer: WebGpuBuffer | null = null;
+  private readbackBuffer: WebGpuBuffer | null = null;\n  private scratchBuffer: WebGpuBuffer | null = null;
   private pointReadbackBuffer: WebGpuBuffer | null = null;
   private capacity = 0;
   private count = 0;
@@ -120,7 +120,7 @@ export class WebGpuPointsTransformer {
     return this.pointsBuffer;
   }
 
-  public getReadbackBuffer(): WebGpuBuffer {
+  public getScratchBuffer(): WebGpuBuffer {\n    if (!this.scratchBuffer) {\n      throw new Error("WebGPU points scratch buffer is not initialized.");\n    }\n\n    return this.scratchBuffer;\n  }\n\n  public getReadbackBuffer(): WebGpuBuffer {
     if (!this.readbackBuffer) {
       throw new Error("WebGPU points readback buffer is not initialized.");
     }
