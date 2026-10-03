@@ -11,6 +11,7 @@ const PARAMETER_BYTES = 16;
 
 export class WebGpuGraphAlgorithm extends BaseAlgorithm {
   private pipeline: WebGpuComputePipeline | null = null;
+  private reductionPipeline: WebGpuComputePipeline | null = null;
   private readonly temperatureBuffer: WebGpuBuffer;
   private readonly maximaBuffer: WebGpuBuffer;
   private readonly parametersBuffer: WebGpuBuffer;
@@ -36,10 +37,13 @@ export class WebGpuGraphAlgorithm extends BaseAlgorithm {
     const sourceUrl = new URL("./graph.wgsl", import.meta.url);
     this.instanceId = await this.backend.createInstance(sourceUrl);
     this.pipeline = this.backend.createComputePipeline(this.instanceId, "graph");
+    this.reductionPipeline = this.backend.createComputePipeline(this.instanceId, "reduceTemperature");
   }
 
   public async executeAsyncStep(_deltaTime: number): Promise<number> {
-    if (!this.pipeline) throw new Error("WebGPU Graph algorithm is not initialized.");
+    if (!this.pipeline || !this.reductionPipeline) {
+      throw new Error("WebGPU Graph algorithm is not initialized.");
+    }
 
     const pointCount = this.pointsTransformer.getCount();
     this.edgesTransformer.load();
@@ -71,6 +75,7 @@ export class WebGpuGraphAlgorithm extends BaseAlgorithm {
 
     this.backend.submit([
       { pipeline: this.pipeline, bindGroup, workgroupCount },
+      { pipeline: this.reductionPipeline, bindGroup, workgroupCount: 1 },
     ], [
       {
         source: this.pointsTransformer.getScratchBuffer(),
@@ -107,5 +112,6 @@ export class WebGpuGraphAlgorithm extends BaseAlgorithm {
     if (this.instanceId !== null) this.backend.destroyInstance(this.instanceId);
     this.instanceId = null;
     this.pipeline = null;
+    this.reductionPipeline = null;
   }
 }
