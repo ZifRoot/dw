@@ -47,3 +47,4 @@ export const BACKUP_TABLES: BackupTable[] = [
 ];
 
 export const BACKUP_TABLE_MAP = new Map(BACKUP_TABLES.map((table) => [table.name, table]));
+export const BACKUP_TABLE_ORDER = BACKUP_TABLES.map((table) => table.name);
