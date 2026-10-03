@@ -4,7 +4,7 @@ import { SvgEngine } from "@core/Engines/SvgEngine";
 import { createControlPanel, createInfoPanel } from "./ui";
 import { RepulsionAlgorithm, RepulsionEngineConfig } from "./physics/RepulsionAlgorithm";
 import { AnimationEngine } from "@core/Engines/AnimationEngine";
-import { EnginePipeline } from "@core/Engines/EnginePipeline";
+import { EnginePipeline, EnginePipelineSynchronization } from "@core/Engines/EnginePipeline";
 import { GraphAlgorithm, GraphEngineConfig } from "./physics/GraphAlgorithm";
 import { ZDampingConfig, ZDapperAlgorithm } from "./physics/ZDapperAlgorithm";
 import { DataManager } from "./data/DataManager";
@@ -18,6 +18,9 @@ import { EdgesScene } from "@core/Scenes/EdgesScene";
 import { WasmBackend } from "@core/Backends/WasmBackend";
 import { WebGpuBackend } from "@core/Backends/WebGpuBackend";
 import { WasmZDapperAlgorithm } from "./physics/wasm/WasmZDapperAlgorithm";
+import { WasmRepulsionAlgorithm } from "./physics/wasm/WasmRepulsionAlgorithm";
+import { WasmGraphAlgorithm } from "./physics/wasm/WasmGraphAlgorithm";
+import { WasmEdgesTransformer } from "./physics/wasm/WasmEdgesTransformer";
 import { WasmPointsTransformer } from "./physics/wasm/WasmPointsTransformer";
 import { WebGpuZDapperAlgorithm } from "./physics/webgpu/WebGpuZDapperAlgorithm";
 import { WebGpuPointsTransformer } from "./physics/webgpu/WebGpuPointsTransformer";
@@ -88,16 +91,31 @@ class Backends {
     configurations: PhysicsConfigurations,
   ) {
     const backend = await WasmBackend.create();
-    const transformer = new WasmPointsTransformer(pointGraphManager, backend);
-    const algorithm = new WasmZDapperAlgorithm(mediator, configurations.zdamping, backend, transformer);
+    const memory = backend.createMemory();
+    const pointsTransformer = new WasmPointsTransformer(pointGraphManager, backend);
+    const edgesTransformer = new WasmEdgesTransformer(pointGraphManager, backend);
 
-    await algorithm.initialize();
+    const repulsion = new WasmRepulsionAlgorithm(mediator, configurations.repulsion, backend, pointsTransformer);
+    const graph = new WasmGraphAlgorithm(mediator, configurations.graph, backend, pointsTransformer, edgesTransformer);
+    const zdamping = new WasmZDapperAlgorithm(mediator, configurations.zdamping, backend, pointsTransformer);
 
-    pipeline.setConfiguration([
-      { name: "Отталкивание", algorithm: new RepulsionAlgorithm(mediator, pointGraphManager, configurations.repulsion) },
-      { name: "Связи", algorithm: new GraphAlgorithm(mediator, pointGraphManager, configurations.graph) },
-      { name: "Затухание по Z", algorithm },
-    ]);
+    await repulsion.initialize(memory);
+    await graph.initialize(memory);
+    await zdamping.initialize(memory);
+
+    const synchronization: EnginePipelineSynchronization = {
+      load: () => pointsTransformer.load(),
+      save: () => pointsTransformer.save(),
+    };
+
+    pipeline.setConfiguration(
+      [
+        { name: "Отталкивание", algorithm: repulsion },
+        { name: "Связи", algorithm: graph },
+        { name: "Затухание по Z", algorithm: zdamping },
+      ],
+      synchronization,
+    );
     return true;
   }
 
