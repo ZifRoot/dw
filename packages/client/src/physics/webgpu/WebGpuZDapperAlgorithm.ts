@@ -133,6 +133,10 @@ export class WebGpuZDapperAlgorithm extends BaseAlgorithm {
     }
   }
 
+  protected applyStep(_deltaTime: number): number {
+    throw new Error("WebGPU Z-damping requires async AnimationEngine support.");
+  }
+
   public getStopTemperature(): number {
     return this.config.stopTemperature;
   }
