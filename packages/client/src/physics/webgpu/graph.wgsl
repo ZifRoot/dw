@@ -66,7 +66,6 @@ fn graph(
         result.y -= move.y;
         result.z -= move.z;
       }
-
       maxTemperature = max(maxTemperature, temp);
     }
   }
@@ -77,20 +76,26 @@ fn graph(
 
   var stride = WORKGROUP_SIZE / 2u;
   while (stride > 0u) {
-    if (localId.x < stride) {
-      localMaxima[localId.x] = max(localMaxima[localId.x], localMaxima[localId.x + stride]);
-    }
+    if (localId.x < stride) localMaxima[localId.x] = max(localMaxima[localId.x], localMaxima[localId.x + stride]);
     workgroupBarrier();
     stride /= 2u;
   }
 
   if (localId.x == 0u) workgroupMaxima[workgroupId.x] = localMaxima[0];
+}
 
-  if (workgroupId.x == 0u && localId.x == 0u) {
-    var total = 0.0;
-    for (var i = 0u; i < parameters.workgroupCount; i++) {
-      total = max(total, workgroupMaxima[i]);
-    }
-    temperature[0] = total;
+@compute @workgroup_size(256)
+fn reduceTemperature(@builtin(local_invocation_id) localId: vec3<u32>) {
+  let index = localId.x;
+  localMaxima[index] = select(0.0, workgroupMaxima[index], index < parameters.workgroupCount);
+  workgroupBarrier();
+
+  var stride = WORKGROUP_SIZE / 2u;
+  while (stride > 0u) {
+    if (localId.x < stride) localMaxima[localId.x] = max(localMaxima[localId.x], localMaxima[localId.x + stride]);
+    workgroupBarrier();
+    stride /= 2u;
   }
+
+  if (localId.x == 0u) temperature[0] = localMaxima[0];
 }
