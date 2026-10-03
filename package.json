@@ -45,8 +45,11 @@
     "preview:client": "npm --workspace client run preview",
     "typecheck-file:client": "npm --workspace client run typecheck-file",
     "format:client": "npm --workspace client run format",
-    "typecheck:tests": "tsc -p test/tsconfig.json",
-    "test": "tsx --tsconfig test/tsconfig.json --test test/index.ts"
+    "typecheck:tests": "npm run typecheck:tests:utils && npm run typecheck:tests:client && npm run typecheck:tests:server",
+    "test": "tsx --tsconfig test/tsconfig.json --test test/index.ts",
+    "typecheck:tests:utils": "tsc -p test/tsconfig.json",
+    "typecheck:tests:client": "tsc -p packages/client/test/tsconfig.json",
+    "typecheck:tests:server": "tsc -p packages/server/test/tsconfig.json"
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.7.0",
