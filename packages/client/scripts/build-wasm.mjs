@@ -1,41 +1,23 @@
-import { existsSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const directory = fileURLToPath(new URL("../src/physics/wasm/", import.meta.url));
-const source = resolve(directory, "z-damping.cpp");
-const output = resolve(directory, "z-damping.wasm");
+const root = resolve(new URL("..", import.meta.url).pathname);
+const sourceDirectory = resolve(root, "src/physics/wasm");
+const modules = [
+  ["repulsion.cpp", "repulsion.wasm", "repulsion"],
+  ["graph.cpp", "graph.wasm", "graph"],
+  ["z-damping.cpp", "z-damping.wasm", "z_damping"],
+];
 
-if (existsSync(output)) {
-  process.exit(0);
-}
-
-const result = spawnSync(
-  "clang++",
-  [
-    "--target=wasm32",
-    "-O3",
-    "-nostdlib",
-    "-Wl,--no-entry",
-    "-Wl,--export-memory",
-    "-Wl,--export=z_damping",
-    "-o",
-    output,
-    source,
-  ],
-  {
-    stdio: "inherit",
-  },
-);
-
-if (result.error) {
-  throw new Error(
-    `Unable to compile WASM: clang++ is required to build ${source}.`,
-    { cause: result.error },
-  );
-}
-
-if (result.status !== 0) {
-  throw new Error(`WASM compilation failed with exit code ${result.status}.`);
+for (const [sourceName, outputName, exportName] of modules) {
+  const source = resolve(sourceDirectory, sourceName);
+  const output = resolve(sourceDirectory, outputName);
+  if (existsSync(output)) continue;
+  mkdirSync(sourceDirectory, { recursive: true });
+  execFileSync("clang++", [
+    "--target=wasm32", "-O3", "-nostdlib", "-Wl,--no-entry",
+    "-Wl,--import-memory", "-Wl,--export=" + exportName,
+    "-o", output, source,
+  ], { stdio: "inherit" });
 }
