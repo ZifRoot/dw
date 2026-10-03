@@ -15,10 +15,10 @@ export class RepulsionEngineConfig {
 export class RepulsionAlgorithm extends BaseAlgorithm {
   constructor(
     mediator: AppMediator,
-    pointGraphManager: PointGraphManager,
+    private readonly pointGraphManager: PointGraphManager,
     public readonly config: RepulsionEngineConfig,
   ) {
-    super(mediator, pointGraphManager);
+    super(mediator);
   }
 
   public applyPair1(p1: Point, p2: Point) {

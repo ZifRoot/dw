@@ -11,10 +11,10 @@ export class ZDampingConfig {
 export class ZDapperAlgorithm extends BaseAlgorithm {
   constructor(
     mediator: AppMediator,
-    pointGraphManager: PointGraphManager,
+    private readonly pointGraphManager: PointGraphManager,
     public readonly config: ZDampingConfig,
   ) {
-    super(mediator, pointGraphManager);
+    super(mediator);
   }
 
   public applyStep(_deltaTime: number): number {

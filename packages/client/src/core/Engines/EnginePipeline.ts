@@ -18,6 +18,11 @@ export interface EnginePipelineEntry {
   enabled?: boolean;
 }
 
+export interface EnginePipelineSynchronization {
+  load(): void;
+  save(): void | Promise<void>;
+}
+
 export interface EnginePipelineConfigChange {
   engineName: string;
   changes: Record<string, unknown>;
@@ -35,6 +40,7 @@ export interface EnginePipelineConfigChange {
  */
 export class EnginePipeline {
   private entries: EnginePipelineEntry[] = [];
+  private synchronization: EnginePipelineSynchronization | null = null;
   private disposeCallbacks: (() => void) | null = null;
   private running = false;
   private destroyed = false;
@@ -70,10 +76,11 @@ export class EnginePipeline {
   }
 
   /** Установить алгоритмы и их порядок. Повтор одного алгоритма разрешён. */
-  public setConfiguration(entries: EnginePipelineEntry[]): void {
+  public setConfiguration(entries: EnginePipelineEntry[], synchronization: EnginePipelineSynchronization | null = null): void {
     if (this.destroyed) return;
 
     this.stop();
+    this.synchronization = synchronization;
     this.entries = entries.map((entry) => ({
       name: entry.name,
       algorithm: entry.algorithm,
@@ -148,6 +155,8 @@ export class EnginePipeline {
       return;
     }
 
+    this.synchronization?.load();
+
     this.running = true;
     this.lastPointsUpdatedAt = 0;
     this.startCheckpointTimer();
@@ -197,7 +206,7 @@ export class EnginePipeline {
     for (const entry of this.entries) {
       if (!entry.enabled) continue;
 
-      callbacks.push((deltaTime) => {
+      callbacks.push(async (deltaTime) => {
         if (!entry.algorithm.isRunning) return;
 
         const remainingSkipFrames = this.skipFrames.get(entry.algorithm) ?? 0;
@@ -206,7 +215,7 @@ export class EnginePipeline {
           return;
         }
 
-        entry.algorithm.step(deltaTime);
+        await entry.algorithm.stepAsync(deltaTime);
         didExecutePhysics = true;
         this.skipFrames.set(entry.algorithm, this.calculateSkipFrames(entry.algorithm));
       });
@@ -218,7 +227,7 @@ export class EnginePipeline {
       return;
     }
 
-    callbacks.push(() => {
+    callbacks.push(async () => {
       if (!didExecutePhysics) return;
 
       this.publishTemperature();
@@ -226,7 +235,7 @@ export class EnginePipeline {
 
       const activeEntries = this.entries.filter((entry) => entry.enabled);
       if (activeEntries.length > 0 && activeEntries.every((entry) => !entry.algorithm.isRunning)) {
-        this.finishRun();
+        await this.finishRun();
       }
 
       didExecutePhysics = false;
@@ -330,11 +339,18 @@ export class EnginePipeline {
   }
 
   /** Завершить один фактический цикл физического расчёта. */
-  private finishRun(): void {
+  private async finishRun(): Promise<void> {
     if (!this.running) return;
 
     this.running = false;
     this.stopCheckpointTimer();
+
+    try {
+      await this.synchronization?.save();
+    } catch (error) {
+      console.error("EnginePipeline synchronization save failed", error);
+    }
+
     this.publishTemperature();
     this.temperatureCoagulator.flush();
     this.emitPointsUpdated();

@@ -976,3 +976,6 @@ packages/client/src/shared/*
 packages/server/src/shared/*
 */~/*
 /packages/server/drizzle1/*
+
+# Generated WebAssembly modules
+packages/client/src/physics/wasm/*.wasm
