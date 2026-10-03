@@ -26,10 +26,11 @@ fn graph(
   @builtin(workgroup_id) workgroupId: vec3<u32>,
 ) {
   let index = globalId.x;
-  var result = points[index];
+  var result = PointState(0.0, 0.0, 0.0, 0);
   var maxTemperature = 0.0;
 
   if (index < parameters.pointCount) {
+    result = points[index];
     for (var edgeIndex = 0u; edgeIndex < parameters.edgeCount; edgeIndex++) {
       let edge = edges[edgeIndex];
       if (edge.physics == 0) { continue; }
@@ -70,7 +71,9 @@ fn graph(
     }
   }
 
-  outputPoints[index] = result;
+  if (index < parameters.pointCount) {
+    outputPoints[index] = result;
+  }
   localMaxima[localId.x] = select(0.0, maxTemperature, index < parameters.pointCount);
   workgroupBarrier();
 
