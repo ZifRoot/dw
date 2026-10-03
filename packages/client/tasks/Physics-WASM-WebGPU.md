@@ -228,15 +228,19 @@ transformer.load()
 backend memory
 ~~~
 
-После вычисления:
+После завершения synchronization boundary pipeline:
 
 ~~~text
 backend memory
+      ↓
+Save step
       ↓
 transformer.save()
       ↓
 PointGraphManager
 ~~~
+
+Algorithm не обязан выполнять `save()` после своего шага. Если следующий algorithm использует тот же backend storage, результат должен оставаться в backend memory.
 
 Для будущих событий изменения отдельной точки предусмотрены loadPoint(index) и savePoint(index).
 
@@ -678,6 +682,166 @@ D3 / SVG
 
 Backend не создаёт отдельную render model.
 
+## 27. Синхронизация между несколькими backend algorithms
+
+Важное архитектурное уточнение: backend algorithm не должен автоматически выгружать результат обратно в PointGraphManager после каждого своего шага.
+
+Если несколько algorithms последовательно работают в одном backend storage, предпочтительная схема:
+
+~~~text
+Load
+  ↓
+Repulsion
+  ↓
+Graph
+  ↓
+Z-damping
+  ↓
+Save
+~~~
+
+Если, например, Repulsion и Graph выполняются на GPU, схема не должна превращаться в:
+
+~~~text
+GPU → PointGraphManager → GPU → PointGraphManager → GPU
+~~~
+
+Такой промежуточный readback/upload не нужен: следующий algorithm может продолжить работу непосредственно с тем же backend storage.
+
+### 27.1 Отдельные pipeline steps
+
+Pipeline должен иметь явные synchronization steps:
+
+~~~text
+Load
+  ↓
+Algorithm 1
+  ↓
+Algorithm 2
+  ↓
+Algorithm 3
+  ↓
+Save
+~~~
+
+`Load` выполняет начальную передачу domain state в выбранный backend storage.
+
+Algorithms работают над уже загруженным состоянием и не выполняют обязательный `save()` после каждого шага.
+
+`Save` выполняет финальную передачу результата обратно в `PointGraphManager`.
+
+Таким образом, synchronization становится свойством pipeline execution, а не ответственностью конкретного physics algorithm.
+
+### 27.2 Backend storage должен жить дольше одного algorithm
+
+Transformer/backend storage должен быть пригоден для последовательного использования несколькими algorithms одного backend.
+
+Для WebGPU:
+
+~~~text
+GPUBuffer
+   ↓
+Repulsion compute
+   ↓
+same GPUBuffer
+   ↓
+Graph compute
+   ↓
+same GPUBuffer
+   ↓
+Z-damping compute
+   ↓
+same GPUBuffer
+~~~
+
+Для WASM аналогично:
+
+~~~text
+WASM memory
+   ↓
+Repulsion
+   ↓
+same memory
+   ↓
+Graph
+   ↓
+same memory
+   ↓
+Z-damping
+~~~
+
+Это позволяет избежать ненужных копирований и особенно дорогих GPU readback/upload операций.
+
+### 27.3 Разделение ответственности
+
+Algorithm отвечает за вычисление:
+
+~~~text
+Algorithm
+    ↓
+transform backend state
+    ↓
+compute
+    ↓
+updated backend state
+~~~
+
+Pipeline отвечает за границы синхронизации:
+
+~~~text
+Load
+    ↓
+algorithms
+    ↓
+Save
+~~~
+
+Transformer отвечает за механизм преобразования между PointGraphManager и backend storage, но не решает, когда pipeline должен выполнять synchronization.
+
+### 27.4 Важное следствие для Repulsion и Graph
+
+При реализации следующих algorithms сначала необходимо определить, могут ли они работать непосредственно с storage предыдущего algorithm.
+
+Предпочтительная модель для одного backend:
+
+~~~text
+Load
+ ↓
+Repulsion
+ ↓
+Graph
+ ↓
+Z-damping
+ ↓
+Save
+~~~
+
+а не:
+
+~~~text
+Load
+ ↓
+Repulsion
+ ↓
+Save
+ ↓
+Load
+ ↓
+Graph
+ ↓
+Save
+ ↓
+Load
+ ↓
+Z-damping
+ ↓
+Save
+~~~
+
+Исключения допустимы только тогда, когда конкретному algorithm действительно нужен CPU/domain state или backend сменился.
+
+Это решение является важной частью будущего полного WASM/WebGPU pipeline и должно учитываться до реализации Repulsion и Graph.
+
 ## 28. Lifecycle и ошибки
 
 Backend-specific algorithm должен иметь lifecycle:
@@ -707,7 +871,8 @@ Composition root может перейти к следующему backend ил�
 - Repulsion и Graph остаются JS;
 - WebGPU execution требует async AnimationEngine support;
 - WebGPU reduction ограничен 65 536 точками;
-- полная синхронизация остаётся основным execution path;
+- synchronization вынесена в отдельные pipeline Load/Save steps;
+- algorithms могут последовательно работать на одном backend storage без промежуточного readback/upload;
 - partial synchronization подготовлена;
 - оптимальная организация полного backend pipeline ещё требует измерений.
 
