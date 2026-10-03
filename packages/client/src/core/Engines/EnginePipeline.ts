@@ -19,8 +19,8 @@ export interface EnginePipelineEntry {
 }
 
 export interface EnginePipelineSynchronization {
-  load(): void;
-  save(): void;
+  load(): void | Promise<void>;
+  save(): void | Promise<void>;
 }
 
 export interface EnginePipelineConfigChange {
@@ -206,7 +206,7 @@ export class EnginePipeline {
     for (const entry of this.entries) {
       if (!entry.enabled) continue;
 
-      callbacks.push((deltaTime) => {
+      callbacks.push(async (deltaTime) => {
         if (!entry.algorithm.isRunning) return;
 
         const remainingSkipFrames = this.skipFrames.get(entry.algorithm) ?? 0;
@@ -215,7 +215,7 @@ export class EnginePipeline {
           return;
         }
 
-        entry.algorithm.step(deltaTime);
+        await entry.algorithm.stepAsync(deltaTime);
         didExecutePhysics = true;
         this.skipFrames.set(entry.algorithm, this.calculateSkipFrames(entry.algorithm));
       });
@@ -227,7 +227,7 @@ export class EnginePipeline {
       return;
     }
 
-    callbacks.push(() => {
+    callbacks.push(async () => {
       if (!didExecutePhysics) return;
 
       this.publishTemperature();
@@ -235,7 +235,7 @@ export class EnginePipeline {
 
       const activeEntries = this.entries.filter((entry) => entry.enabled);
       if (activeEntries.length > 0 && activeEntries.every((entry) => !entry.algorithm.isRunning)) {
-        this.finishRun();
+        await this.finishRun();
       }
 
       didExecutePhysics = false;
@@ -339,12 +339,18 @@ export class EnginePipeline {
   }
 
   /** Завершить один фактический цикл физического расчёта. */
-  private finishRun(): void {
+  private async finishRun(): Promise<void> {
     if (!this.running) return;
 
     this.running = false;
     this.stopCheckpointTimer();
-    this.synchronization?.save();
+
+    try {
+      await this.synchronization?.save();
+    } catch (error) {
+      console.error("EnginePipeline synchronization save failed", error);
+    }
+
     this.publishTemperature();
     this.temperatureCoagulator.flush();
     this.emitPointsUpdated();
