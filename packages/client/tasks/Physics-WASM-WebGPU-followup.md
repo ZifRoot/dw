@@ -311,3 +311,139 @@ EnginePipeline
 ~~~
 
 Этот инвариант должен сохраняться при последующем расширении physics backend.
+
+
+## 16. Реализация Repulsion и Graph
+
+Backend implementations для оставшихся двух algorithms добавлены для обоих исследовательских backend.
+
+WASM:
+
+~~~text
+WasmRepulsionAlgorithm
+    → repulsion.wasm
+    → repulsion.cpp
+
+WasmGraphAlgorithm
+    → graph.wasm
+    → graph.cpp
+~~~
+
+WebGPU:
+
+~~~text
+WebGpuRepulsionAlgorithm
+    → repulsion.wgsl
+
+WebGpuGraphAlgorithm
+    → graph.wgsl
+~~~
+
+Оба backend используют тот же point layout:
+
+~~~text
+x: float32
+y: float32
+z: float32
+fixed: int32
+~~~
+
+### WASM shared memory
+
+Repulsion, Graph и Z-damping создаются из отдельных WASM modules, но получают одну WebAssembly.Memory.
+
+~~~text
+                WebAssembly.Memory
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+    Repulsion        Graph        Z-damping
+     module          module          module
+        │              │              │
+        └──────────────┴──────────────┘
+                       │
+                 Point storage
+~~~
+
+Поэтому переход между algorithms не требует копирования point state.
+
+Allocator backend также является общим для modules, использующих одну memory, чтобы разные instances не выделяли пересекающиеся области.
+
+### WebGPU shared point storage
+
+WebGPU Repulsion и Graph используют один WebGpuPointsTransformer.
+
+Алгоритм пишет результат в transformer-owned scratch buffer, после чего backend копирует результат обратно в основной point buffer.
+
+~~~text
+GPU point buffer
+      ↓
+compute algorithm
+      ↓
+GPU scratch buffer
+      ↓
+same GPU point buffer
+~~~
+
+Это позволяет нескольким algorithms работать последовательно с одним backend point storage без CPU readback между ними.
+
+### Graph concurrency
+
+WebGPU Graph не использует конкурентную запись нескольких invocations непосредственно в одну точку.
+
+Каждая invocation владеет ровно одной выходной точкой и читает исходные points/edges:
+
+~~~text
+point i
+  ↓
+scan relevant edges
+  ↓
+output point i
+~~~
+
+Это избегает race condition на координатах.
+
+Текущий исследовательский вариант использует полный scan массива edges для каждой point. Это намеренно простая корректная GPU baseline; оптимизация adjacency representation является отдельным исследованием.
+
+### Repulsion execution model
+
+WebGPU Repulsion использует один invocation на point. Invocation читает исходный point buffer, вычисляет displacement относительно остальных points и записывает только свою output point.
+
+Это не является буквальным переносом последовательного JavaScript pair loop: GPU вариант использует независимый snapshot состояния текущего шага, что позволяет избежать конкурентных записей.
+
+### Temperature reduction
+
+Repulsion и Graph используют тот же двухпроходный принцип reduction, что и Z-damping:
+
+~~~text
+algorithm pass
+    ↓
+workgroup maxima
+    ↓
+reduction pass
+    ↓
+temperature[0]
+~~~
+
+Ограничение текущего prototype: 256 workgroups × 256 invocations = 65 536 points.
+
+### Synchronization
+
+Для WASM pipeline теперь есть отдельные generic Load/Save boundaries в EnginePipeline.
+
+~~~text
+Load
+  ↓
+WASM Repulsion
+  ↓
+WASM Graph
+  ↓
+WASM Z-damping
+  ↓
+Save
+~~~
+
+Алгоритмы не выполняют промежуточный save.
+
+WebGPU Repulsion и Graph также реализованы с async execution contract. Их подключение к текущему synchronous AnimationEngine остаётся отдельной границей AnimationEngine-async-callbacks.md.
+
