@@ -134,7 +134,7 @@ export class ObservableObject<
         );
       },
 
-      ownKeys: (currentTarget): PropertyKey[] => {
+      ownKeys: (currentTarget): (string | symbol)[] => {
         const currentState = getState(currentTarget);
 
         return [
