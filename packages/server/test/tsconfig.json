@@ -1,4 +1,4 @@
 {
-  "extends": "../../../test/tsconfig.json",
+  "extends": "../../../test/tsconfig.base.json",
   "files": []
 }
