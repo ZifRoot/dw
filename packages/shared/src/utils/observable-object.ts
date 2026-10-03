@@ -1,6 +1,4 @@
-type Primitive = string | number | boolean | bigint | symbol | null | undefined;
-
-export type ObservableObjectListener<T> = (value: T, previousValue: T) => void;
+import { ObservableArray } from "./observable-array";
 
 export interface ObservableEvent<TArgs extends unknown[] = []> {
   readonly kind: "observable-event";
@@ -13,10 +11,10 @@ export function event<TArgs extends unknown[] = []>(): ObservableEvent<TArgs> {
   }) as ObservableEvent<TArgs>;
 }
 
-type AnyEvent = ObservableEvent<unknown[]>;
+type EventCallback = (...args: any[]) => void;
 
 interface EventEmitter {
-  addListener(callback: (...args: any[]) => void): () => void;
+  addListener(callback: EventCallback): () => void;
   emit(...args: any[]): void;
 }
 
@@ -28,13 +26,15 @@ interface ObservableObjectState {
 const states = new WeakMap<object, ObservableObjectState>();
 
 /**
- * ObservableObject provides observable properties and event methods.
+ * Наблюдаемый объект состояния и именованных событий.
  *
- * The constructor configuration describes initial state values and event
- * channels. Event channels do not contain application logic: calling an event
- * method only notifies its subscribers.
+ * Конфигурация задаёт начальные значения свойств и event channels.
+ * Event method не содержит прикладной логики: вызов метода только уведомляет
+ * подписчиков соответствующего события.
  */
-export class ObservableObject<TConfig extends Record<string, unknown> = Record<string, unknown>> {
+export class ObservableObject<
+  TConfig extends Record<string, unknown> = Record<string, unknown>,
+> {
   public constructor(config: TConfig) {
     if (!isPlainObject(config)) {
       throw new TypeError("ObservableObject configuration must be a plain object.");
@@ -51,8 +51,9 @@ export class ObservableObject<TConfig extends Record<string, unknown> = Record<s
     for (const key of Reflect.ownKeys(config)) {
       const value = config[key as keyof TConfig];
 
+      state.events.set(key, createEventEmitter());
+
       if (isObservableEvent(value)) {
-        state.events.set(key, createEventEmitter());
         continue;
       }
 
@@ -63,12 +64,22 @@ export class ObservableObject<TConfig extends Record<string, unknown> = Record<s
       get: (currentTarget, property, receiver) => {
         const currentState = getState(currentTarget);
 
-        if (currentState.events.has(property)) {
-          return createEventDispatcher(currentState.events.get(property)!);
+        if (typeof property === "string" && property.startsWith("on")) {
+          const eventName = findEventName(currentState.events, property);
+
+          if (eventName !== undefined) {
+            return (callback: EventCallback): (() => void) => {
+              return currentState.events.get(eventName)!.addListener(callback);
+            };
+          }
         }
 
-        if (property in currentState.values) {
+        if (currentState.values[property] !== undefined || property in currentState.values) {
           return currentState.values[property];
+        }
+
+        if (currentState.events.has(property)) {
+          return createEventDispatcher(currentState.events.get(property)!);
         }
 
         return Reflect.get(currentTarget, property, receiver);
@@ -77,7 +88,7 @@ export class ObservableObject<TConfig extends Record<string, unknown> = Record<s
       set: (currentTarget, property, value): boolean => {
         const currentState = getState(currentTarget);
 
-        if (currentState.events.has(property)) {
+        if (currentState.events.has(property) && !(property in currentState.values)) {
           throw new TypeError(`Cannot assign to event method "${String(property)}".`);
         }
 
@@ -94,7 +105,7 @@ export class ObservableObject<TConfig extends Record<string, unknown> = Record<s
         const observableValue = createObservableValue(value);
         currentState.values[property] = observableValue;
 
-        notifyValueChange(currentState, property, observableValue, oldValue);
+        currentState.events.get(property)!.emit(observableValue);
 
         return true;
       },
@@ -108,6 +119,40 @@ export class ObservableObject<TConfig extends Record<string, unknown> = Record<s
 
         return true;
       },
+
+      has: (currentTarget, property): boolean => {
+        const currentState = getState(currentTarget);
+
+        return (
+          property in currentState.values ||
+          currentState.events.has(property) ||
+          Reflect.has(currentTarget, property)
+        );
+      },
+
+      ownKeys: (currentTarget): PropertyKey[] => {
+        const currentState = getState(currentTarget);
+
+        return [
+          ...Reflect.ownKeys(currentTarget),
+          ...Reflect.ownKeys(currentState.values),
+        ];
+      },
+
+      getOwnPropertyDescriptor: (currentTarget, property) => {
+        const currentState = getState(currentTarget);
+
+        if (property in currentState.values) {
+          return {
+            configurable: true,
+            enumerable: true,
+            value: currentState.values[property],
+            writable: true,
+          };
+        }
+
+        return Reflect.getOwnPropertyDescriptor(currentTarget, property);
+      },
     });
 
     states.set(proxy, state);
@@ -115,14 +160,22 @@ export class ObservableObject<TConfig extends Record<string, unknown> = Record<s
     return proxy as ObservableObject<TConfig>;
   }
 
-  public on<K extends string>(eventName: K, callback: (...args: any[]) => void): () => void {
+  /**
+   * Подписаться на событие по его имени.
+   *
+   * Для публичного API ObservableObject также генерирует короткую форму
+   * on<EventName>, например onTemperature или onReset.
+   */
+  public on(eventName: string, callback: EventCallback): () => void {
     const state = getState(this);
 
-    if (!state.events.has(eventName)) {
+    const event = state.events.get(eventName);
+
+    if (!event) {
       throw new Error(`Unknown ObservableObject event "${eventName}".`);
     }
 
-    return state.events.get(eventName)!.addListener(callback);
+    return event.addListener(callback);
   }
 }
 
@@ -132,25 +185,10 @@ function createObservableValue(value: unknown): unknown {
   }
 
   if (Array.isArray(value)) {
-    return value;
+    return new ObservableArray(...(value as unknown[]) as never[]);
   }
 
   return value;
-}
-
-function notifyValueChange(
-  state: ObservableObjectState,
-  property: PropertyKey,
-  value: unknown,
-  previousValue: unknown,
-): void {
-  const event = state.events.get(property);
-
-  if (!event) {
-    return;
-  }
-
-  event.emit(value, previousValue);
 }
 
 function createEventDispatcher(event: EventEmitter): (...args: any[]) => void {
@@ -160,7 +198,7 @@ function createEventDispatcher(event: EventEmitter): (...args: any[]) => void {
 }
 
 function createEventEmitter(): EventEmitter {
-  const listeners = new Set<(...args: any[]) => void>();
+  const listeners = new Set<EventCallback>();
 
   return {
     addListener(callback): () => void {
@@ -179,7 +217,24 @@ function createEventEmitter(): EventEmitter {
   };
 }
 
-function isObservableEvent(value: unknown): value is AnyEvent {
+function findEventName(events: Map<PropertyKey, EventEmitter>, property: string): PropertyKey | undefined {
+  if (property.length <= 2) {
+    return undefined;
+  }
+
+  const eventName = property.slice(2);
+  const candidate = eventName.charAt(0).toLowerCase() + eventName.slice(1);
+
+  for (const key of events.keys()) {
+    if (key === candidate) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+function isObservableEvent(value: unknown): value is ObservableEvent {
   return isPlainObject(value) && value.kind === "observable-event";
 }
 
