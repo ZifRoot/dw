@@ -40,7 +40,7 @@ export class WebGpuGraphAlgorithm extends BaseAlgorithm {
     this.reductionPipeline = this.backend.createComputePipeline(this.instanceId, "reduceTemperature");
   }
 
-  public async executeAsyncStep(_deltaTime: number): Promise<number> {
+  protected async applyStepAsync(_deltaTime: number): Promise<number> {
     if (!this.pipeline || !this.reductionPipeline) {
       throw new Error("WebGPU Graph algorithm is not initialized.");
     }
@@ -95,10 +95,6 @@ export class WebGpuGraphAlgorithm extends BaseAlgorithm {
 
     const dataOut = await this.backend.readBuffer(this.temperatureReadback);
     return new Float32Array(dataOut)[0];
-  }
-
-  protected applyStep(): number {
-    throw new Error("WebGPU Graph requires async AnimationEngine support.");
   }
 
   public getStopTemperature(): number { return this.config.stopTemperature; }
