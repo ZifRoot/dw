@@ -47,7 +47,7 @@ test("property assignment emits only when the value changes", () => {
   });
   const values: number[] = [];
 
-  observable.onTemperature((value) => values.push(value));
+  observable.onTemperature((value: number) => values.push(value));
 
   observable.temperature = 20;
   observable.temperature = 21;
@@ -125,7 +125,7 @@ test("event members support payloads", () => {
   });
   const values: number[] = [];
 
-  observable.onSelected((value) => values.push(value));
+  observable.onSelected((value: number) => values.push(value));
   observable.selected(42);
 
   assert.deepEqual(values, [42]);
