@@ -255,7 +255,33 @@ WebGPU:
 
 Graph требует отдельного исследования concurrent writes и accumulation.
 
-## 14. Главный инвариант
+## 14. Synchronization steps
+
+Синхронизация не должна выполняться после каждого algorithm.
+
+Предпочтительная структура pipeline:
+
+~~~text
+Load
+  ↓
+Repulsion
+  ↓
+Graph
+  ↓
+Z-damping
+  ↓
+Save
+~~~
+
+`Load` передаёт domain state в backend storage один раз. Algorithms последовательно используют тот же storage. `Save` возвращает итоговое состояние в `PointGraphManager`.
+
+Это особенно важно для WebGPU: промежуточные `GPU → CPU → GPU` transfers между algorithms должны избегаться, если algorithms могут работать на одном `GPUBuffer`.
+
+Для WASM действует тот же принцип с общей `WebAssembly.Memory`.
+
+Algorithm отвечает за вычисление, а pipeline — за границы synchronization. Transformer реализует саму передачу данных, но не решает, где в pipeline должны находиться Load/Save.
+
+## 15. Главный инвариант
 
 Backend меняет способ выполнения algorithm, но не меняет:
 
