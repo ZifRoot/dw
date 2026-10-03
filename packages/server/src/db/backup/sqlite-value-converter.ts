@@ -12,8 +12,11 @@ export function toSqliteValue(type: BackupColumnType, value: unknown): SqliteVal
     case "timestamp": return value instanceof Date ? value.toISOString() : String(value);
     case "bytea": return Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
     case "text":
+      return String(value);
     case "integer":
-    case "real": return value;
+    case "real":
+      if (typeof value !== "number") throw new Error("SQLite numeric value must be a number");
+      return value;
   }
 }
 
