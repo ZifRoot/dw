@@ -19,7 +19,7 @@ export interface EnginePipelineEntry {
 }
 
 export interface EnginePipelineSynchronization {
-  load(): void | Promise<void>;
+  load(): void;
   save(): void | Promise<void>;
 }
 
