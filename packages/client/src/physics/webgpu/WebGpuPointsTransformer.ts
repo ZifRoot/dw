@@ -61,8 +61,18 @@ export class WebGpuPointsTransformer {
   }
 
   public async save(): Promise<void> {
-    const values = new Float32Array(await this.backend.readBuffer(this.readbackBuffer!));
     const points = this.pointGraphManager.getPointsArray();
+    if (points.length === 0) return;
+
+    this.backend.submit([], [{
+      source: this.pointsBuffer!,
+      sourceOffset: 0,
+      destination: this.readbackBuffer!,
+      destinationOffset: 0,
+      size: this.getByteLength(),
+    }]);
+
+    const values = new Float32Array(await this.backend.readBuffer(this.readbackBuffer!));
 
     for (let index = 0; index < points.length; index++) {
       const offset = index * POINT_STRIDE;
