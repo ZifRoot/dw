@@ -333,10 +333,10 @@ export class EnginePipeline {
   private finishRun(): void {
     if (!this.running) return;
 
-    this.publishTemperature();
-    this.temperatureCoagulator.flush();
     this.running = false;
     this.stopCheckpointTimer();
+    this.publishTemperature();
+    this.temperatureCoagulator.flush();
     this.emitPointsUpdated();
     this.disposeCallbacks?.();
     this.disposeCallbacks = null;
