@@ -1,13 +1,25 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "module": "commonjs",
     "baseUrl": ".",
     "paths": {
-      "@utils/*": ["../packages/shared/src/utils/*"]
+      "@utils/*": [
+        "../packages/shared/src/utils/*"
+      ]
     },
-    "noEmit": true
+    "noEmit": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ]
   },
-  "include": ["**/*.test.ts"]
+  "include": [
+    "index.ts",
+    "**/*.test.ts"
+  ]
 }
