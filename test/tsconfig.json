@@ -3,6 +3,10 @@
   "compilerOptions": {
     "types": ["node"],
     "module": "commonjs",
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["../packages/shared/src/*"]
+    },
     "noEmit": true
   },
   "include": ["**/*.test.ts"]

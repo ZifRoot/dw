@@ -38,7 +38,7 @@ deepseek-w/
 │  └─ shared/        # ТОЛЬКО src/utils/* — ОДНА canonical-копия утилит (НО не npm-пакет!)
 ├─ generators/
 │  ├─ dew/           # генерация API-клиента СЕРВЕРА (spec "API Documentation") → packages/client/src/clients/dew/{fetch,axios}
-│  └─ embedder/      # генерация клиента ЭМБЕДДИНГ-СЕРВИСА (spec "Embedding Service" 2.0.0) → packages/server/src/clients/embedder/{axios,fetch,node}
+│  └─ embedder/      # генерация клиента ЭМБЕДДИНГ-СЕРВИСА (spec "Embedding Service" 2.0.0) → packages/server/src/clients/embedder/axios
 ├─ .vscode/          # launch.json (compounds Debug/Release Fullstack) + tasks.json
 ├─ link-shared.cmd   # Windows-джанкшены packages/{server,client}/src/shared → packages/shared/src
 └─ xxx/, example/    # черновики/мусор (xxx/ — в git!, example/ — gitignored)
@@ -116,6 +116,14 @@ shared должен иметь собственный compilation/build context.
 ~~~
 
 Это не косметическая правка ~tsconfig~, а изменение архитектуры.
+
+### Generated embedding client: Axios only
+
+На сервере используется только сгенерированный `typescript-axios` клиент для внешнего Embedding Service: `packages/server/src/clients/embedder/axios` (alias `@embedder`).
+
+Ранее в репозитории также существовал сгенерированный `typescript-fetch` клиент (`packages/server/src/clients/embedder/fetch`). Он не является поддерживаемым клиентом проекта: его runtime использует DOM-oriented типы (`RequestCredentials`, `WindowOrWorkerGlobalScope` и связанные API), что несовместимо с серверным Node.js TypeScript context. Поэтому fetch-клиент удалён вместе с его generator config; server typecheck не должен возвращать DOM-типы только ради этого клиента.
+
+Для embedding service повторно генерируется только Axios-клиент. Это зафиксировано в `generators/embedder/generate.cmd`, `generate.ps1` и root `generate-api`.
 
 ### Shared tests: отдельный test project
 

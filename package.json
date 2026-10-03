@@ -22,7 +22,7 @@
     "generate:all": "npm run generate:dew && npm run generate:embedder",
     "generate:dew": "cd generators\\dew && generate.cmd",
     "generate:embedder": "cd generators\\embedder && generate.cmd",
-    "generate-api": "cd ./generators/embedder && openapi-generator-cli batch ./configs/fetch.json ./configs/node.json ./configs/axios.json",
+    "generate-api": "cd ./generators/embedder && openapi-generator-cli batch ./configs/axios.json",
     "debug:server": "npm --workspace server run debug",
     "debug:client": "npm --workspace client run debug",
     "release:server": "npm --workspace server run release",
