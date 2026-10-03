@@ -26,7 +26,8 @@
     "pg": "^8.21.0",
     "swagger-ui-express": "^5.0.1",
     "yaml": "^2.9.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@electric-sql/pglite": "^0.5.8"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
