@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ObservableArray } from "./observable-array";
+import { ObservableArray } from "@utils/observable-array";
 
 type PrimitiveTestValue = string | number | boolean | bigint | symbol | null | undefined;
 

@@ -4,7 +4,7 @@ import {
   AnimationCallback,
   AnimationEngine,
   AnimationGenerator,
-} from "./AnimationEngine";
+} from "../../../src/core/Engines/AnimationEngine";
 
 type RafCallback = (timestamp: number) => void;
 

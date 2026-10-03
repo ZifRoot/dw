@@ -1,11 +1,11 @@
-name: Typecheck
+name: CI
 
 on:
   push:
   pull_request:
 
 jobs:
-  typecheck:
+  verify:
     runs-on: ubuntu-latest
 
     steps:
@@ -27,8 +27,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Shared utils tests Fast
-        run: npm run test:shared:utils:fast
+      - name: Typecheck tests
+        run: npm run typecheck:tests
 
-      - name: Shared utils tests
-        run: npm run test:shared:utils
+      - name: Tests
+        run: npm test

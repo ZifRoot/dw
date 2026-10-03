@@ -24,19 +24,21 @@ React UI и end-to-end тестирование всего приложения 
 
 ## 2. Test runner и инфраструктура
 
-На текущем состоянии `packages/client` test runner не подключён. Его выбор и подключение являются частью отдельной задачи.
+В проекте используется единый Node.js test runner через `test/index.ts`. Runtime-контексты разделены TypeScript-конфигурациями: shared tests используют `test/tsconfig.json`, клиентские — `packages/client/test/tsconfig.json`, серверные — `packages/server/test/tsconfig.json`.
 
 Необходимо зафиксировать:
 
 1. test runner и зависимости;
 2. команду локального запуска;
-3. TypeScript-конфигурацию тестов;
+3. TypeScript-конфигурации каждого runtime-контекста;
 4. расположение тестовых файлов;
 5. запуск тестов в CI;
 6. способ управления timers и временем;
 7. необходимость DOM-окружения.
 
 Runner должен позволять детерминированно проверять scheduler, timers и порядок событий без ожидания реального времени и без зависимости от реального `requestAnimationFrame`.
+
+Для typecheck используются отдельные команды контекстов: `typecheck:tests:utils`, `typecheck:tests:client` и `typecheck:tests:server`. Сводная команда `typecheck:tests` запускает их последовательно.
 
 ## 3. Принципы
 
@@ -191,7 +193,35 @@ Temperature для UI должна быть presentation state, а не прям
 
 ## 15. Минимальная структура тестов
 
-После подключения runner тесты должны быть разделены по смыслу:
+Тестовая инфраструктура разделяется по runtime-контекстам. Общий каталог `test/` содержит только базовую Node.js-конфигурацию и shared utility tests.
+
+```text
+test/
+├── index.ts
+├── tsconfig.json
+└── utils/
+    ├── observable-array.test.ts
+    └── logger-singleRunner.test.ts
+
+packages/
+├── client/
+│   └── test/
+│       ├── tsconfig.json
+│       └── core/
+│           └── Engines/
+│               └── AnimationEngine.test.ts
+└── server/
+    └── test/
+        └── tsconfig.json
+```
+
+Клиентские тесты не должны находиться в общем `test/client`: клиент имеет собственную тестовую среду, собственный `tsconfig.json` и DOM lib.
+
+Серверная тестовая среда также изолирована собственным `tsconfig.json`. Она наследуется от общего `test/tsconfig.json` без DOM.
+
+Базовый `test/tsconfig.json` не содержит DOM и типизирует только shared utility tests. Клиентский `packages/client/test/tsconfig.json` наследуется от него и добавляет DOM libs. Серверский `packages/server/test/tsconfig.json` наследуется от него без DOM.
+
+Смысловые группы тестов должны покрывать:
 
 1. configuration;
 2. physics pass / temperature;
@@ -207,9 +237,9 @@ Temperature для UI должна быть presentation state, а не прям
 
 ## 16. Definition of Done
 
-- [ ] В `packages/client` подключён и документирован test runner.
-- [ ] Есть команда локального запуска.
-- [ ] Тесты запускаются в CI.
+- [x] Подключён и документирован единый test runner.
+- [x] Есть единая команда локального запуска.
+- [x] Тесты запускаются в CI.
 - [ ] Timers и время lifecycle контролируются детерминированно.
 - [ ] Покрыты temperature, scheduler и skip boundaries.
 - [ ] Покрыты `enabled` и runtime scheduling как разные состояния.

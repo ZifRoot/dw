@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { createLoggedMethodRunner, _safe } from "./logger";
-import { ExecutionGuard, createSingleRunner } from "./single-runner";
+import { createLoggedMethodRunner, _safe } from "@utils/logger";
+import { ExecutionGuard, createSingleRunner } from "@utils/single-runner";
 
 async function captureErrors<T>(action: () => Promise<T>): Promise<{ result: T; errors: unknown[] }> {
   const errors: unknown[] = [];
