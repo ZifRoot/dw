@@ -97,6 +97,10 @@ export class WebGpuGraphAlgorithm extends BaseAlgorithm {
     return new Float32Array(dataOut)[0];
   }
 
+  protected applyStep(_deltaTime: number): number {
+    throw new Error("WebGPU Graph requires async AnimationEngine support.");
+  }
+
   public getStopTemperature(): number { return this.config.stopTemperature; }
 
   public destroy(): void {
