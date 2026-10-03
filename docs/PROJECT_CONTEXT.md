@@ -135,11 +135,18 @@ shared должен иметь собственный compilation/build context.
              client           server        shared tests
 ~~~
 
-Это **третье TypeScript project environment**, но не третье runtime-приложение. Оно существует исключительно для тестового кода.
+Это **третье TypeScript project environment**. При этом оно не обязано совпадать с runtime-окружением server и не является «третьим приложением».
 
-Текущие shared-тесты используют встроенный **Node.js test runner ~node:test~ и ~node:assert/strict~**, а не Jest. Они запускаются через ~tsx --test~. GitHub Actions запускает их на runner с Node.js 22; runner является CI-хостом, а Node.js test runtime — средой исполнения тестов. TypeScript-конфигурация описывает именно требования тестового проекта (в частности Node.js types), а не «окружение GitHub Actions» как отдельную платформу.
+Важно различать **project environment** и конкретную версию/реализацию runtime:
+- **Client** — браузерное окружение с DOM и своим набором библиотек/типов.
+- **Server** — серверное runtime-окружение; сейчас это Node.js, но его версия является отдельной характеристикой проекта. Теоретически сервер может работать и в другом runtime, например Bun или Deno.
+- **Tests** — самостоятельное test/runtime-окружение. Сейчас тесты используют Node.js test runner через ~node:test~ и запускаются через ~tsx --test~, но версия Node.js для тестов не обязана совпадать с версией Node.js сервера. Например, сервер может работать на Node.js 24, а тесты — на Node.js 22. Различия версий могут означать различия доступных API, встроенных возможностей и TypeScript typings; это одна из причин, почему тестовый context нельзя автоматически считать тем же самым, что server context.
 
-Таким образом, production shared остаётся environment-neutral source layer, а тесты получают конкретный Node-oriented TypeScript context в ~test/tsconfig.json~.
+GitHub Actions в этой схеме является только CI-хостом. Сейчас workflow запускает тесты на runner с Node.js 22, но это не означает, что «GitHub Actions» является TypeScript-окружением тестов.
+
+Поэтому `client`, `server` и `test` следует рассматривать как **три независимых compilation/runtime contexts**, каждый со своим набором доступных API, типов, зависимостей и потенциально своей версией runtime.
+
+Таким образом, production shared остаётся environment-neutral source layer, а тесты получают собственный конкретный context в ~test/tsconfig.json~.
 
 ### ⚠️ Грабли и «костыли» (знать ОБЯЗАТЕЛЬНО)
 
