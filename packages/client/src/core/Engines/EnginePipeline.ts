@@ -18,6 +18,11 @@ export interface EnginePipelineEntry {
   enabled?: boolean;
 }
 
+export interface EnginePipelineSynchronization {
+  load(): void;
+  save(): void;
+}
+
 export interface EnginePipelineConfigChange {
   engineName: string;
   changes: Record<string, unknown>;
@@ -35,6 +40,7 @@ export interface EnginePipelineConfigChange {
  */
 export class EnginePipeline {
   private entries: EnginePipelineEntry[] = [];
+  private synchronization: EnginePipelineSynchronization | null = null;
   private disposeCallbacks: (() => void) | null = null;
   private running = false;
   private destroyed = false;
@@ -70,10 +76,11 @@ export class EnginePipeline {
   }
 
   /** Установить алгоритмы и их порядок. Повтор одного алгоритма разрешён. */
-  public setConfiguration(entries: EnginePipelineEntry[]): void {
+  public setConfiguration(entries: EnginePipelineEntry[], synchronization: EnginePipelineSynchronization | null = null): void {
     if (this.destroyed) return;
 
     this.stop();
+    this.synchronization = synchronization;
     this.entries = entries.map((entry) => ({
       name: entry.name,
       algorithm: entry.algorithm,
