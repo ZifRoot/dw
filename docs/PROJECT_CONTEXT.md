@@ -117,11 +117,29 @@ shared должен иметь собственный compilation/build context.
 
 Это не косметическая правка ~tsconfig~, а изменение архитектуры.
 
-### ⚠️ Отдельный случай: ~packages/shared/tsconfig.test.json~
+### Shared tests: отдельный test project
 
-~packages/shared/tsconfig.test.json~ **не является production-конфигурацией shared и не превращает shared в самостоятельный TS-проект**. Это специальный изолированный compilation context для проверки ~*.test.ts~.
+Общие классы из ~packages/shared/src~ не должны получать собственный compilation context. **Тесты этих классов — другой вопрос**: тестовый код действительно является самостоятельным TypeScript project context.
 
-Его наличие объясняется необходимостью отдельно typecheck-ить тесты shared. Поэтому этот файл нельзя использовать как аргумент в пользу того, что «у shared должен быть обычный ~tsconfig.json~».
+Тесты вынесены из ~packages/shared/src~ в корневой ~test/shared/~. Для них используется ~test/tsconfig.json~, который наследуется непосредственно от корневого ~tsconfig.base.json~:
+
+~~~
+                         tsconfig.base.json
+                                │
+                ┌───────────────┼───────────────┐
+                │               │               │
+                ▼               ▼               ▼
+       client/tsconfig.base  server/tsconfig.base  test/tsconfig.json
+                │               │               │
+                ▼               ▼               ▼
+             client           server        shared tests
+~~~
+
+Это **третье TypeScript project environment**, но не третье runtime-приложение. Оно существует исключительно для тестового кода.
+
+Текущие shared-тесты используют встроенный **Node.js test runner ~node:test~ и ~node:assert/strict~**, а не Jest. Они запускаются через ~tsx --test~. GitHub Actions запускает их на runner с Node.js 22; runner является CI-хостом, а Node.js test runtime — средой исполнения тестов. TypeScript-конфигурация описывает именно требования тестового проекта (в частности Node.js types), а не «окружение GitHub Actions» как отдельную платформу.
+
+Таким образом, production shared остаётся environment-neutral source layer, а тесты получают конкретный Node-oriented TypeScript context в ~test/tsconfig.json~.
 
 ### ⚠️ Грабли и «костыли» (знать ОБЯЗАТЕЛЬНО)
 
