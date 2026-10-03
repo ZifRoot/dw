@@ -515,3 +515,191 @@ test("generator factory failure is deferred to the next frame", () => {
     console.error = originalError;
   }
 });
+
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+}
+
+test("async callback blocks the next callback in its group but not independent groups", async () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let resolveAsync!: () => void;
+  const asyncCompletion = new Promise<void>((resolve) => {
+    resolveAsync = resolve;
+  });
+
+  const engine = new AnimationEngine();
+  engine.addCallbacks([
+    () => {
+      calls.push("A");
+      return asyncCompletion;
+    },
+    () => calls.push("C"),
+  ]);
+  engine.addCallback(() => {
+    calls.push("B");
+    performanceTime += 5;
+  });
+
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+
+  assert.equal(calls[0], "A");
+  assert.ok(calls.includes("B"));
+  assert.equal(calls.includes("C"), false);
+
+  resolveAsync();
+  await flushPromises();
+
+  performanceTime = 100;
+  runNextAnimationFrame(100);
+
+  assert.ok(calls.includes("C"));
+  engine.clear();
+});
+
+test("the same callback can complete synchronously and asynchronously on different runs", async () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let run = 0;
+  let resolveAsync!: () => void;
+  const asyncCompletion = new Promise<void>((resolve) => {
+    resolveAsync = resolve;
+  });
+
+  const callback: AnimationCallback = () => {
+    run++;
+    calls.push(`run${run}`);
+
+    if (run === 2) {
+      return asyncCompletion;
+    }
+
+    performanceTime += 10;
+  };
+
+  const engine = new AnimationEngine();
+  engine.addCallback(callback);
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+  assert.deepEqual(calls, ["run1"]);
+
+  performanceTime = 100;
+  runNextAnimationFrame(100);
+  assert.deepEqual(calls, ["run1", "run2"]);
+
+  performanceTime = 120;
+  runNextAnimationFrame(120);
+  assert.deepEqual(calls, ["run1", "run2"]);
+
+  resolveAsync();
+  await flushPromises();
+
+  performanceTime = 140;
+  runNextAnimationFrame(140);
+  assert.deepEqual(calls, ["run1", "run2", "run3"]);
+
+  engine.clear();
+});
+
+test("removing a group while its callback is awaiting prevents rescheduling", async () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let resolveAsync!: () => void;
+  const asyncCompletion = new Promise<void>((resolve) => {
+    resolveAsync = resolve;
+  });
+
+  const engine = new AnimationEngine();
+  const dispose = engine.addCallback(() => {
+    calls.push("A");
+    return asyncCompletion;
+  });
+
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+  assert.deepEqual(calls, ["A"]);
+
+  dispose();
+  resolveAsync();
+  await flushPromises();
+
+  assert.equal(rafQueue.length, 0);
+  engine.clear();
+});
+
+test("stopping while a callback is awaiting allows a later restart", async () => {
+  installAnimationFrameMock();
+
+  const calls: string[] = [];
+  let resolveAsync!: () => void;
+  const asyncCompletion = new Promise<void>((resolve) => {
+    resolveAsync = resolve;
+  });
+
+  const engine = new AnimationEngine();
+  engine.addCallback(() => {
+    calls.push("A");
+    return asyncCompletion;
+  });
+
+  runCalibration();
+
+  performanceTime = 80;
+  runNextAnimationFrame(80);
+  assert.deepEqual(calls, ["A"]);
+
+  engine.stop();
+  resolveAsync();
+  await flushPromises();
+
+  assert.equal(rafQueue.length, 0);
+
+  engine.addCallback(() => calls.push("B"));
+  runCalibration();
+
+  performanceTime = 160;
+  runNextAnimationFrame(160);
+
+  assert.ok(calls.includes("B"));
+  engine.clear();
+});
+
+test("rejected async callback is handled without an unhandled rejection", async () => {
+  installAnimationFrameMock();
+
+  const errors: unknown[][] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    errors.push(args);
+  };
+
+  try {
+    const engine = new AnimationEngine();
+    engine.addCallback(() => Promise.reject(new Error("async boom")));
+
+    runCalibration();
+
+    performanceTime = 80;
+    runNextAnimationFrame(80);
+    await flushPromises();
+
+    assert.equal(errors.length, 1);
+    assert.equal(
+      (engine as unknown as { isRunning: boolean }).isRunning,
+      false,
+    );
+  } finally {
+    console.error = originalError;
+  }
+});
