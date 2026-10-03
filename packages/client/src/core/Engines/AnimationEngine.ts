@@ -365,12 +365,23 @@ export class AnimationEngine {
   }
 
   private start(): void {
-    if (this.isRunning || this.groups.size === 0) return;
+    if (this.groups.size === 0) return;
+
+    if (this.isRunning) {
+      if (this.rafId === null && this.groupsQueue.size > 0) {
+        this.scheduleStep();
+      }
+      return;
+    }
+
     if (!this.calibrate()) return;
 
     this.isRunning = true;
     this.enqueueReadyGroups();
-    this.scheduleStep();
+
+    if (this.groupsQueue.size > 0) {
+      this.scheduleStep();
+    }
   }
 
   private enqueueReadyGroups(): void {
@@ -521,10 +532,8 @@ export class AnimationEngine {
 
     if (this.isRunning) {
       this.groupsQueue.enqueueStarted(group.node);
-      return;
+      if (this.rafId === null) this.scheduleStep();
     }
-
-    this.scheduleStepAfterAsyncCompletion(group);
   }
 
   private failAsyncCallback(groupId: number, promise: Promise<void>, error: unknown): void {
@@ -533,15 +542,6 @@ export class AnimationEngine {
 
     console.error("AnimationEngine callback failed", error);
     this.removeGroup(groupId);
-  }
-
-  private scheduleStepAfterAsyncCompletion(group: CallbackGroup): void {
-    if (group.node.queue !== null || group.waitingPromise !== null || this.groups.size === 0) return;
-
-    if (this.isRunning) {
-      this.groupsQueue.enqueueStarted(group.node);
-      if (this.rafId === null) this.scheduleStep();
-    }
   }
 
   private getNextCallback(group: CallbackGroup): IteratorResult<AnimationCallback> {
