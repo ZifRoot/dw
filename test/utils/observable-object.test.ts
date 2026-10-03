@@ -4,12 +4,16 @@ import { test } from "node:test";
 import { ObservableArray } from "@utils/observable-array";
 import { ObservableObject, event } from "@utils/observable-object";
 
+function createObservable(config: Record<string, unknown>): any {
+  return new ObservableObject(config);
+}
+
 test("constructor accepts a plain object and creates an ObservableObject", () => {
   const source = {
     temperature: 20,
   };
 
-  const observable = new ObservableObject(source) as any;
+  const observable = createObservable(source);
 
   assert.equal(source instanceof Object, true);
   assert.equal(source instanceof ObservableObject, false);
@@ -19,7 +23,7 @@ test("constructor accepts a plain object and creates an ObservableObject", () =>
 });
 
 test("constructor rejects an ObservableObject as input", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     temperature: 20,
   }) as any;
 
@@ -38,7 +42,7 @@ test("constructor rejects non-plain objects", () => {
 });
 
 test("property assignment emits only when the value changes", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     temperature: 20,
   });
   const values: number[] = [];
@@ -55,7 +59,7 @@ test("property assignment emits only when the value changes", () => {
 });
 
 test("property assignment replaces the stored value", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     value: 1,
   });
 
@@ -65,7 +69,7 @@ test("property assignment replaces the stored value", () => {
 });
 
 test("nested plain objects are converted recursively", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     config: {
       temperature: 20,
       limits: {
@@ -82,7 +86,7 @@ test("nested plain objects are converted recursively", () => {
 });
 
 test("arrays are converted to ObservableArray", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     values: [1, 2, 3],
   });
 
@@ -94,7 +98,7 @@ test("special objects remain unchanged", () => {
   const date = new Date(0);
   const map = new Map([["key", "value"]]);
 
-  const observable = new ObservableObject({
+  const observable = createObservable({
     date,
     map,
   });
@@ -104,7 +108,7 @@ test("special objects remain unchanged", () => {
 });
 
 test("event members dispatch without storing application logic", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     reset: event(),
   });
   const calls: number[] = [];
@@ -116,7 +120,7 @@ test("event members dispatch without storing application logic", () => {
 });
 
 test("event members support payloads", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     selected: event<[number]>(),
   });
   const values: number[] = [];
@@ -128,7 +132,7 @@ test("event members support payloads", () => {
 });
 
 test("event members cannot be assigned", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     reset: event(),
   });
 
@@ -138,7 +142,7 @@ test("event members cannot be assigned", () => {
 });
 
 test("managed properties and events cannot be deleted", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     temperature: 20,
     reset: event(),
   });
@@ -153,7 +157,7 @@ test("managed properties and events cannot be deleted", () => {
 });
 
 test("subscriptions can be disposed", () => {
-  const observable = new ObservableObject({
+  const observable = createObservable({
     temperature: 20,
   });
   const values: number[] = [];
