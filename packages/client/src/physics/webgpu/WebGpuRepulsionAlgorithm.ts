@@ -10,6 +10,7 @@ const PARAMETER_BYTES = 32;
 
 export class WebGpuRepulsionAlgorithm extends BaseAlgorithm {
   private pipeline: WebGpuComputePipeline | null = null;
+  private reductionPipeline: WebGpuComputePipeline | null = null;
   private readonly temperatureBuffer: WebGpuBuffer;
   private readonly maximaBuffer: WebGpuBuffer;
   private readonly parametersBuffer: WebGpuBuffer;
@@ -34,10 +35,13 @@ export class WebGpuRepulsionAlgorithm extends BaseAlgorithm {
     const sourceUrl = new URL("./repulsion.wgsl", import.meta.url);
     this.instanceId = await this.backend.createInstance(sourceUrl);
     this.pipeline = this.backend.createComputePipeline(this.instanceId, "repulsion");
+    this.reductionPipeline = this.backend.createComputePipeline(this.instanceId, "reduceTemperature");
   }
 
   public async executeAsyncStep(_deltaTime: number): Promise<number> {
-    if (!this.pipeline) throw new Error("WebGPU Repulsion algorithm is not initialized.");
+    if (!this.pipeline || !this.reductionPipeline) {
+      throw new Error("WebGPU Repulsion algorithm is not initialized.");
+    }
 
     const count = this.transformer.getCount();
     if (count === 0) return 0;
@@ -58,6 +62,7 @@ export class WebGpuRepulsionAlgorithm extends BaseAlgorithm {
 
     this.backend.submit([
       { pipeline: this.pipeline, bindGroup, workgroupCount },
+      { pipeline: this.reductionPipeline, bindGroup, workgroupCount: 1 },
     ], [
       {
         source: this.transformer.getScratchBuffer(),
@@ -93,6 +98,7 @@ export class WebGpuRepulsionAlgorithm extends BaseAlgorithm {
     if (this.instanceId !== null) this.backend.destroyInstance(this.instanceId);
     this.instanceId = null;
     this.pipeline = null;
+    this.reductionPipeline = null;
   }
 
   private writeParameters(count: number, workgroupCount: number): void {
