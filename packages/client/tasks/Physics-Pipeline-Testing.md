@@ -191,7 +191,32 @@ Temperature для UI должна быть presentation state, а не прям
 
 ## 15. Минимальная структура тестов
 
-После подключения runner тесты должны быть разделены по смыслу:
+Тесты не должны дублировать структуру production-пакетов только ради симметрии. Каталог `test/` является отдельной тестовой средой.
+
+Базовая структура:
+
+```text
+test/
+├── index.ts
+├── tsconfig.json
+├── utils/
+│   ├── observable-array.test.ts
+│   └── logger-singleRunner.test.ts
+└── client/
+    └── core/
+        └── Engines/
+            └── AnimationEngine.test.ts
+```
+
+Для Physics Pipeline тесты должны располагаться в клиентском контексте, например:
+
+```text
+test/client/core/Engines/EnginePipeline.test.ts
+```
+
+Каталог `test/server/` не создаётся заранее: он появляется только при наличии server-specific тестов.
+
+Смысловые группы тестов должны покрывать:
 
 1. configuration;
 2. physics pass / temperature;
