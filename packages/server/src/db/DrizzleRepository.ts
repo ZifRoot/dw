@@ -12,6 +12,7 @@ import {
 import { IRepository } from "./IRepository";
 import { FragmentType, MessagesBizData, Role } from "./resp";
 import { PgTransaction } from "drizzle-orm/pg-core";
+import type { ExtractTablesWithRelations } from "drizzle-orm";
 import {
   ChatMessage,
   ChatMessageCreate,
@@ -29,7 +30,7 @@ import {
 import { Log } from "@utils/logger";
 import "@utils/array-extensions";
 
-type PgTx = PgTransaction<any, any, any>;
+type PgTx = PgTransaction<any, typeof schema, ExtractTablesWithRelations<typeof schema>>;
 
 export class DrizzleRepository implements IRepository {
   constructor(private client: typeof db_drizzle) {}
