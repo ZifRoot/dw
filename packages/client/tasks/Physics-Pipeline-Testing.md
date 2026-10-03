@@ -24,13 +24,13 @@ React UI и end-to-end тестирование всего приложения 
 
 ## 2. Test runner и инфраструктура
 
-На текущем состоянии `packages/client` test runner не подключён. Его выбор и подключение являются частью отдельной задачи.
+В проекте используется единый Node.js test runner через `test/index.ts`. Runtime-контексты разделены TypeScript-конфигурациями: shared tests используют `test/tsconfig.json`, клиентские — `packages/client/test/tsconfig.json`, серверные — `packages/server/test/tsconfig.json`.
 
 Необходимо зафиксировать:
 
 1. test runner и зависимости;
 2. команду локального запуска;
-3. TypeScript-конфигурацию тестов;
+3. TypeScript-конфигурации каждого runtime-контекста;
 4. расположение тестовых файлов;
 5. запуск тестов в CI;
 6. способ управления timers и временем;
@@ -235,9 +235,9 @@ packages/
 
 ## 16. Definition of Done
 
-- [ ] В `packages/client` подключён и документирован test runner.
-- [ ] Есть команда локального запуска.
-- [ ] Тесты запускаются в CI.
+- [x] Подключён и документирован единый test runner.
+- [x] Есть единая команда локального запуска.
+- [x] Тесты запускаются в CI.
 - [ ] Timers и время lifecycle контролируются детерминированно.
 - [ ] Покрыты temperature, scheduler и skip boundaries.
 - [ ] Покрыты `enabled` и runtime scheduling как разные состояния.
