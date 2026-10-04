@@ -38,7 +38,7 @@ function createCsv(rows: CopyRow[]): Blob {
     [
       row.id.toString(),
       quoteCsv(row.content),
-      quoteCsv(row.payload.toString("base64")),
+      quoteCsv("\\x" + row.payload.toString("hex")),
     ].join(","),
   );
 
