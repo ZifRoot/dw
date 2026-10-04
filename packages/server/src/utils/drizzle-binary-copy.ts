@@ -142,6 +142,10 @@ const BINARY_COPY_STRATEGIES: Record<string, BinaryCopyStrategy> = {
   jsonb: {
     type: "text",
     map: (column, driverValue) => {
+      if (typeof driverValue === "string") {
+        return { type: "text", value: driverValue };
+      }
+
       if (typeof driverValue !== "object" || driverValue === null) {
         throw new TypeError(
           `Drizzle column "${column.name}" mapped jsonb to an unsupported value`,
@@ -149,6 +153,30 @@ const BINARY_COPY_STRATEGIES: Record<string, BinaryCopyStrategy> = {
       }
 
       return { type: "text", value: JSON.stringify(driverValue) };
+    },
+  },
+  "timestamp with time zone": {
+    type: "text",
+    map: (column, driverValue) => {
+      if (!(driverValue instanceof Date)) {
+        throw new TypeError(
+          `Drizzle column "${column.name}" mapped timestamp with time zone to an unsupported value`,
+        );
+      }
+
+      return { type: "text", value: driverValue.toISOString() };
+    },
+  },
+  "timestamp without time zone": {
+    type: "text",
+    map: (column, driverValue) => {
+      if (!(driverValue instanceof Date)) {
+        throw new TypeError(
+          `Drizzle column "${column.name}" mapped timestamp without time zone to an unsupported value`,
+        );
+      }
+
+      return { type: "text", value: driverValue.toISOString() };
     },
   },
   timestamp: {
