@@ -126,18 +126,12 @@ export class AnimationEngine {
   constructor() {}
 
   /** Добавить один callback как отдельную группу. */
-  public addCallback(
-    callback: AnimationCallback,
-    options: SequenceOptions = {},
-  ): () => void {
+  public addCallback(callback: AnimationCallback, options: SequenceOptions = {}): () => void {
     return this.addCallbacks([callback], options);
   }
 
   /** Добавить последовательную группу callback'ов. */
-  public addCallbacks(
-    callbacks: AnimationCallback[],
-    options: SequenceOptions = {},
-  ): () => void {
+  public addCallbacks(callbacks: AnimationCallback[], options: SequenceOptions = {}): () => void {
     if (callbacks.length === 0) return () => {};
 
     return this.addGroup(new ArraySequence([...callbacks], options.oneShot === true));
@@ -149,10 +143,7 @@ export class AnimationEngine {
   }
 
   /** Добавить фабрику Generator как повторяемую последовательность. */
-  public addGeneratorFactory(
-    factory: AnimationGeneratorFactory,
-    options: SequenceOptions = {},
-  ): () => void {
+  public addGeneratorFactory(factory: AnimationGeneratorFactory, options: SequenceOptions = {}): () => void {
     return this.addGroup(new GeneratorFactorySequence(factory, options.oneShot === true));
   }
 
@@ -431,10 +422,7 @@ export class AnimationEngine {
     }
   }
 
-  private executeSafely(
-    callback: AnimationCallback,
-    deltaTime: number,
-  ): void | Promise<void> {
+  private executeSafely(callback: AnimationCallback, deltaTime: number): void | Promise<void> {
     try {
       return callback(deltaTime);
     } catch (error) {

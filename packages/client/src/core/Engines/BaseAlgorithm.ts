@@ -11,9 +11,7 @@ export abstract class BaseAlgorithm {
   public temperature = 0;
   private running = false;
 
-  protected constructor(
-    protected readonly mediator: AppMediator,
-  ) {}
+  protected constructor(protected readonly mediator: AppMediator) {}
 
   /** Запустить алгоритм. */
   public start(): void {

@@ -9,7 +9,12 @@ const Z_DAMPING_EXPORT = "z_damping";
 export class WasmZDapperAlgorithm extends BaseAlgorithm {
   private instanceId: number | null = null;
 
-  public constructor(mediator: AppMediator, public readonly config: ZDampingConfig, private readonly backend: WasmBackend, private readonly transformer: WasmPointsTransformer) {
+  public constructor(
+    mediator: AppMediator,
+    public readonly config: ZDampingConfig,
+    private readonly backend: WasmBackend,
+    private readonly transformer: WasmPointsTransformer,
+  ) {
     super(mediator);
   }
 
@@ -21,12 +26,12 @@ export class WasmZDapperAlgorithm extends BaseAlgorithm {
 
   protected applyStep(_deltaTime: number): number {
     const data = this.transformer.getData();
-    return this.backend.invoke(this.getInstanceId(), Z_DAMPING_EXPORT, [
-      data.pointer, data.length, this.config.dampingFactor, this.config.threshold,
-    ]);
+    return this.backend.invoke(this.getInstanceId(), Z_DAMPING_EXPORT, [data.pointer, data.length, this.config.dampingFactor, this.config.threshold]);
   }
 
-  public getStopTemperature(): number { return this.config.stopTemperature; }
+  public getStopTemperature(): number {
+    return this.config.stopTemperature;
+  }
 
   public destroy(): void {
     if (this.instanceId !== null) {

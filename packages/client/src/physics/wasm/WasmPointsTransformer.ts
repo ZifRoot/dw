@@ -4,16 +4,24 @@ import { WasmBackend } from "@core/Backends/WasmBackend";
 const POINT_STRIDE = 4;
 const POINT_BYTES = POINT_STRIDE * Float32Array.BYTES_PER_ELEMENT;
 
-export interface WasmPointData { pointer: number; length: number; }
+export interface WasmPointData {
+  pointer: number;
+  length: number;
+}
 
 export class WasmPointsTransformer {
   private pointer: number | null = null;
   private capacity = 0;
   private instanceId: number | null = null;
 
-  public constructor(private readonly pointGraphManager: PointGraphManager, private readonly backend: WasmBackend) {}
+  public constructor(
+    private readonly pointGraphManager: PointGraphManager,
+    private readonly backend: WasmBackend,
+  ) {}
 
-  public attachInstance(instanceId: number): void { this.instanceId = instanceId; }
+  public attachInstance(instanceId: number): void {
+    this.instanceId = instanceId;
+  }
 
   public load(): WasmPointData {
     const data = this.ensurePointStorage();
@@ -64,7 +72,10 @@ export class WasmPointsTransformer {
     const values = new ArrayBuffer(POINT_BYTES);
     const floats = new Float32Array(values);
     const statuses = new Int32Array(values);
-    floats[0] = point.x; floats[1] = point.y; floats[2] = point.z; statuses[3] = point.fixed ? 1 : 0;
+    floats[0] = point.x;
+    floats[1] = point.y;
+    floats[2] = point.z;
+    statuses[3] = point.fixed ? 1 : 0;
     this.backend.writeBytes(data.instanceId, data.pointer + index * POINT_BYTES, new Uint8Array(values));
   }
 
@@ -75,10 +86,16 @@ export class WasmPointsTransformer {
 
     const data = this.ensurePointStorage();
     const values = this.backend.readFloat32(data.instanceId, data.pointer + index * POINT_BYTES, POINT_STRIDE);
-    point.x = values[0]; point.y = values[1]; point.z = values[2];
+    point.x = values[0];
+    point.y = values[1];
+    point.z = values[2];
   }
 
-  public destroy(): void { this.pointer = null; this.capacity = 0; this.instanceId = null; }
+  public destroy(): void {
+    this.pointer = null;
+    this.capacity = 0;
+    this.instanceId = null;
+  }
 
   private ensurePointStorage(): { instanceId: number; pointer: number } {
     const instanceId = this.getInstanceId();

@@ -73,25 +73,28 @@ export class WebGpuGraphAlgorithm extends BaseAlgorithm {
       this.temperatureBuffer,
     ]);
 
-    this.backend.submit([
-      { pipeline: this.pipeline, bindGroup, workgroupCount },
-      { pipeline: this.reductionPipeline, bindGroup, workgroupCount: 1 },
-    ], [
-      {
-        source: this.pointsTransformer.getScratchBuffer(),
-        sourceOffset: 0,
-        destination: this.pointsTransformer.getPointBuffer(),
-        destinationOffset: 0,
-        size: this.pointsTransformer.getByteLength(),
-      },
-      {
-        source: this.temperatureBuffer,
-        sourceOffset: 0,
-        destination: this.temperatureReadback,
-        destinationOffset: 0,
-        size: 4,
-      },
-    ]);
+    this.backend.submit(
+      [
+        { pipeline: this.pipeline, bindGroup, workgroupCount },
+        { pipeline: this.reductionPipeline, bindGroup, workgroupCount: 1 },
+      ],
+      [
+        {
+          source: this.pointsTransformer.getScratchBuffer(),
+          sourceOffset: 0,
+          destination: this.pointsTransformer.getPointBuffer(),
+          destinationOffset: 0,
+          size: this.pointsTransformer.getByteLength(),
+        },
+        {
+          source: this.temperatureBuffer,
+          sourceOffset: 0,
+          destination: this.temperatureReadback,
+          destinationOffset: 0,
+          size: 4,
+        },
+      ],
+    );
 
     const dataOut = await this.backend.readBuffer(this.temperatureReadback);
     return new Float32Array(dataOut)[0];
@@ -101,7 +104,9 @@ export class WebGpuGraphAlgorithm extends BaseAlgorithm {
     throw new Error("WebGPU Graph requires async AnimationEngine support.");
   }
 
-  public getStopTemperature(): number { return this.config.stopTemperature; }
+  public getStopTemperature(): number {
+    return this.config.stopTemperature;
+  }
 
   public destroy(): void {
     this.temperatureBuffer.destroy();
