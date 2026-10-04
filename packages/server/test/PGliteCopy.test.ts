@@ -29,7 +29,23 @@ line-3
   }));
 }
 
-test("PGlite binary COPY round-trips large JS data in one table", async () => {
+function quoteCsv(value: string): string {
+  return '"' + value.replaceAll('"', '""') + '"';
+}
+
+function createCsv(rows: CopyRow[]): Blob {
+  const lines = rows.map((row) =>
+    [
+      row.id.toString(),
+      quoteCsv(row.content),
+      quoteCsv(row.payload.toString("base64")),
+    ].join(","),
+  );
+
+  return new Blob([lines.join("\n") + "\n"], { type: "text/csv" });
+}
+
+test("PGlite COPY imports large JS data into and reads it from one table", async () => {
   const pg = new PGlite();
 
   try {
@@ -42,17 +58,25 @@ test("PGlite binary COPY round-trips large JS data in one table", async () => {
     `);
 
     const rows = createRows();
+    const csv = createCsv(rows);
 
-    const exported = await pg.query(
-      "COPY copy_rows FROM '/dev/blob' WITH (FORMAT binary)",
+    await pg.query(
+      "COPY copy_rows (id, content, payload) FROM '/dev/blob' WITH (FORMAT csv, HEADER false)",
       [],
-      { blob: new Blob() },
+      { blob: csv },
     );
 
-    assert.ok(exported);
+    const result = await pg.query<CopyRow>(
+      "SELECT id, content, payload FROM copy_rows ORDER BY id",
+    );
 
-    // The test uses COPY as the only data-loading mechanism. The next step
-    // will be replaced by the JS-to-COPY stream once that adapter is added.
+    assert.equal(result.rows.length, rows.length);
+
+    for (let index = 0; index < rows.length; index += 1) {
+      assert.equal(result.rows[index].id, rows[index].id);
+      assert.equal(result.rows[index].content, rows[index].content);
+      assert.deepEqual(result.rows[index].payload, rows[index].payload);
+    }
   } finally {
     await pg.close();
   }
