@@ -3,6 +3,10 @@ import { test } from "node:test";
 
 import { PGlite } from "@electric-sql/pglite";
 
+const { rowWriter } = require("pg-copy-streams-binary") as {
+  rowWriter: () => NodeJS.ReadWriteStream;
+};
+
 type CopyRow = {
   id: number;
   content: string;
@@ -16,7 +20,7 @@ function createRows(): CopyRow[] {
     <text>line-1
 line-2
 line-3
-\tindented</text>
+	indented</text>
   </g>
 </svg>`;
 
@@ -29,23 +33,31 @@ line-3
   }));
 }
 
-function quoteCsv(value: string): string {
-  return '"' + value.split('"').join('""') + '"';
+async function createBinaryCopy(rows: CopyRow[]): Promise<Blob> {
+  const writer = rowWriter();
+  const chunks: Buffer[] = [];
+
+  const completed = new Promise<void>((resolve, reject) => {
+    writer.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    writer.once("end", resolve);
+    writer.once("error", reject);
+  });
+
+  for (const row of rows) {
+    writer.write([
+      { type: "int4", value: row.id },
+      { type: "text", value: row.content },
+      { type: "bytea", value: row.payload },
+    ]);
+  }
+
+  writer.end();
+  await completed;
+
+  return new Blob(chunks);
 }
 
-function createCsv(rows: CopyRow[]): Blob {
-  const lines = rows.map((row) =>
-    [
-      row.id.toString(),
-      quoteCsv(row.content),
-      quoteCsv("\\x" + row.payload.toString("hex")),
-    ].join(","),
-  );
-
-  return new Blob([lines.join("\n") + "\n"], { type: "text/csv" });
-}
-
-test("PGlite COPY imports large JS data into and reads it from one table", async () => {
+test("PGlite COPY imports large JS data using PostgreSQL binary COPY", async () => {
   const pg = new PGlite();
 
   try {
@@ -58,12 +70,12 @@ test("PGlite COPY imports large JS data into and reads it from one table", async
     `);
 
     const rows = createRows();
-    const csv = createCsv(rows);
+    const binaryCopy = await createBinaryCopy(rows);
 
     await pg.query(
-      "COPY copy_rows (id, content, payload) FROM '/dev/blob' WITH (FORMAT csv, HEADER false)",
+      "COPY copy_rows (id, content, payload) FROM '/dev/blob' WITH (FORMAT binary)",
       [],
-      { blob: csv },
+      { blob: binaryCopy },
     );
 
     const result = await pg.query<CopyRow>(
