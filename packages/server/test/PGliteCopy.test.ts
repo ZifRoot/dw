@@ -3,8 +3,17 @@ import { test } from "node:test";
 
 import { PGlite } from "@electric-sql/pglite";
 
+type BinaryCopyValue = {
+  type: "int4" | "text" | "bytea";
+  value: number | string | Buffer;
+};
+
+type BinaryCopyWriter = NodeJS.ReadWriteStream & {
+  write(chunk: BinaryCopyValue[]): boolean;
+};
+
 const { rowWriter } = require("pg-copy-streams-binary") as {
-  rowWriter: () => NodeJS.ReadWriteStream;
+  rowWriter: () => BinaryCopyWriter;
 };
 
 type CopyRow = {
@@ -35,10 +44,12 @@ line-3
 
 async function createBinaryCopy(rows: CopyRow[]): Promise<Blob> {
   const writer = rowWriter();
-  const chunks: Buffer[] = [];
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
 
   const completed = new Promise<void>((resolve, reject) => {
-    writer.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    writer.on("data", (chunk: Buffer) =>
+      chunks.push(new Uint8Array(chunk).slice()),
+    );
     writer.once("end", resolve);
     writer.once("error", reject);
   });
