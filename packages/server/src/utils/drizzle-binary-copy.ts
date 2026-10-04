@@ -100,10 +100,12 @@ export async function createBinaryCopyFromDrizzleTable<TTable extends AnyPgTable
     ([propertyName, column]) => prepareColumn(propertyName, column),
   );
   const writer = rowWriter();
-  const chunks: Buffer[] = [];
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
 
   const completed = new Promise<void>((resolve, reject) => {
-    writer.on("data", (chunk: Buffer) => chunks.push(chunk));
+    writer.on("data", (chunk: Buffer) =>
+      chunks.push(Uint8Array.from(chunk)),
+    );
     writer.once("end", resolve);
     writer.once("error", reject);
   });
