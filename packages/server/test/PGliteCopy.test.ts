@@ -29,7 +29,7 @@ function createRows(): CopyRow[] {
     <text>line-1
 line-2
 line-3
-	indented</text>
+\tindented</text>
   </g>
 </svg>`;
 
@@ -93,12 +93,32 @@ test("PGlite COPY imports large JS data using PostgreSQL binary COPY", async () 
       "SELECT id, content, payload FROM copy_rows ORDER BY id",
     );
 
-    assert.equal(result.rows.length, rows.length);
+    assert.equal(
+      result.rows.length,
+      rows.length,
+      "COPY must restore every generated row",
+    );
 
     for (let index = 0; index < rows.length; index += 1) {
-      assert.equal(result.rows[index].id, rows[index].id);
-      assert.equal(result.rows[index].content, rows[index].content);
-      assert.deepEqual(result.rows[index].payload, rows[index].payload);
+      assert.equal(
+        result.rows[index].id,
+        rows[index].id,
+        `row ${index + 1}: id must survive binary COPY unchanged`,
+      );
+      assert.equal(
+        result.rows[index].content,
+        rows[index].content,
+        `row ${index + 1}: text content must survive binary COPY unchanged`,
+      );
+
+      // PGlite returns BYTEA as Uint8Array, while the fixture uses Node.js Buffer.
+      // Normalize the actual value before comparing the binary content.
+      const actualPayload = Buffer.from(result.rows[index].payload);
+      assert.deepEqual(
+        actualPayload,
+        rows[index].payload,
+        `row ${index + 1}: BYTEA bytes must survive binary COPY unchanged`,
+      );
     }
   } finally {
     await pg.close();
