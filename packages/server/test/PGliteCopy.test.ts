@@ -30,7 +30,7 @@ line-3
 }
 
 function quoteCsv(value: string): string {
-  return '"' + value.replaceAll('"', '""') + '"';
+  return '"' + value.split('"').join('""') + '"';
 }
 
 function createCsv(rows: CopyRow[]): Blob {
