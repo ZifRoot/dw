@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import {
-  getTableColumns,
   getTableConfig,
   type AnyPgColumn,
   type AnyPgTable,
@@ -113,7 +112,7 @@ async function createBinaryCopyFromDrizzleTable<TTable extends AnyPgTable>(
   table: TTable,
   rows: Array<TTable["$inferInsert"]>,
 ): Promise<Blob> {
-  const columns = Object.entries(getTableColumns(table));
+  const columns = Object.entries(table as Record<string, AnyPgColumn>).filter(([propertyName]) => !propertyName.startsWith("_")).map(([propertyName, column]) => [propertyName, column] as const);
   const writer = rowWriter();
   const chunks: Uint8Array<ArrayBuffer>[] = [];
 
