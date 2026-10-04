@@ -8,7 +8,7 @@ import {
   type AnyPgColumn,
   type AnyPgTable,
 } from "drizzle-orm/pg-core";
-import { getTableColumns, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import {
   copyRowsTable,
@@ -16,26 +16,7 @@ import {
   type CopyRowsSelect,
 } from "./PGliteCopyTestSchema";
 
-type BinaryCopyType = "int4" | "text" | "bytea";
-
-type BinaryCopyValue = {
-  type: BinaryCopyType;
-  value: number | string | Buffer | null;
-};
-
-type BinaryCopyWriter = NodeJS.ReadWriteStream & {
-  write(chunk: BinaryCopyValue[]): boolean;
-};
-
-const { rowWriter } = require("pg-copy-streams-binary") as {
-  rowWriter: () => BinaryCopyWriter;
-};
-
-const COPY_TYPES: Record<string, BinaryCopyType> = {
-  integer: "int4",
-  text: "text",
-  bytea: "bytea",
-};
+import { createBinaryCopyFromDrizzleTable } from "../src/utils/drizzle-binary-copy";
 
 function quoteIdentifier(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
