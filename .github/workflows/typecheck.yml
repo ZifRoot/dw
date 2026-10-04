@@ -27,8 +27,20 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Typecheck tests
-        run: npm run typecheck:tests
+      - name: Typecheck shared tests
+        run: npm run typecheck:tests:utils
 
-      - name: Tests
-        run: npm test
+      - name: Typecheck server tests
+        run: npm run typecheck:tests:server
+
+      - name: Typecheck client tests
+        run: npm run typecheck:tests:client
+
+      - name: Shared tests
+        run: npm run test:utils
+
+      - name: Server tests
+        run: npm run test:server
+
+      - name: Client tests
+        run: npm run test:client

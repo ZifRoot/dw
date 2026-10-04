@@ -3,12 +3,20 @@
   "version": "1.0.0",
   "description": "DW — client, server and shared source project.",
   "homepage": "https://github.com/ZifRoot/dw#readme",
-  "bugs": {"url": "https://github.com/ZifRoot/dw/issues"},
-  "repository": {"type": "git", "url": "git+https://github.com/ZifRoot/dw.git"},
+  "bugs": {
+    "url": "https://github.com/ZifRoot/dw/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZifRoot/dw.git"
+  },
   "license": "ISC",
   "author": "ZifRoot",
   "private": true,
-  "workspaces": ["packages/client", "packages/server"],
+  "workspaces": [
+    "packages/client",
+    "packages/server"
+  ],
   "scripts": {
     "link:shared": "bash ./scripts/link-shared.sh",
     "generate:all": "npm run generate:dew && npm run generate:embedder",
@@ -37,13 +45,15 @@
     "preview:client": "npm --workspace client run preview",
     "typecheck-file:client": "npm --workspace client run typecheck-file",
     "format:client": "npm --workspace client run format",
-    "typecheck:tests": "npm run typecheck:tests:utils && npm run typecheck:tests:client && npm run typecheck:tests:server",
-    "test": "npm run test:utils && npm run test:client",
+    "typecheck:tests": "npm run typecheck:tests:utils && npm run typecheck:tests:server && npm run typecheck:tests:client",
+    "test": "npm run test:utils && npm run test:server && npm run test:client",
     "test:utils": "tsx --tsconfig test/tsconfig.json --test test/index.ts",
-    "test:client": "tsx --tsconfig packages/client/test/tsconfig.json --test packages/client/test/AnimationEngine.test.ts",
+    "test:client": "tsx --tsconfig packages/client/test/tsconfig.json --test packages/client/test/index.ts",
     "typecheck:tests:utils": "tsc -p test/tsconfig.json",
     "typecheck:tests:client": "tsc -p packages/client/test/tsconfig.json",
-    "typecheck:tests:server": "tsc -p packages/server/test/tsconfig.json"
+    "typecheck:tests:server": "tsc -p packages/server/test/tsconfig.json",
+    "test:server": "tsx --tsconfig packages/server/test/tsconfig.json --test packages/server/test/index.ts",
+    "test:client:problematic": "tsx --tsconfig packages/client/test/tsconfig.json --test packages/client/test/problematic/index.ts"
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.7.0",
@@ -51,5 +61,8 @@
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   },
-  "allowScripts": {"esbuild": true, "@openapitools/openapi-generator-cli@2.41.0": true}
+  "allowScripts": {
+    "esbuild": true,
+    "@openapitools/openapi-generator-cli@2.41.0": true
+  }
 }
