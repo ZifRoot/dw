@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { AnimationCallback, AnimationEngine, AnimationGenerator } from "../src/core/Engines/AnimationEngine";
+import { AnimationCallback, AnimationEngine, AnimationGenerator } from "../../src/core/Engines/AnimationEngine";
 
 type RafCallback = (timestamp: number) => void;
 
