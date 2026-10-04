@@ -211,10 +211,13 @@ test(
           rows[index].content,
           `row ${index + 1}: text content must survive binary COPY unchanged`,
         );
-        assert.equal(
-          actual.payload,
-          rows[index].payload,
-          `row ${index + 1}: BYTEA must survive binary COPY unchanged after Drizzle mapping`,
+        const expectedPayload = Buffer.from(rows[index].payload, "hex");
+        const actualPayload = Buffer.from(actual.payload);
+
+        assert.deepEqual(
+          actualPayload,
+          expectedPayload,
+          `row ${index + 1}: BYTEA bytes must survive binary COPY unchanged after Drizzle mapping`,
         );
       }
     } finally {
