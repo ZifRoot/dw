@@ -17,6 +17,11 @@ type BinaryCopyStrategy = {
   map: (column: AnyPgColumn, value: unknown) => BinaryCopyValue;
 };
 
+type PreparedColumn = {
+  propertyName: string;
+  map: (value: unknown) => BinaryCopyValue;
+};
+
 const { rowWriter } = require("pg-copy-streams-binary") as {
   rowWriter: () => BinaryCopyWriter;
 };
@@ -63,10 +68,10 @@ const BINARY_COPY_STRATEGIES: Record<string, BinaryCopyStrategy> = {
   },
 };
 
-function mapDrizzleValueToBinaryCopy(
+function prepareColumn(
+  propertyName: string,
   column: AnyPgColumn,
-  value: unknown,
-): BinaryCopyValue {
+): PreparedColumn {
   const strategy = BINARY_COPY_STRATEGIES[column.getSQLType()];
 
   if (!strategy) {
@@ -75,35 +80,38 @@ function mapDrizzleValueToBinaryCopy(
     );
   }
 
-  if (value == null) {
-    return { type: strategy.type, value: null };
-  }
+  return {
+    propertyName,
+    map: (value) => {
+      if (value == null) {
+        return { type: strategy.type, value: null };
+      }
 
-  return strategy.map(column, column.mapToDriverValue(value));
+      return strategy.map(column, column.mapToDriverValue(value));
+    },
+  };
 }
 
 export async function createBinaryCopyFromDrizzleTable<TTable extends AnyPgTable>(
   table: TTable,
   rows: Array<TTable["$inferInsert"]>,
 ): Promise<Blob> {
-  const columns = Object.entries(getTableColumns(table));
+  const columns = Object.entries(getTableColumns(table)).map(
+    ([propertyName, column]) => prepareColumn(propertyName, column),
+  );
   const writer = rowWriter();
-  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  const chunks: Buffer[] = [];
 
   const completed = new Promise<void>((resolve, reject) => {
-    writer.on("data", (chunk: Buffer) =>
-      chunks.push(new Uint8Array(chunk).slice()),
-    );
+    writer.on("data", (chunk: Buffer) => chunks.push(chunk));
     writer.once("end", resolve);
     writer.once("error", reject);
   });
 
   for (const row of rows) {
-    const rowValues = columns.map(([propertyName, column]) =>
-      mapDrizzleValueToBinaryCopy(
-        column,
-        (row as Record<string, unknown>)[propertyName],
-      ),
+    const sourceRow = row as Record<string, unknown>;
+    const rowValues = columns.map(({ propertyName, map }) =>
+      map(sourceRow[propertyName]),
     );
 
     writer.write(rowValues);
