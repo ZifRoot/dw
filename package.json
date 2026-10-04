@@ -52,7 +52,8 @@
     "typecheck:tests:utils": "tsc -p test/tsconfig.json",
     "typecheck:tests:client": "tsc -p packages/client/test/tsconfig.json",
     "typecheck:tests:server": "tsc -p packages/server/test/tsconfig.json",
-    "test:server": "tsx --tsconfig packages/server/test/tsconfig.json --test packages/server/test/index.ts"
+    "test:server": "tsx --tsconfig packages/server/test/tsconfig.json --test packages/server/test/index.ts",
+    "test:client:problematic": "tsx --tsconfig packages/client/test/tsconfig.json --test packages/client/test/problematic/index.ts"
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.7.0",

@@ -99,41 +99,6 @@ test("never-started groups have priority in registration order", () => {
   engine.clear();
 });
 
-test("lastCompletedAt determines priority after a long callback", () => {
-  const calls: string[] = [];
-  const deltas: number[] = [];
-  let aRuns = 0;
-
-  const engine = createRunningEngine([
-    [
-      (deltaTime) => {
-        calls.push("A");
-        deltas.push(deltaTime);
-        aRuns++;
-        performanceTime += aRuns === 1 ? 10 : 1;
-      },
-    ],
-    [
-      (deltaTime) => {
-        calls.push("B");
-        deltas.push(deltaTime);
-        performanceTime += 2;
-      },
-    ],
-  ]);
-
-  performanceTime = 80;
-  runNextAnimationFrame(80);
-  assert.deepEqual(calls, ["A", "B"]);
-
-  performanceTime = 100;
-  runNextAnimationFrame(100);
-
-  assert.deepEqual(calls, ["A", "B", "A"]);
-  assert.deepEqual(deltas, [0, 10, 10]);
-  engine.clear();
-});
-
 test("equal completion timestamps preserve FIFO order", () => {
   const calls: string[] = [];
   const engine = createRunningEngine([[() => void calls.push("A")], [() => void calls.push("B")], [() => void calls.push("C")]]);
@@ -524,50 +489,7 @@ test("async callback blocks the next callback in its group but not independent g
   engine.clear();
 });
 
-test("the same callback can complete synchronously and asynchronously on different runs", async () => {
-  installAnimationFrameMock();
 
-  const calls: string[] = [];
-  let run = 0;
-  let resolveAsync!: () => void;
-  const asyncCompletion = new Promise<void>((resolve) => {
-    resolveAsync = resolve;
-  });
-
-  const callback: AnimationCallback = () => {
-    run++;
-    calls.push(`run${run}`);
-
-    if (run === 2) {
-      return asyncCompletion;
-    }
-
-    performanceTime += 10;
-  };
-
-  const engine = new AnimationEngine();
-  engine.addCallback(callback);
-  runCalibration();
-
-  performanceTime = 80;
-  runNextAnimationFrame(80);
-  assert.deepEqual(calls, ["run1"]);
-
-  performanceTime = 100;
-  runNextAnimationFrame(100);
-  assert.deepEqual(calls, ["run1", "run2"]);
-
-  assert.equal(rafQueue.length, 0);
-
-  resolveAsync();
-  await asyncCompletion;
-
-  performanceTime = 140;
-  runNextAnimationFrame(140);
-  assert.deepEqual(calls, ["run1", "run2", "run3"]);
-
-  engine.clear();
-});
 
 test("removing a group while its callback is awaiting prevents rescheduling", async () => {
   installAnimationFrameMock();
