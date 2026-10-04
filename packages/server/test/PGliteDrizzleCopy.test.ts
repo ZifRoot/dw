@@ -8,7 +8,7 @@ import {
   type AnyPgColumn,
   type AnyPgTable,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+import { getTableColumns, sql } from "drizzle-orm";
 
 import {
   copyRowsTable,
@@ -112,7 +112,7 @@ async function createBinaryCopyFromDrizzleTable<TTable extends AnyPgTable>(
   table: TTable,
   rows: Array<TTable["$inferInsert"]>,
 ): Promise<Blob> {
-  const columns = Object.entries(table as Record<string, AnyPgColumn>).filter(([propertyName]) => !propertyName.startsWith("_")).map(([propertyName, column]) => [propertyName, column] as const);
+  const columns = Object.entries(getTableColumns(table));
   const writer = rowWriter();
   const chunks: Uint8Array<ArrayBuffer>[] = [];
 
