@@ -96,6 +96,10 @@ function targetExpression(sqlType: string, columnName: string): string {
       return identifier + "::timestamp";
     case "varchar":
       return identifier + "::varchar";
+    case "timestamp with time zone":
+      return identifier + "::timestamptz";
+    case "timestamp without time zone":
+      return identifier + "::timestamp";
     default:
       return identifier;
   }
