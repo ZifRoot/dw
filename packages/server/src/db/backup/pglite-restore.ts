@@ -1,4 +1,17 @@
 import { PGlite } from "@electric-sql/pglite";
+import { getTableColumns } from "drizzle-orm";
+import {
+  chatMessagesTable,
+  chatSessionsTable,
+  embeddingsTable,
+  filesTable,
+  messageFilesTable,
+  messageFragmentsTable,
+  userTable,
+} from "../drizzle/drizzle-schema";
+import {
+  createBinaryCopyFromDrizzleTable,
+} from "../../utils/drizzle-binary-copy";
 import {
   BACKUP_TABLES,
   BACKUP_TABLE_ORDER,
@@ -40,8 +53,119 @@ const PG_FOREIGN_KEYS = [
   'ALTER TABLE "embeddings" ADD CONSTRAINT "embeddings_session_id_chat_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "chat_sessions"("id") ON DELETE CASCADE',
 ];
 
+const DRIZZLE_TABLES = {
+  user: userTable,
+  chat_sessions: chatSessionsTable,
+  chat_messages: chatMessagesTable,
+  files: filesTable,
+  message_files: messageFilesTable,
+  message_fragments: messageFragmentsTable,
+  embeddings: embeddingsTable,
+} as const;
+
 function quoteIdentifier(value: string): string {
   return '"' + value.replace(/"/g, '""') + '"';
+}
+
+function stagingType(sqlType: string): string {
+  switch (sqlType) {
+    case "boolean":
+      return "boolean";
+    case "integer":
+      return "integer";
+    case "real":
+      return "real";
+    case "doublePrecision":
+      return "double precision";
+    case "bytea":
+      return "bytea";
+    default:
+      return "text";
+  }
+}
+
+function targetExpression(sqlType: string, columnName: string): string {
+  const identifier = quoteIdentifier(columnName);
+
+  switch (sqlType) {
+    case "uuid":
+      return identifier + "::uuid";
+    case "jsonb":
+      return identifier + "::jsonb";
+    case "timestamp":
+      return identifier + "::timestamp";
+    case "varchar":
+      return identifier + "::varchar";
+    default:
+      return identifier;
+  }
+}
+
+async function copyTable(
+  pg: PGlite,
+  tableName: string,
+  drizzleTable: typeof DRIZZLE_TABLES[keyof typeof DRIZZLE_TABLES],
+  rows: Array<Record<string, unknown>>,
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  const columns = Object.values(getTableColumns(drizzleTable));
+  const stagingName = "__dw_copy_" + tableName;
+
+  await pg.exec(
+    "CREATE TEMP TABLE " +
+      quoteIdentifier(stagingName) +
+      " (" +
+      columns
+        .map(
+          (column) =>
+            quoteIdentifier(column.name) +
+            " " +
+            stagingType(column.getSQLType()),
+        )
+        .join(", ") +
+      ")",
+  );
+
+  try {
+    const binaryCopy = await createBinaryCopyFromDrizzleTable(
+      drizzleTable,
+      rows as never,
+    );
+
+    const columnNames = columns
+      .map((column) => quoteIdentifier(column.name))
+      .join(", ");
+
+    await pg.query(
+      "COPY " +
+        quoteIdentifier(stagingName) +
+        " (" +
+        columnNames +
+        ") FROM '/dev/blob' WITH (FORMAT binary)",
+      [],
+      { blob: binaryCopy },
+    );
+
+    await pg.exec(
+      "INSERT INTO " +
+        quoteIdentifier(tableName) +
+        " (" +
+        columnNames +
+        ") SELECT " +
+        columns
+          .map((column) =>
+            targetExpression(column.getSQLType(), column.name),
+          )
+          .join(", ") +
+        " FROM " +
+        quoteIdentifier(stagingName),
+    );
+  } finally {
+    await pg.exec(
+      "DROP TABLE IF EXISTS " + quoteIdentifier(stagingName),
+    );
+  }
 }
 
 export async function restoreSqliteBackup(
@@ -60,23 +184,14 @@ export async function restoreSqliteBackup(
 
     for (const table of BACKUP_TABLES) {
       const rows = data.get(table.name) ?? [];
-      if (rows.length === 0) continue;
+      const drizzleTable =
+        DRIZZLE_TABLES[table.name as keyof typeof DRIZZLE_TABLES];
 
-      const columns = table.columns.map((column) => quoteIdentifier(column.name)).join(", ");
-      const placeholders = table.columns.map((_, index) => "$" + (index + 1)).join(", ");
-
-      for (const row of rows) {
-        await pg.query(
-          "INSERT INTO " +
-            quoteIdentifier(table.name) +
-            " (" +
-            columns +
-            ") VALUES (" +
-            placeholders +
-            ")",
-          table.columns.map((column) => row[column.name]),
-        );
+      if (!drizzleTable) {
+        throw new Error("Missing Drizzle table for backup table: " + table.name);
       }
+
+      await copyTable(pg, table.name, drizzleTable, rows);
     }
 
     for (const index of PG_INDEXES) {
