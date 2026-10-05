@@ -963,3 +963,309 @@ BaseAlgorithm сохраняет синхронный applyStep() для обр�
 [ ] performance comparison
 
 Документ является одновременно архитектурной документацией и задачей на дальнейшую реализацию/исследование. Он отражает текущее состояние исходников и принятые решения.
+
+
+## 33. Архитектурное уточнение: BaseBackend, BackendContext и backend buffers
+
+Этот раздел фиксирует новую архитектурную модель, принятую после реализации WASM/WebGPU prototype. Предыдущие разделы, описывающие отдельную memory для каждого algorithm instance и `transformer.attachInstance(...)`, сохраняются выше как история prototype, но **не являются целевой архитектурой**.
+
+### 33.1 BaseBackend и BackendContext — разные понятия
+
+Текущий низкоуровневый `Backend` должен концептуально называться `BaseBackend`.
+
+`BaseBackend` — утилитарный технологический слой. Он ничего не знает о PointGraphManager, Mediator, Transformer, physics semantics или Pipeline.
+
+~~~text
+BaseBackend
+    ├── memory / buffers
+    ├── allocation
+    ├── read / write
+    ├── module / instance creation
+    ├── execution
+    └── resource destruction
+~~~
+
+Реализации:
+
+~~~text
+BaseBackend
+    ├── WasmBackend
+    └── WebGpuBackend
+~~~
+
+WasmBackend работает с WebAssembly.Memory, WebAssembly.Instance и linear memory.
+
+WebGpuBackend работает с GPUDevice, GPUBuffer, compute resources и command execution.
+
+Отдельно вводится `BackendContext`. Это не новый тип backend API, а lifecycle-окружение конкретной backend configuration:
+
+~~~text
+BackendContext
+├── BaseBackend
+├── Transformers[]
+├── Algorithms[]
+└── EnginePipeline
+~~~
+
+BackendContext знает участников своей конфигурации и отвечает за их связывание и уничтожение.
+
+Transformer и Algorithm **не принадлежат BaseBackend**. Они входят в одно BackendContext.
+
+### 33.2 Lifecycle BackendContext
+
+При создании:
+
+~~~text
+create BaseBackend
+      ↓
+create Transformers
+      ↓
+subscribe Transformers to Mediator
+      ↓
+create Algorithms
+      ↓
+create/configure EnginePipeline
+~~~
+
+При уничтожении порядок должен учитывать зависимости:
+
+~~~text
+Algorithms.dispose()
+      ↓
+Transformers.dispose()
+      ↓
+BaseBackend.dispose()
+~~~
+
+Transformer должен отписаться от Mediator до уничтожения backend resources.
+
+Это особенно важно при смене backend:
+
+~~~text
+BackendContext(WASM)
+        ↓
+dispose
+        ↓
+BackendContext(WebGPU)
+~~~
+
+Старые WASM transformers не должны продолжать получать Mediator events после переключения на WebGPU.
+
+### 33.3 Transformer хранит backend buffer
+
+Transformer является владельцем backend-представления соответствующей domain model.
+
+Например:
+
+~~~text
+PointGraphManager
+       ↕
+PointsTransformer
+       ↕
+Backend Buffer
+~~~
+
+Transformer:
+- знает свою domain model;
+- получает её изменения через Mediator;
+- сериализует model state в backend representation;
+- хранит backend buffer/resource;
+- применяет backend state обратно к model;
+- освобождает свой resource при dispose.
+
+Transformer не знает physics semantics и не принадлежит конкретному Algorithm.
+
+Один Transformer может использоваться несколькими Algorithms.
+
+Один Algorithm может использовать несколько Transformers.
+
+Таким образом, связь является many-to-many:
+
+~~~text
+Repulsion ───────→ Points
+Graph ───────────→ Points + Edges
+Z-damping ───────→ Points
+Other algorithm ─→ Points + Texture + ...
+~~~
+
+### 33.4 Buffer — backend-specific resource handle
+
+Результат `Transformer.getBuffer()` должен представлять backend resource, а не случайный внутренний объект Transformer.
+
+Абстрактно:
+
+~~~text
+Transformer.getBuffer()
+        ↓
+Backend Buffer
+~~~
+
+Для WASM buffer может содержать регион общей WebAssembly.Memory:
+
+~~~text
+WasmBuffer
+├── pointer / offset
+└── byteLength
+~~~
+
+Для WebGPU buffer может содержать GPU resource и параметры его использования:
+
+~~~text
+WebGpuBuffer
+├── GPUBuffer
+├── offset
+├── size
+└── backend-specific binding information
+~~~
+
+Не следует считать этот handle универсальным числом. WASM pointer и WebGPU GPUBuffer имеют разную природу.
+
+Transformer владеет lifecycle buffer, а Algorithm получает buffer для использования в своих вычислениях.
+
+### 33.5 Общая memory может использоваться несколькими WASM algorithms
+
+Несколько WASM modules могут иметь отдельные WebAssembly.Instance, но использовать одну WebAssembly.Memory:
+
+~~~text
+                    WebAssembly.Memory
+                           │
+             ┌─────────────┼─────────────┐
+             │             │             │
+             ▼             ▼             ▼
+       Repulsion       Graph        Z-damping
+        instance       instance       instance
+             │             │             │
+             └─────────────┴─────────────┘
+                           │
+                      shared buffers
+~~~
+
+Backend отвечает за allocation внутри общей memory, чтобы ресурсы не пересекались.
+
+Это означает, что Transformer не должен хранить один `attachedInstanceId`. Один и тот же buffer может использоваться несколькими algorithm instances.
+
+### 33.6 Algorithm и WebAssembly.Instance
+
+`Algorithm` и технический `WebAssembly.Instance` — не одно и то же понятие, но отдельный архитектурный класс `Instance` не вводится.
+
+Например:
+
+~~~text
+WasmRepulsionAlgorithm
+├── WebAssembly.Instance   ← implementation detail
+├── PointsBuffer
+└── algorithm state
+~~~
+
+То есть Algorithm является нашей архитектурной сущностью, а `WebAssembly.Instance` — внутренней деталью реализации конкретного WASM algorithm.
+
+Для WebGPU аналогичная деталь может быть представлена compute pipeline, bind groups и другими GPU resources.
+
+### 33.7 Mediator-driven synchronization
+
+Целевая модель больше не требует, чтобы EnginePipeline явно выполнял generic `Load` и `Save` вызовы Transformer.
+
+Transformer подписывается на Mediator и получает направление синхронизации через события.
+
+Первоначальная загрузка:
+
+~~~text
+DataManager
+    ↓
+PointGraphManager
+    ↓
+Mediator: data loaded
+    ↓
+Transformer
+    ↓
+Backend Buffer
+~~~
+
+Изменение отдельной точки:
+
+~~~text
+Mediator: point changed + Point ID
+    ↓
+Transformer
+    ↓
+PointGraphManager existing index
+    ↓
+Backend Buffer
+~~~
+
+Transformer **не создаёт собственный ID → index Map**. Для разрешения Point ID используется существующая индексация PointGraphManager.
+
+Обратная синхронизация после physics:
+
+~~~text
+EnginePipeline
+    ↓
+final completion callback
+    ↓
+Mediator: physics state updated
+    ↓
+Transformer
+    ↓
+Backend Buffer → PointGraphManager
+~~~
+
+Final callback является orchestration callback, а не дополнительным physics Algorithm.
+
+### 33.8 Направления синхронизации задаются Transformer
+
+Конкретный Transformer должен знать, на какие Mediator events он подписывается для:
+- model → backend synchronization;
+- backend → model synchronization;
+- полной загрузки;
+- частичного обновления, если оно поддерживается.
+
+Конкретные event types могут передаваться через constructor/configuration Transformer, если это не противоречит существующей типизированной модели Mediator.
+
+Это позволяет Transformer оставаться адаптером данных, а EnginePipeline — механизмом выполнения physics.
+
+### 33.9 Новая граница ответственности
+
+Целевая схема:
+
+~~~text
+PointGraphManager
+       │
+       ↕
+     Mediator
+       │
+       ↕
+   Transformer
+       │
+       ↕
+ Backend Buffer
+       │
+       ↕
+   Algorithm
+       │
+       ▼
+Backend execution
+~~~
+
+При этом:
+
+- PointGraphManager — domain source of truth;
+- Mediator — события изменения и synchronization boundaries;
+- Transformer — model ↔ backend buffer;
+- Buffer — backend storage handle;
+- Algorithm — physics semantics и вычисление;
+- BaseBackend — низкоуровневые backend operations;
+- BackendContext — lifecycle и состав конкретной backend configuration;
+- EnginePipeline — порядок выполнения algorithms.
+
+### 33.10 Что должно быть пересмотрено при реализации
+
+Следующая реализация должна пересмотреть:
+1. `EnginePipelineSynchronization.load/save`;
+2. `transformer.attachInstance(...)`;
+3. transformer-specific return types из `loadData()`;
+4. отдельную memory на каждый WASM algorithm instance;
+5. собственные Transformer ID → index maps;
+6. lifecycle и unsubscribe Transformer от Mediator;
+7. создание/замену BackendContext при смене backend.
+
+Эта модель является **архитектурным направлением для следующей реализации**, а не утверждением, что все перечисленные изменения уже внесены в исходники.
