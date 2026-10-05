@@ -18,7 +18,7 @@ Graph
 Z-damping
 ~~~
 
-На текущем этапе backend-прототип заменяет только Z-damping. Repulsion и Graph остаются JavaScript algorithms. Архитектура должна позволять позднее заменить их без изменения EnginePipeline.
+На текущем этапе backend-реализации существуют для всех трёх algorithms: Repulsion, Graph и Z-damping. Для WASM и WebGPU реализованы отдельные backend algorithms, при этом EnginePipeline остаётся единым. JavaScript сохраняется как fallback. Архитектура не должна зависеть от конкретного backend.
 
 ## 2. Источник истины
 
@@ -494,7 +494,7 @@ try WebGPU
 
 Текущий порядок попыток в index.ts: WebGPU → WASM → default JS.
 
-## 19. Default и experimental pipelines
+## 19. Default и experimental configurations
 
 Default:
 
@@ -507,20 +507,20 @@ JS Z-damping
 WASM:
 
 ~~~text
-JS Repulsion
-JS Graph
+WASM Repulsion
+WASM Graph
 WASM Z-damping
 ~~~
 
 WebGPU:
 
 ~~~text
-JS Repulsion
-JS Graph
+WebGPU Repulsion
+WebGPU Graph
 WebGPU Z-damping
 ~~~
 
-Это промежуточный этап исследования. Конечная цель — иметь backend implementations для всех трёх algorithms при сохранении одного EnginePipeline.
+Это текущие experimental configurations. Default configuration остаётся полностью JavaScript. Все три backend-варианта используют один EnginePipeline; различается только набор concrete algorithm implementations.
 
 ## 20. Shared mathematical semantics
 
@@ -901,6 +901,42 @@ Composition root может перейти к следующему backend ил�
 - temperature;
 - численные расхождения.
 
+## 32. Исправления после CI
+
+После реализации backend algorithms PR прошёл несколько последовательных исправлений по результатам CI. Эти исправления не меняют выбранную архитектуру, но фиксируют важные технические границы реализации.
+
+### 32.1. Некорректные переводы строк в исходниках
+
+В нескольких исходниках вместо реальных переводов строк оказались текстовые последовательности \\n. TypeScript воспринимал их как недопустимые символы и typecheck завершался с TS1127.
+
+Исправлено во всех затронутых TypeScript/WGSL файлах: текстовые последовательности заменены реальными переводами строк.
+
+### 32.2. Типизация imports для WebAssembly
+
+WebAssembly.instantiate() не принимал условно построенный объект imports из-за несовместимого выведенного union-типа.
+
+Использован явный тип:
+
+~~~ts
+const imports: WebAssembly.Imports = memory
+  ? { env: { memory } }
+  : {};
+~~~
+
+Это особенно важно для общего WebAssembly.Memory: при переданной memory модуль получает её через env.memory, а при отсутствии использует собственную exported memory.
+
+### 32.3. Синхронный abstract contract для WebGPU algorithms
+
+BaseAlgorithm сохраняет синхронный applyStep() для обратной совместимости, даже когда конкретный algorithm имеет настоящий async execution через applyStepAsync().
+
+Поэтому WebGpuRepulsionAlgorithm, WebGpuGraphAlgorithm и WebGpuZDapperAlgorithm явно реализуют applyStep() и завершают его ошибкой с указанием, что WebGPU требует async AnimationEngine support.
+
+Это не попытка выполнять GPU synchronously: synchronous путь намеренно защищён от случайного запуска WebGPU через старый API.
+
+### 32.4. Итог CI
+
+После этих исправлений CI успешно завершился, PR #54 был смержен в dev. Следующие изменения в этой задаче должны исходить из уже проверенного состояния после merge.
+
 ## 32. Статус
 
 [x] единый EnginePipeline
@@ -923,6 +959,7 @@ Composition root может перейти к следующему backend ил�
 [x] включение WebGPU Z-damping в основной pipeline
 [x] backend Repulsion
 [x] backend Graph
+[x] CI/typecheck после реализации backend algorithms
 [ ] performance comparison
 
 Документ является одновременно архитектурной документацией и задачей на дальнейшую реализацию/исследование. Он отражает текущее состояние исходников и принятые решения.
