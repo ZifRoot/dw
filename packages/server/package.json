@@ -26,7 +26,8 @@
     "pg": "^8.21.0",
     "swagger-ui-express": "^5.0.1",
     "yaml": "^2.9.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@electric-sql/pglite": "^0.5.8"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -37,6 +38,7 @@
     "drizzle-kit": "^0.31.10",
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.17",
-    "tsconfig-paths": "^4.2.0"
+    "tsconfig-paths": "^4.2.0",
+    "pg-copy-streams-binary": "^2.2.0"
   }
 }

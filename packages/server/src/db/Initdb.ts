@@ -1,44 +1,33 @@
 import "dotenv/config";
-// import { PrismaItemRepository } from "./PrismaItemRepository";
-// import { PrismaPg } from "@prisma/adapter-pg";
-// import { PrismaClient } from "../generated/prisma/client";
 import { DrizzleRepository } from "./DrizzleRepository";
-import { db_drizzle } from "./drizzle/drizzle-db";
 import { IRepository } from "./IRepository";
-import { DbManager } from "./db-manager";
-
-// export async function testDb1() {
-//   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
-//   const repository = new PrismaItemRepository(prisma);
-
-//   let ax = await repository.findAllSessions();
-//   let str = JSON.stringify(ax);
-//   console.log(str);
-//   //await repository.create({ id: randomUUID(), title: "hterthtr", title_type: "fg", updated_at: 4 });
-
-//   await prisma.$disconnect();
-// }
-
-// export function InitPrismaDb() {
-//   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
-//   return new PrismaItemRepository(prisma);
-// }
+import {
+  getDatabaseRuntime,
+  initializeDatabaseRuntime,
+} from "./database-runtime";
+import {
+  initPGliteDrizzle,
+  initPostgresDrizzle,
+} from "./drizzle/drizzle-db";
 
 export function InitdrizzleDb() {
-  return new DrizzleRepository(db_drizzle);
+  const current = getDatabaseRuntime();
+  if (current.backend === "pglite" && current.pglite) {
+    return new DrizzleRepository(initPGliteDrizzle(current.pglite));
+  }
+
+  return new DrizzleRepository(initPostgresDrizzle());
 }
 
 export function InitDb(): IRepository {
-  if (!DbManager.startAndWaitSync()) throw new Error("Failed to initialize database");
-  return InitdrizzleDb();
+  throw new Error("Synchronous database initialization is no longer supported");
 }
 
 export function InitDbFast(): IRepository {
-  return InitdrizzleDb();
+  throw new Error("Fast database initialization is no longer supported");
 }
 
 export async function InitDbAsync(): Promise<IRepository> {
-  if (!(await DbManager.startAndWaitAsync())) throw new Error("Failed to initialize database");
+  await initializeDatabaseRuntime();
   return InitdrizzleDb();
 }
-// runWithPromiseAsync(main()).catch(console.error);

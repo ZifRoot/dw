@@ -1,4 +1,5 @@
 // Server tests.
-// Add server test imports here as the server test suite grows.
+import "./PGliteCopy.test";
+import "./PGliteDrizzleCopy.test";
 
 export {};

@@ -17,6 +17,7 @@ import { dateStr } from "@utils/date-utils";
 import { LogSafe, Safe } from "@utils/logger";
 import { EmbedderLmStudio } from "./EmbedderLmStudio";
 import { AsyncPool } from "@utils/async-pool";
+import { createDatabaseBackup } from "./db/database-runtime";
 
 const FILE_DOWNLOAD_CONCURRENCY = 4;
 
