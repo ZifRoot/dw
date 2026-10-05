@@ -23,7 +23,7 @@ EnginePipeline
     └── Z-damping
 ~~~
 
-На текущем этапе backend-specific является только Z-damping.
+На текущем этапе backend-specific реализации существуют для Repulsion, Graph и Z-damping. Default configuration остаётся JavaScript, а WASM/WebGPU configurations используют соответствующие backend algorithms.
 
 ## 2. Pipeline создаётся один раз
 
@@ -220,24 +220,24 @@ JS Z-damping
 WASM:
 
 ~~~text
-JS Repulsion
-JS Graph
+WASM Repulsion
+WASM Graph
 WASM Z-damping
 ~~~
 
 WebGPU:
 
 ~~~text
-JS Repulsion
-JS Graph
+WebGPU Repulsion
+WebGPU Graph
 WebGPU Z-damping
 ~~~
 
-Это промежуточная исследовательская стадия.
+Это текущие experimental configurations; все они используют один EnginePipeline.
 
 ## 13. Будущее
 
-После Z-damping backend implementations могут быть добавлены для Repulsion и Graph:
+Backend implementations для Repulsion и Graph уже добавлены:
 
 ~~~text
 WASM:
@@ -253,7 +253,7 @@ WebGPU:
 
 При этом EnginePipeline остаётся тем же.
 
-Graph требует отдельного исследования concurrent writes и accumulation.
+Graph baseline использует ownership одной output point на invocation и не требует concurrent writes в одну координату.
 
 ## 14. Synchronization steps
 
@@ -447,3 +447,13 @@ Save
 
 WebGPU Repulsion, Graph и Z-damping подключены к общему async contract AnimationEngine. Pipeline ожидает завершение каждого backend step перед переходом к следующему algorithm, а финальный Save ожидается перед завершением physics run.
 
+
+## 18. Исправления после CI
+
+После реализации Repulsion и Graph CI выявил три технических класса ошибок:
+
+1. В нескольких исходниках были записаны текстовые последовательности \\n вместо реальных переводов строк. Это приводило к TS1127 при typecheck.
+2. Условно сформированный объект imports для WebAssembly.instantiate() требовал явной типизации как WebAssembly.Imports, чтобы корректно поддерживать переданную shared WebAssembly.Memory.
+3. WebGPU algorithms наследовали синхронный abstract applyStep() из BaseAlgorithm. Для сохранения общего synchronous contract методы реализованы явно, но намеренно бросают ошибку; фактическое выполнение WebGPU идёт через applyStepAsync().
+
+После этих исправлений CI успешно прошёл, а PR #54 был смержен в dev.
