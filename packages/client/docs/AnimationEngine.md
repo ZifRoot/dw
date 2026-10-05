@@ -53,7 +53,7 @@ AnimationEngine — единственная точка доступа подс�
 
 Планирование — это процесс, который определяет, **какие зарегистрированные callback'и будут выполнены в текущем кадре, а какие продолжат выполнение в следующем**.
 
-AnimationEngine хранит состояние нескольких параллельных групп и использует cursor для продолжения каждой последовательности с нужного callback.
+AnimationEngine хранит состояние нескольких параллельных групп и использует Sequence для получения следующего callback.
 
 На каждом animation frame происходит примерно следующее:
 
@@ -301,7 +301,7 @@ Group
 └── queue node
 ~~~
 
-`sequence` — текущий источник callback'ов. Для `addCallbacks()` это внутренний циклический адаптер массива, для `addGenerator()` — переданный Generator, для `addGeneratorFactory()` — Generator, созданный фабрикой.
+`sequence` — текущий источник callback'ов. Для `addCallbacks()` используется ArraySequence, для `addGenerator()` — GeneratorSequence, для `addGeneratorFactory()` — GeneratorFactorySequence.
 
 lastCompletedAt хранит момент завершения последнего callback этой группы.
 
@@ -453,7 +453,7 @@ A → B → C → done
 A → B → C → A → B → C → ...
 ~~~
 
-Внутри AnimationEngine это реализовано как источник последовательности с тем же iterator-протоколом.
+Внутри AnimationEngine это реализовано через ArraySequence.
 
 Поэтому концептуальная иерархия API выглядит так:
 
@@ -555,7 +555,7 @@ deltaTime = 0
 Это одинаково работает для `addCallback`, `addCallbacks`, `addGenerator` и `addGeneratorFactory`.
 
 
-## Дальнейшее развитие
+## Модель Sequence
 
 Источники последовательностей унифицированы через специальную абстракцию Sequence.
 
@@ -563,7 +563,7 @@ deltaTime = 0
 
 AnimationEngine не должен знать, является ли источник массивом callback'ов, одним callback'ом, Generator или функцией, создающей Generator.
 
-Целевая абстракция:
+Текущий контракт:
 
 ~~~ts
 interface Sequence<T> extends Iterator<T> {
@@ -698,7 +698,7 @@ Generator #2 → END
 
 ### Реализации Sequence
 
-Целевая архитектура предусматривает специализированные реализации:
+Реализация использует специализированные типы Sequence:
 
 ~~~
 Sequence
@@ -779,9 +779,9 @@ Frame N+2:
 
 Это правило не позволяет одной повторяемой последовательности бесконечно захватывать оставшийся бюджет одного кадра.
 
-### Целевая ответственность AnimationEngine
+### Ответственность AnimationEngine
 
-После введения Sequence AnimationEngine должен знать только:
+AnimationEngine работает только с:
 
 ~~~
 Group
