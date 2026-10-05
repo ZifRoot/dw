@@ -120,8 +120,7 @@ export class AnimationEngine {
   private currentStep = 0;
   private nextGroupId = 0;
   private groups = new Map<number, CallbackGroup>();
-  private pendingGroups = new DoublyLinkedList<CallbackGroup>();
-  private startedGroups = new DoublyLinkedList<CallbackGroup>();
+  private groupsQueue = new DoublyLinkedList<CallbackGroup>();
 
   constructor() {}
 
@@ -160,7 +159,7 @@ export class AnimationEngine {
     };
 
     this.groups.set(groupId, group);
-    this.enqueuePending(group);
+    this.enqueueGroup(group);
     this.start();
 
     let disposed = false;
@@ -217,36 +216,51 @@ export class AnimationEngine {
     for (const group of this.groups.values()) {
       if (group.queueNode !== null || group.waitingPromise !== null) continue;
 
-      if (group.lastCompletedAt === null) {
-        this.enqueuePending(group);
-      } else {
-        this.enqueueStarted(group);
-      }
+      this.enqueueGroup(group);
     }
   }
 
-  private enqueuePending(group: CallbackGroup): void {
-    group.queueNode = this.pendingGroups.append(group);
+  private enqueueGroup(group: CallbackGroup): void {
+    let node = this.groupsQueue.first;
+
+    while (node !== null) {
+      if (this.compareGroupPriority(group, node.value) > 0) {
+        break;
+      }
+
+      node = node.next;
+    }
+
+    group.queueNode =
+      node === null
+        ? this.groupsQueue.append(group)
+        : this.groupsQueue.insertBefore(node, group);
   }
 
-  private enqueueStarted(group: CallbackGroup): void {
-    group.queueNode = this.startedGroups.append(group);
+  /**
+   * Сравнить приоритеты групп.
+   *
+   * Группа без завершённых callback'ов имеет больший приоритет,
+   * чем группа с известным временем последнего завершения.
+   * При равных значениях сохраняется порядок добавления.
+   */
+  private compareGroupPriority(left: CallbackGroup, right: CallbackGroup): number {
+    if (left.lastCompletedAt === right.lastCompletedAt) return 0;
+    if (left.lastCompletedAt === null) return 1;
+    if (right.lastCompletedAt === null) return -1;
+
+    return right.lastCompletedAt - left.lastCompletedAt;
   }
 
   private removeFromQueue(group: CallbackGroup): void {
     if (group.queueNode === null) return;
 
-    if (group.queueNode.belongsTo(this.pendingGroups)) {
-      this.pendingGroups.remove(group.queueNode);
-    } else if (group.queueNode.belongsTo(this.startedGroups)) {
-      this.startedGroups.remove(group.queueNode);
-    }
-
+    this.groupsQueue.remove(group.queueNode);
     group.queueNode = null;
   }
 
   private hasQueuedGroups(): boolean {
-    return this.pendingGroups.size > 0 || this.startedGroups.size > 0;
+    return this.groupsQueue.size > 0;
   }
 
   private scheduleStep(): void {
@@ -325,36 +339,16 @@ export class AnimationEngine {
     }
   }
 
-  private takeOldestStartedGroup(): DoublyLinkedListNode<CallbackGroup> | null {
-    let selected: DoublyLinkedListNode<CallbackGroup> | null = null;
-    let selectedTime = Infinity;
-
-    for (let node = this.startedGroups.first; node !== null; node = node.next) {
-      const completedAt = node.value.lastCompletedAt ?? Infinity;
-      if (completedAt < selectedTime) {
-        selected = node;
-        selectedTime = completedAt;
-      }
-    }
-
-    return selected;
-  }
-
   private takeNextGroup(): CallbackGroup | null {
-    const pendingNode = this.pendingGroups.first;
+    for (let node = this.groupsQueue.first; node !== null; node = node.next) {
+      if (node.value.eligibleStep > this.currentStep) continue;
 
-    if (pendingNode !== null && pendingNode.value.eligibleStep <= this.currentStep) {
-      this.pendingGroups.remove(pendingNode);
-      pendingNode.value.queueNode = null;
-      return pendingNode.value;
+      this.groupsQueue.remove(node);
+      node.value.queueNode = null;
+      return node.value;
     }
 
-    const startedNode = this.takeOldestStartedGroup();
-    if (startedNode === null) return null;
-
-    this.startedGroups.remove(startedNode);
-    startedNode.value.queueNode = null;
-    return startedNode.value;
+    return null;
   }
 
   private executeGroupCallback(group: CallbackGroup): boolean {
@@ -365,7 +359,7 @@ export class AnimationEngine {
         this.removeGroup(group.groupId);
       } else {
         group.eligibleStep = this.currentStep + 1;
-        this.enqueuePending(group);
+        this.enqueueGroup(group);
       }
 
       return false;
@@ -387,7 +381,7 @@ export class AnimationEngine {
     }
 
     group.lastCompletedAt = performance.now();
-    this.enqueueStarted(group);
+    this.enqueueGroup(group);
 
     return true;
   }
@@ -400,7 +394,7 @@ export class AnimationEngine {
     group.lastCompletedAt = performance.now();
 
     if (this.isRunning) {
-      this.enqueueStarted(group);
+      this.enqueueGroup(group);
       if (this.rafId === null) this.scheduleStep();
     }
   }
@@ -445,9 +439,7 @@ export class AnimationEngine {
 
   public clear(): void {
     this.groups.clear();
-    // Группы хранятся в одной очереди с двумя логическими участками.
-    this.pendingGroups.clear();
-    this.startedGroups.clear();
+    this.groupsQueue.clear();
     this.currentStep = 0;
     this.stop();
   }
