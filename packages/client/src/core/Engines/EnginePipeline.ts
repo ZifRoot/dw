@@ -277,7 +277,7 @@ export class EnginePipeline {
       return;
     }
 
-    this.temperatureCoagulator.push(this.calculatePipelineTemperature(temperatures));
+    this.temperatureThrottler.push(this.calculatePipelineTemperature(temperatures));
   }
 
   /** Рассчитать температуру Pipeline из температур включённых physics. */
