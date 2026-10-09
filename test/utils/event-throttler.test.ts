@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { EventThrottler } from "@utils/event-throttler";
+import { EventCoagulator } from "@utils/event-coagulator";
 
 test("EventThrottler last mode emits only the last value in a window", async () => {
   const emitted: number[] = [];
@@ -91,4 +92,34 @@ test("EventThrottler throttle serializes async callbacks and returns their value
   assert.deepEqual(results, [10, 20, 30]);
   assert.deepEqual(order, [1, 2, 3]);
   assert.equal(maxActive, 1);
+});
+
+test("EventCoagulator preserves its legacy constructor and inherits EventThrottler", async () => {
+  const emitted: number[] = [];
+  const coagulator = new EventCoagulator<number>(5, "latest", (value) => { emitted.push(value); });
+
+  assert.ok(coagulator instanceof EventThrottler);
+  coagulator.push(1);
+  coagulator.push(2);
+  await coagulator.flush();
+
+  assert.deepEqual(emitted, [2]);
+  coagulator.dispose();
+});
+
+test("EventThrottler event callbacks and direct callbacks share the same throttle", async () => {
+  const order: string[] = [];
+  const throttler = new EventThrottler<number>({
+    minMs: 2,
+    mode: "all",
+    onEmit: (value) => { order.push(`event:${value}`); },
+  });
+
+  throttler.push(1);
+  const direct = throttler.throttle(() => { order.push("direct"); });
+  throttler.push(2);
+  await Promise.all([direct, throttler.flush()]);
+
+  assert.deepEqual(order, ["direct", "event:1", "event:2"]);
+  throttler.dispose();
 });
