@@ -58,7 +58,7 @@ export class EnginePipeline {
     private readonly mediator: AppMediator,
     private readonly animation: AnimationEngine,
   ) {
-    this.temperatureThrottler = new EventThrottler<number>({ delayMs: TEMPERATURE_UI_DELAY_MS, mode: "last", onEmit: () => {
+    this.temperatureThrottler = new EventThrottler<number>({ minMs: TEMPERATURE_UI_DELAY_MS, mode: "last", onEmit: () => {
       this.mediator.pipelineStateChanged(this.createViewState());
     } });
 
