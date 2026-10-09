@@ -97,7 +97,7 @@ export class EventCoagulator<T extends EventCoagulatorValue> {
       return;
     }
 
-    const operation = (async () => {
+    const operation = Promise.resolve().then(async () => {
       try {
         await this.onEmit(value);
         this.lastPublished = value;
@@ -106,7 +106,7 @@ export class EventCoagulator<T extends EventCoagulatorValue> {
         this.onError?.(error);
         throw error;
       }
-    })();
+    });
 
     this.processing = operation;
     try {
