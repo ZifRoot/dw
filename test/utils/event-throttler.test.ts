@@ -6,7 +6,7 @@ import { EventThrottler } from "@utils/event-throttler";
 test("EventThrottler last mode emits only the last value in a window", async () => {
   const emitted: number[] = [];
   const throttler = new EventThrottler<number>({
-    delayMs: 5,
+    minMs: 5,
     mode: "last",
     onEmit: (value) => { emitted.push(value); },
   });
@@ -23,7 +23,7 @@ test("EventThrottler last mode emits only the last value in a window", async () 
 test("EventThrottler average mode emits the numeric average", async () => {
   const emitted: number[] = [];
   const throttler = new EventThrottler<number>({
-    delayMs: 5,
+    minMs: 5,
     mode: "average",
     onEmit: (value) => { emitted.push(value); },
   });
@@ -39,7 +39,7 @@ test("EventThrottler average mode emits the numeric average", async () => {
 test("EventThrottler all mode emits each event in order", async () => {
   const emitted: number[] = [];
   const throttler = new EventThrottler<number>({
-    delayMs: 5,
+    minMs: 5,
     minMs: 1,
     mode: "all",
     onEmit: async (value) => { emitted.push(value); },
@@ -57,7 +57,7 @@ test("EventThrottler all mode emits each event in order", async () => {
 test("EventThrottler package mode emits one array per window", async () => {
   const emitted: number[][] = [];
   const throttler = new EventThrottler<number>({
-    delayMs: 5,
+    minMs: 5,
     mode: "package",
     onEmit: (values) => { emitted.push(values); },
   });
@@ -72,7 +72,7 @@ test("EventThrottler package mode emits one array per window", async () => {
 });
 
 test("EventThrottler throttle serializes async callbacks and returns their values", async () => {
-  const throttler = new EventThrottler(1);
+  const throttler = new EventThrottler<void>({ minMs: 1, mode: "all", onEmit: () => undefined });
   const order: number[] = [];
   let active = 0;
   let maxActive = 0;
