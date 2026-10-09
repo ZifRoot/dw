@@ -57,6 +57,10 @@ export class EventCoagulator<T extends EventCoagulatorValue> {
         continue;
       }
 
+      if (this.timer !== null) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
       await this.processPending();
     }
   }
