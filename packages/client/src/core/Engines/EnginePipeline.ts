@@ -1,4 +1,4 @@
-import { EventCoagulator } from "@utils/event-coagulator";
+import { EventThrottler } from "@utils/event-throttler";
 import { AppMediator } from "../AppMediator";
 import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
 import { BaseAlgorithm } from "./BaseAlgorithm";
@@ -46,7 +46,7 @@ export class EnginePipeline {
   private destroyed = false;
   private checkpointTimer: ReturnType<typeof setInterval> | null = null;
   private readonly skipFrames = new Map<BaseAlgorithm, number>();
-  private readonly temperatureCoagulator: EventCoagulator<number>;
+  private readonly temperatureThrottler: EventThrottler<number>;
   private temperatureAggregation: EnginePipelineTemperatureAggregation = "maximum";
   private lastPointsUpdatedAt = 0;
 
@@ -58,9 +58,9 @@ export class EnginePipeline {
     private readonly mediator: AppMediator,
     private readonly animation: AnimationEngine,
   ) {
-    this.temperatureCoagulator = new EventCoagulator(TEMPERATURE_UI_DELAY_MS, "latest", () => {
+    this.temperatureThrottler = new EventThrottler<number>({ delayMs: TEMPERATURE_UI_DELAY_MS, mode: "last", onEmit: () => {
       this.mediator.pipelineStateChanged(this.createViewState());
-    });
+    } });
 
     this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
     this.unsubscribeConfig = this.mediator.onPipelineEngineConfigChanged((change) => {
@@ -190,7 +190,7 @@ export class EnginePipeline {
 
     this.destroyed = true;
     this.stop();
-    this.temperatureCoagulator.dispose();
+    this.temperatureThrottler.dispose();
     this.unsubscribeStart();
     this.unsubscribeConfig();
     this.unsubscribeEnabled();
@@ -273,7 +273,7 @@ export class EnginePipeline {
     const temperatures = this.entries.filter((entry) => entry.enabled).map((entry) => entry.algorithm.temperature);
 
     if (temperatures.length === 0) {
-      this.temperatureCoagulator.push(0);
+      this.temperatureThrottler.push(0);
       return;
     }
 
@@ -352,7 +352,7 @@ export class EnginePipeline {
     }
 
     this.publishTemperature();
-    this.temperatureCoagulator.flush();
+    await this.temperatureThrottler.flush();
     this.emitPointsUpdated();
     this.disposeCallbacks?.();
     this.disposeCallbacks = null;
