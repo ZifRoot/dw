@@ -97,11 +97,15 @@ export class EventCoagulator<T extends EventCoagulatorValue> {
       return;
     }
 
+    let succeeded = false;
+    let hasNewValuesAfterFailure = false;
     const operation = Promise.resolve().then(async () => {
       try {
         await this.onEmit(value);
         this.lastPublished = value;
+        succeeded = true;
       } catch (error) {
+        hasNewValuesAfterFailure = this.pendingValues.length > 0;
         this.pendingValues = [...values, ...this.pendingValues];
         this.onError?.(error);
         throw error;
@@ -113,7 +117,13 @@ export class EventCoagulator<T extends EventCoagulatorValue> {
       await operation;
     } finally {
       this.processing = null;
-      if (this.pendingValues.length > 0 && this.timer === null) this.schedule();
+      if (
+        this.pendingValues.length > 0 &&
+        this.timer === null &&
+        (succeeded || hasNewValuesAfterFailure)
+      ) {
+        this.schedule();
+      }
     }
   }
 
