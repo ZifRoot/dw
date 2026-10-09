@@ -163,24 +163,32 @@ export class EventThrottler<T = unknown> {
     const values = this.pendingValues;
     this.pendingValues = [];
     const mode = this.eventOptions.mode;
-    const aggregate: T | number | T[] = mode === "last"
-      ? values[values.length - 1]
-      : mode === "average"
-        ? this.average(values)
-        : mode === "package"
-          ? values
+    let aggregate: T | number | T[];
+
+    try {
+      aggregate = mode === "last"
+        ? values[values.length - 1]
+        : mode === "average"
+          ? this.average(values)
           : values;
+    } catch (error) {
+      this.pendingValues = [...values, ...this.pendingValues];
+      this.eventOptions.onError?.(error);
+      throw error;
+    }
 
     if ((mode === "last" || mode === "average") && this.lastPublished === aggregate) {
       if (this.pendingValues.length > 0 && this.timer === null) this.schedule();
       return;
     }
 
+    let processedCount = 0;
     const operation = (async () => {
       try {
         if (mode === "all") {
           for (const value of values) {
             await this.throttle(() => (this.eventOptions as Extract<EventThrottlerOptions<T>, { mode: "all" }>).onEmit(value));
+            processedCount += 1;
           }
         } else if (mode === "package") {
           await this.throttle(() => (this.eventOptions as Extract<EventThrottlerOptions<T>, { mode: "package" }>).onEmit(values));
@@ -191,7 +199,7 @@ export class EventThrottler<T = unknown> {
         }
         if (mode === "last" || mode === "average") this.lastPublished = aggregate as T | number;
       } catch (error) {
-        this.pendingValues = [...values, ...this.pendingValues];
+        this.pendingValues = [...values.slice(processedCount), ...this.pendingValues];
         this.eventOptions?.onError?.(error);
         throw error;
       }
