@@ -1,23 +1,23 @@
-import { EventThrottler } from "./event-throttler";
+import { Throttler } from "./throttler";
 
 const throttlerSymbol = Symbol("eventThrottler");
 
 type ThrottleClass = { new (...args: any[]): {} };
 
-/** Create a per-instance EventThrottler for methods decorated with @ThrottledMethod. */
+/** Create a per-instance Throttler for methods decorated with @ThrottledMethod. */
 export function CreateEventThrottle(minMs: number, maxMs?: number) {
   return function <T extends ThrottleClass>(constructor: T) {
     return class extends constructor {
       constructor(...args: any[]) {
         super(...args);
-        (this as any)[throttlerSymbol] = new EventThrottler(minMs, maxMs);
+        (this as any)[throttlerSymbol] = new Throttler(minMs, maxMs);
       }
     };
   };
 }
 
-/** Inject a shared EventThrottler into decorated instances. */
-export function InjectEventThrottle(instance: EventThrottler<any>) {
+/** Inject a shared Throttler into decorated instances. */
+export function InjectEventThrottle(instance: Throttler) {
   return function <T extends ThrottleClass>(constructor: T) {
     return class extends constructor {
       constructor(...args: any[]) {
@@ -36,16 +36,16 @@ export function ThrottledMethod(target: any, propertyKey: string, descriptor: Pr
   }
 
   descriptor.value = async function (this: any, ...args: any[]) {
-    const throttler = this[throttlerSymbol] as EventThrottler<any> | undefined;
+    const throttler = this[throttlerSymbol] as Throttler | undefined;
     if (!throttler) {
-      throw new Error("No EventThrottler found. Use @CreateEventThrottle or @InjectEventThrottle on the class.");
+      throw new Error("No Throttler found. Use @CreateEventThrottle or @InjectEventThrottle on the class.");
     }
     return throttler.throttle(() => original.apply(this, args));
   };
 }
 
-/** Retrieve the EventThrottler injected into an instance by a class decorator. */
-export function getEventThrottler(instance: object): EventThrottler<any> | undefined {
+/** Retrieve the Throttler injected into an instance by a class decorator. */
+export function getEventThrottler(instance: object): Throttler | undefined {
   return (instance as any)[throttlerSymbol];
 }
 
