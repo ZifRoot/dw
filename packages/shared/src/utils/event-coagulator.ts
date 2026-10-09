@@ -1,18 +1,16 @@
 import { EventThrottler, type EventThrottlerOptions } from "./event-throttler";
 
-/** @deprecated Use EventThrottler with mode "last", "average", "all", or "package". */
+/** @deprecated Use EventThrottler directly. */
 export type EventCoagulatorValue = number | string | boolean;
 
 /** @deprecated Use EventThrottlerMode. "latest" maps to "last". */
 export type EventCoagulatorMode = "latest" | "average";
 
 /**
- * @deprecated Compatibility wrapper. Prefer EventThrottler directly.
- * Keeps the existing EventCoagulator constructor while using the unified implementation.
+ * @deprecated Compatibility wrapper over EventThrottler.
+ * Preserves the original constructor and translates legacy mode/interval values.
  */
-export class EventCoagulator<T extends EventCoagulatorValue> {
-  private readonly throttler: EventThrottler<T>;
-
+export class EventCoagulator<T extends EventCoagulatorValue> extends EventThrottler<T> {
   public constructor(
     delayMs: number,
     mode: EventCoagulatorMode,
@@ -20,20 +18,18 @@ export class EventCoagulator<T extends EventCoagulatorValue> {
     onError?: (error: unknown) => void,
   ) {
     const options = mode === "average"
-      ? { delayMs, mode: "average" as const, onEmit: onEmit as (value: number) => void | Promise<void>, onError }
-      : { delayMs, mode: "last" as const, onEmit, onError };
-    this.throttler = new EventThrottler<T>(options as EventThrottlerOptions<T>);
-  }
-
-  public push(value: T): void {
-    this.throttler.push(value);
-  }
-
-  public flush(): Promise<void> {
-    return this.throttler.flush();
-  }
-
-  public dispose(): void {
-    this.throttler.dispose();
+      ? {
+          minMs: delayMs,
+          mode: "average" as const,
+          onEmit: onEmit as (value: number) => void | Promise<void>,
+          onError,
+        }
+      : {
+          minMs: delayMs,
+          mode: "last" as const,
+          onEmit,
+          onError,
+        };
+    super(options as EventThrottlerOptions<T>);
   }
 }
