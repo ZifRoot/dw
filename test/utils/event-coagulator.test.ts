@@ -6,7 +6,9 @@ import { EventCoagulator } from "@utils/event-coagulator";
 
 test("coalesces values and emits the latest value", async () => {
   const emitted: number[] = [];
-  const coagulator = new EventCoagulator(10, "latest", (value) => emitted.push(value));
+  const coagulator = new EventCoagulator<number>(10, "latest", (value) => {
+    emitted.push(value);
+  });
 
   coagulator.push(1);
   coagulator.push(2);
@@ -21,7 +23,7 @@ test("awaits asynchronous processing and does not overlap emissions", async () =
   const emitted: number[] = [];
   let active = 0;
   let maxActive = 0;
-  const coagulator = new EventCoagulator(5, "latest", async (value) => {
+  const coagulator = new EventCoagulator<number>(5, "latest", async (value) => {
     active += 1;
     maxActive = Math.max(maxActive, active);
     emitted.push(value);
@@ -47,7 +49,7 @@ test("starts the next delay window after processing completes", async () => {
   const startTimes: number[] = [];
   const completionTimes: number[] = [];
   const delayMs = 25;
-  const coagulator = new EventCoagulator(delayMs, "latest", async (value) => {
+  const coagulator = new EventCoagulator<number>(delayMs, "latest", async (value) => {
     startTimes.push(Date.now());
     await delay(40);
     completionTimes.push(Date.now());
@@ -68,7 +70,9 @@ test("starts the next delay window after processing completes", async () => {
 
 test("averages numeric values", async () => {
   const emitted: number[] = [];
-  const coagulator = new EventCoagulator(10, "average", (value) => emitted.push(value));
+  const coagulator = new EventCoagulator<number>(10, "average", (value) => {
+    emitted.push(value);
+  });
 
   coagulator.push(2);
   coagulator.push(4);
@@ -82,14 +86,16 @@ test("retains failed values and reports errors for a later retry", async () => {
   const emitted: number[] = [];
   const errors: unknown[] = [];
   let shouldFail = true;
-  const coagulator = new EventCoagulator(
+  const coagulator = new EventCoagulator<number>(
     10,
     "latest",
     (value) => {
       if (shouldFail) throw new Error("write failed");
       emitted.push(value);
     },
-    (error) => errors.push(error),
+    (error) => {
+      errors.push(error);
+    },
   );
 
   coagulator.push(1);
@@ -104,7 +110,7 @@ test("retains failed values and reports errors for a later retry", async () => {
 
 test("flush waits for asynchronous completion", async () => {
   let completed = false;
-  const coagulator = new EventCoagulator(100, "latest", async () => {
+  const coagulator = new EventCoagulator<number>(100, "latest", async () => {
     await delay(10);
     completed = true;
   });
@@ -116,6 +122,9 @@ test("flush waits for asynchronous completion", async () => {
 });
 
 test("rejects invalid delay", () => {
-  assert.throws(() => new EventCoagulator(0, "latest", () => undefined), RangeError);
-  assert.throws(() => new EventCoagulator(Number.NaN, "latest", () => undefined), RangeError);
+  assert.throws(() => new EventCoagulator<number>(0, "latest", () => undefined), RangeError);
+  assert.throws(
+    () => new EventCoagulator<number>(Number.NaN, "latest", () => undefined),
+    RangeError,
+  );
 });
