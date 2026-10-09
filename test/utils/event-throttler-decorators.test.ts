@@ -8,31 +8,42 @@ import {
 } from "@utils/event-throttler-decorators";
 import { EventThrottler } from "@utils/event-throttler";
 
+function applyMethodDecorator(
+  prototype: object,
+  methodName: string,
+): void {
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, methodName);
+  assert.ok(descriptor);
+  EventThrottledMethod(prototype, methodName, descriptor);
+  Object.defineProperty(prototype, methodName, descriptor);
+}
+
 test("CreateEventThrottle attaches an EventThrottler and methods publish their first argument", async () => {
   const emitted: number[] = [];
 
-  @CreateEventThrottle<number>({
-    minMs: 2,
-    mode: "last",
-    onEmit: (value) => { emitted.push(value); },
-  })
   class Publisher {
-    @EventThrottledMethod
-    public publish(value: number): void {
+    public publish(_value: number): void {
       throw new Error("The decorated publisher method must not execute");
     }
   }
 
-  const publisher = new Publisher();
+  applyMethodDecorator(Publisher.prototype, "publish");
+  const DecoratedPublisher = CreateEventThrottle<number>({
+    minMs: 2,
+    mode: "last",
+    onEmit: (value) => { emitted.push(value); },
+  })(Publisher);
+
+  const publisher = new DecoratedPublisher();
   const throttler = getEventThrottler<number>(publisher);
 
   assert.ok(throttler instanceof EventThrottler);
   publisher.publish(1);
   publisher.publish(2);
-  await throttler!.flush();
+  await throttler.flush();
 
   assert.deepEqual(emitted, [2]);
-  throttler!.dispose();
+  throttler.dispose();
 });
 
 test("InjectEventThrottle shares one event buffer between methods on different classes", async () => {
@@ -43,20 +54,20 @@ test("InjectEventThrottle shares one event buffer between methods on different c
     onEmit: (values) => { emitted.push(values); },
   });
 
-  @InjectEventThrottle(shared)
   class FirstPublisher {
-    @EventThrottledMethod
-    public publishFirst(value: number): void {}
+    public publishFirst(_value: number): void {}
   }
-
-  @InjectEventThrottle(shared)
   class SecondPublisher {
-    @EventThrottledMethod
-    public publishSecond(value: number): void {}
+    public publishSecond(_value: number): void {}
   }
 
-  const first = new FirstPublisher();
-  const second = new SecondPublisher();
+  applyMethodDecorator(FirstPublisher.prototype, "publishFirst");
+  applyMethodDecorator(SecondPublisher.prototype, "publishSecond");
+  const DecoratedFirstPublisher = InjectEventThrottle(shared)(FirstPublisher);
+  const DecoratedSecondPublisher = InjectEventThrottle(shared)(SecondPublisher);
+
+  const first = new DecoratedFirstPublisher();
+  const second = new DecoratedSecondPublisher();
 
   assert.equal(getEventThrottler(first), shared);
   assert.equal(getEventThrottler(second), shared);
@@ -70,16 +81,18 @@ test("InjectEventThrottle shares one event buffer between methods on different c
 });
 
 test("EventThrottledMethod rejects methods without an event argument", () => {
-  @CreateEventThrottle<number>({
-    minMs: 2,
-    mode: "last",
-    onEmit: () => {},
-  })
   class Publisher {
-    @EventThrottledMethod
     public publish(): void {}
   }
 
-  assert.throws(() => new Publisher().publish(), /requires an event argument/);
-  getEventThrottler(new Publisher())?.dispose();
+  applyMethodDecorator(Publisher.prototype, "publish");
+  const DecoratedPublisher = CreateEventThrottle<number>({
+    minMs: 2,
+    mode: "last",
+    onEmit: () => {},
+  })(Publisher);
+  const publisher = new DecoratedPublisher();
+
+  assert.throws(() => publisher.publish(), /requires an event argument/);
+  getEventThrottler(publisher)?.dispose();
 });
