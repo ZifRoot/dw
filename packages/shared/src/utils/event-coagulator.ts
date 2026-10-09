@@ -1,114 +1,123 @@
-/** Примитивные значения, для которых сравнение выполняется через ===. */
+/** Primitive values compared with strict equality. */
 export type EventCoagulatorValue = number | string | boolean;
 
-/** Способ получения значения из событий, накопленных за интервал. */
+/** Aggregation applied to values collected in one window. */
 export type EventCoagulatorMode = "latest" | "average";
 
 /**
- * Коагулирует часто поступающие значения в одно событие.
+ * Coalesces frequent values into asynchronous, non-overlapping emissions.
  *
- * Все значения, поступившие в течение заданного интервала, не выполняются
- * по отдельности. По окончании интервала наружу передаётся одно значение:
- * последнее или среднее.
+ * A processing window starts after delayMs without being reset by each push.
+ * Once onEmit finishes, a new delay window starts before another emission.
+ * Values pushed while onEmit is running are coalesced into the next emission.
  *
- * Одинаковые результирующие значения повторно не публикуются.
- *
- * Класс предназначен для примитивных значений. Глубокое сравнение объектов
- * намеренно не выполняется.
+ * Only primitive values are supported; object deep equality is intentionally
+ * not performed. Failed emissions are retained and can be retried by a later
+ * push or flush. A failed emission is reported through onError when provided.
  */
 export class EventCoagulator<T extends EventCoagulatorValue> {
   private pendingValues: T[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
   private lastPublished: T | undefined;
+  private processing: Promise<void> | null = null;
 
-  /**
-   * Создаёт EventCoagulator.
-   *
-   * @param delayMs - минимальная задержка перед публикацией накопленного значения.
-   * @param mode - способ получения результирующего значения.
-   * @param onEmit - обработчик опубликованного значения.
-   */
   public constructor(
     private readonly delayMs: number,
     private readonly mode: EventCoagulatorMode,
-    private readonly onEmit: (value: T) => void,
+    private readonly onEmit: (value: T) => void | Promise<void>,
+    private readonly onError?: (error: unknown) => void,
   ) {
     if (!Number.isFinite(delayMs) || delayMs <= 0) {
-      throw new RangeError("Задержка должна быть конечным числом больше 0");
+      throw new RangeError("Delay must be a finite number greater than 0");
     }
   }
 
-  /**
-   * Принимает новое значение.
-   *
-   * Если в данный момент уже идёт ожидание, значение добавляется
-   * в текущее окно и отдельное событие для него не создаётся.
-   */
+  /** Add a value to the current window, scheduling processing if idle. */
   public push(value: T): void {
     this.pendingValues.push(value);
-
-    if (this.timer !== null) {
-      return;
-    }
-
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      this.emitPending();
-    }, this.delayMs);
+    if (this.timer !== null || this.processing !== null) return;
+    this.schedule();
   }
 
   /**
-   * Немедленно публикует накопленное значение.
+   * Immediately process pending values and wait for asynchronous completion.
    *
-   * Используется, когда перед уничтожением или остановкой системы
-   * необходимо обработать последнее накопленное состояние.
+   * If processing fails, the values remain pending and this promise rejects.
+   * A later push or flush can retry them.
    */
-  public flush(): void {
+  public async flush(): Promise<void> {
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
 
-    this.emitPending();
+    while (this.pendingValues.length > 0 || this.processing !== null) {
+      if (this.processing !== null) {
+        await this.processing;
+        continue;
+      }
+
+      await this.processPending();
+    }
   }
 
-  /** Останавливает ожидание и отбрасывает ещё не опубликованные значения. */
+  /** Cancel the timer and discard values not yet being processed. */
   public dispose(): void {
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-
     this.pendingValues = [];
   }
 
-  /** Публикует результат текущего окна, если он отличается от предыдущего. */
-  private emitPending(): void {
-    if (this.pendingValues.length === 0) {
+  private schedule(): void {
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      void this.processPending().catch(() => undefined);
+    }, this.delayMs);
+  }
+
+  private async processPending(): Promise<void> {
+    if (this.processing !== null) {
+      await this.processing;
       return;
     }
+    if (this.pendingValues.length === 0) return;
 
     const values = this.pendingValues;
     this.pendingValues = [];
-
     const value = this.aggregate(values);
 
     if (this.lastPublished === value) {
+      if (this.pendingValues.length > 0 && this.timer === null) this.schedule();
       return;
     }
 
-    this.lastPublished = value;
-    this.onEmit(value);
+    const operation = (async () => {
+      try {
+        await this.onEmit(value);
+        this.lastPublished = value;
+      } catch (error) {
+        this.pendingValues = [...values, ...this.pendingValues];
+        this.onError?.(error);
+        throw error;
+      }
+    })();
+
+    this.processing = operation;
+    try {
+      await operation;
+    } finally {
+      this.processing = null;
+      if (this.pendingValues.length > 0 && this.timer === null) this.schedule();
+    }
   }
 
-  /** Получает результирующее значение текущего окна. */
   private aggregate(values: T[]): T {
-    if (this.mode === "latest") {
-      return values[values.length - 1];
-    }
+    if (this.mode === "latest") return values[values.length - 1];
 
     if (typeof values[0] !== "number") {
-      throw new TypeError("Режим average поддерживает только number");
+      throw new TypeError("Average mode supports only numbers");
     }
 
     const sum = values.reduce((total, value) => total + (value as number), 0);
