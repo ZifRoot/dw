@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This document describes the **Shared source-layer pattern** used in DW: one canonical copy of source code is consumed directly by several applications, while each consumer keeps its own TypeScript compilation context and runtime assumptions.
+This document describes a general **Shared source-layer pattern**, illustrated by its use in DW. One canonical copy of source code is consumed directly by several independent consumers, while each consumer keeps its own compilation context and runtime assumptions.
 
 The idea is broader than a directory named `shared`. It is an architectural choice about **ownership of source code, compilation, runtime boundaries, and dependency resolution**.
 
-The pattern is useful when a repository contains heterogeneous applications—for example, a browser client and a Node.js server—that should reuse some code but do not share the same TypeScript configuration, runtime APIs, module format, or dependency graph.
+The pattern is useful when a repository contains multiple source trees—call them A, B, C, and so on—that need to reuse implementation code but have different runtimes, TypeScript configurations, module formats, build tools, or dependency graphs. A consumer can be an application, a service, a worker, a command-line tool, or a test suite; the important property is its independent execution and compilation context, not its name.
 
 ## The problem this pattern addresses
 
@@ -22,45 +22,50 @@ Different consumers may require different settings:
 
 If shared source is compiled once under a single package configuration, that configuration becomes an additional architectural contract. The shared package may need a build output, a public entry point, module-format decisions, declaration generation, and a dependency policy. It may also need compatibility work for the intersection of consumer environments.
 
-Sometimes that is desirable. In DW, the chosen requirement is different: shared production code should remain source code, and the **consumer should supply the compilation context**.
+Sometimes that is desirable. This pattern addresses a different requirement: shared code should remain plain source code, and **each consumer should supply its own compilation context**. The shared directory is deliberately not a standalone package: it has source files, but no independent `tsconfig.json` and no `package.json`. That keeps package metadata and compilation policy out of the shared layer; consumers decide how the same source is compiled and run.
 
-## The core model
+## The general model
 
-DW keeps one canonical copy of the shared source under `packages/shared/src`. Client and server expose that source under their own source trees through filesystem links.
+Keep one canonical copy of the shared source in a dedicated directory. Each consumer exposes that source under its own source tree through a filesystem link (or an equivalent source-resolution mechanism). In the abstract model, A, B, and C each point to the same canonical source:
 
 ```text
-                         packages/shared/src
+                         shared/src
                          canonical source
                                   |
                     +-------------+-------------+
                     |                           |
                     v                           v
-       packages/client/src/shared   packages/server/src/shared
-            symlink/junction              symlink/junction
+             A/src/shared       B/src/shared       C/src/shared
+                 link               link               link
                     |                           |
                     v                           v
-           Client TypeScript project    Server TypeScript project
-           DOM / ESNext / bundler       Node types / CommonJS
-           client build tooling          server build tooling
+             A's project          B's project          C's project
+           runtime/config A      runtime/config B      runtime/config C
 ```
 
-The links do not create copies of the files. Both consumers resolve to the same canonical files. A change made under `packages/shared/src` is therefore visible to both consumers without copying or publishing a package.
+The links do not create copies of the files: all consumers resolve to the same canonical files. A change in the shared source is visible to A, B, C, and any other linked consumer without copying or publishing a package.
 
-The client and server still compile those files as part of their own TypeScript projects. Shared production code does **not** own a separate TypeScript project configuration.
+Each consumer compiles and runs that source in its own context. The shared source layer itself does **not** own a separate TypeScript project configuration or package manifest.
 
 ## Why filesystem links are used
 
-The link is the mechanism that makes the same source tree appear at the path expected by each consumer, without duplicating it.
+The primary reason for this design is a **TypeScript source-root constraint**, not merely convenience or reduced packaging overhead.
 
-This provides several properties:
+Each consumer compiles Shared code as part of its own project. When a TypeScript consumer sets `rootDir` to its own `src` tree (or otherwise relies on a bounded source root), importing the canonical shared files directly from a sibling directory can put those files outside that root. TypeScript may reject them with **TS6059** (“File is not under 'rootDir'”), because the compiler is being asked to compile source outside the declared project root. The exact behavior depends on the consumer's configuration, but the architectural constraint is general: a source file outside a consumer's root may not be accepted as one of its compilation inputs.
+
+The chosen solution is to keep the **canonical source** in a dedicated shared directory, while exposing it through a filesystem link under each consumer's `src` tree—for example, `A/src/shared`, `B/src/shared`, and `C/src/shared`. The source is then reachable within each consumer's compilation root while remaining physically owned in one place. Each consumer compiles the same files with its own TypeScript configuration, without moving the canonical files into an application or maintaining duplicate copies.
+
+This is the decisive reason for the link locations: **the links point inward, into each consumer's source tree, so the shared files fall within that consumer's compilation root**. The design is useful when the requirements are one canonical source tree, consumer-owned compilation, and consumer-local source roots. Direct imports from outside a root may violate that boundary; a separately built package or copied source may be valid alternatives, but they change the model rather than preserve the same source-only arrangement.
+
+The links also provide useful secondary properties:
 
 1. **One source of truth.** There is one editable copy of each shared implementation.
-2. **Consumer-owned compilation.** The client and server include the source in their own TypeScript projects.
+2. **Consumer-owned compilation.** Each consumer includes the source in its own TypeScript project.
 3. **Consumer-owned runtime assumptions.** The shared code is checked in each consuming context rather than being forced through one shared build.
-4. **Minimal packaging overhead.** There is no separate shared package build, emitted JavaScript, declaration pipeline, or package export map to maintain.
-5. **Immediate propagation.** Adding or editing a file in the canonical source tree is reflected through the links.
+4. **No duplicated source tree.** Both paths refer to the canonical source instead of requiring maintained copies.
+5. **Immediate propagation.** Changes in the canonical source are available through the links.
 
-The links are generated locally and are not committed as ordinary source directories. In DW, `.gitignore` excludes `packages/client/src/shared/*` and `packages/server/src/shared/*`; a fresh checkout must create the links before typechecking or building.
+The links are generated locally and are not committed as ordinary source directories. In DW, `.gitignore` excludes `packages/client/src/shared/*` and `packages/server/src/shared/*`; a fresh checkout must create the links before typechecking or building. The paths and scripts below are the concrete DW example; they are not requirements for every adoption of the pattern.
 
 ### Link creation in DW
 
@@ -223,7 +228,7 @@ However, it also requires an explicit decision about how that package is built a
 
 In DW, the source-layer design is intentional: shared production code is compiled by its consumers. The independent audit also records the opposite trade-off—manual links make fresh checkouts and cross-platform setup more fragile. These considerations should be weighed rather than treating either symlinks or workspace packages as universally superior.
 
-## Applying the concept to another project
+## Applying the pattern to another project
 
 Use this checklist when adapting the pattern:
 
@@ -237,6 +242,12 @@ Use this checklist when adapting the pattern:
 - [ ] Make link setup reproducible on every supported operating system and run it in CI after checkout.
 - [ ] Typecheck/build every consumer and run the shared tests.
 - [ ] Document the trade-offs: links are operational infrastructure, not committed source copies or package boundaries.
+
+## Concrete example: DW
+
+The general pattern above is used in DW with three distinct contexts: the client, the server, and the shared test suite. The client and server are production consumers; the tests are a verification consumer with their own TypeScript configuration, test runner, and runtime. The test suite does not inherit the client or server configuration merely because it tests shared code. This illustrates that A, B, and C need not all be applications: a test environment can be another independent consumer.
+
+The current DW implementation details are described below and throughout the examples in this document. They should be treated as an example of the pattern, not as universal requirements.
 
 ## Existing DW documentation
 
