@@ -10,19 +10,51 @@ The pattern is useful when a repository contains multiple source trees—call th
 
 ## The problem this pattern addresses
 
-A conventional shared module/package is often built as its own unit. That can be the right choice, but it introduces a question: **which environment does the shared package target?**
+This pattern is for a specific architectural constraint: **several independent TypeScript projects must compile the same original source files, while each project must keep its own source root**. The source should not be copied into each project, and the shared code should not become a separately built package.
 
-Different consumers may require different settings:
+### Start with the project boundaries
 
-- browser code may need `DOM` and `DOM.Iterable` library types;
-- server code may need Node.js types and server-specific APIs;
-- consumers may use different `module` and `moduleResolution` settings;
-- one consumer may bundle source with Vite while another emits CommonJS or uses a different runtime;
-- the client, server, and test runner may have different runtime versions and available APIs.
+Imagine a repository with three independent consumers: a backend, a frontend, and a CLI tool. Each has its own `tsconfig.json`, compiler settings, and runtime. Their compilation roots are intentionally local to each project; raising them to a common parent directory is not allowed by the repository's architecture.
 
-If shared source is compiled once under a single package configuration, that configuration becomes an additional architectural contract. The shared package may need a build output, a public entry point, module-format decisions, declaration generation, and a dependency policy. It may also need compatibility work for the intersection of consumer environments.
+A simplified layout might look like this:
 
-Sometimes that is desirable. This pattern addresses a different requirement: shared code should remain plain source code, and **each consumer should supply its own compilation context**. The shared directory is deliberately not a standalone package: it has source files, but no independent `tsconfig.json` and no `package.json`. That keeps package metadata and compilation policy out of the shared layer; consumers decide how the same source is compiled and run.
+```text
+src/
+├── shared/                       # The one canonical source tree
+├── backend/
+│   ├── tsconfig.json              # Backend's own project/root
+│   └── shared -> ../shared        # Link to the canonical source
+├── frontend/
+│   ├── tsconfig.json              # Frontend's own project/root
+│   └── shared -> ../shared        # Link to the canonical source
+└── cli/
+    ├── tsconfig.json              # CLI's own project/root
+    └── shared -> ../shared        # Link to the canonical source
+```
+
+The exact source layout and `rootDir` values depend on the project. The important constraint is that each consumer has a bounded compilation root and cannot simply expand it to include the common parent directory.
+
+### Why an ordinary import may fail
+
+Suppose the backend imports a file directly from `src/shared/`. That physical path is outside the backend project's own source root. Depending on the TypeScript configuration and how files enter the compilation, TypeScript can reject the file with **TS6059** (“File is not under 'rootDir'”). Changing `rootDir` to a higher-level directory might remove that particular error, but it also changes the project's declared boundary—and in some repositories that is explicitly not permitted.
+
+A workspace package is another valid architecture, but it introduces a package boundary and requires an intentional decision about exports, dependencies, and whether the shared code is built separately or compiled by consumers. Copying the files into each consumer avoids the path issue but creates multiple editable copies, which is a different and undesirable source-of-truth model.
+
+### The solution under these constraints
+
+Keep one canonical source tree and expose it **inside each consumer's own source tree** through a symbolic link (or an equivalent mechanism that makes the same files visible within that tree). Each consumer can then include the shared files under its own compilation root, while the physical source remains in one place.
+
+This is not a claim that symbolic links are universally required for all shared TypeScript code. They are a fit when all of these conditions apply:
+
+1. Several independent TypeScript consumers need the same original source files.
+2. Each consumer must retain its own local compilation root; that root cannot be widened to a common parent.
+3. The same physical source should be used—maintained copies are not acceptable.
+4. The shared source should remain source-only rather than becoming an independently configured and built package.
+5. Each consumer must compile and validate the shared code using its own TypeScript and runtime context.
+
+Under these constraints, links (or an equivalent source-resolution mechanism) solve the source-root problem without changing the project boundaries or duplicating files. The absence of a shared `package.json` and `tsconfig.json`, the lack of a separate shared build, and immediate visibility of source changes are properties of this chosen model—not independent reasons to adopt it.
+
+## The general model
 
 ## The general model
 
