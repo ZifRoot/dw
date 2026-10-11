@@ -2,6 +2,7 @@ import { EventCoagulator } from "@utils/event-coagulator";
 import { AppMediator } from "../AppMediator";
 import { AnimationCallback, AnimationEngine } from "./AnimationEngine";
 import { BaseAlgorithm } from "./BaseAlgorithm";
+import type { PipelineViewState } from "@ui/dto/PipelineViewState";
 
 export type EnginePipelineTemperatureAggregation = "maximum" | "average";
 
@@ -17,8 +18,12 @@ export interface EnginePipelineEntry {
   enabled?: boolean;
 }
 
+export interface EnginePipelineSynchronization {
+  load(): void;
+  save(): void | Promise<void>;
+}
+
 export interface EnginePipelineConfigChange {
-  pipelineName: string;
   engineName: string;
   changes: Record<string, unknown>;
 }
@@ -35,6 +40,7 @@ export interface EnginePipelineConfigChange {
  */
 export class EnginePipeline {
   private entries: EnginePipelineEntry[] = [];
+  private synchronization: EnginePipelineSynchronization | null = null;
   private disposeCallbacks: (() => void) | null = null;
   private running = false;
   private destroyed = false;
@@ -51,20 +57,13 @@ export class EnginePipeline {
   constructor(
     private readonly mediator: AppMediator,
     private readonly animation: AnimationEngine,
-    private readonly name: string,
   ) {
-    this.temperatureCoagulator = new EventCoagulator(
-      TEMPERATURE_UI_DELAY_MS,
-      "latest",
-      (temperature) => {
-        this.mediator.temperature = temperature;
-      },
-    );
+    this.temperatureCoagulator = new EventCoagulator(TEMPERATURE_UI_DELAY_MS, "latest", () => {
+      this.mediator.pipelineStateChanged(this.createViewState());
+    });
 
     this.unsubscribeStart = this.mediator.onStartRepulsion(() => this.start());
     this.unsubscribeConfig = this.mediator.onPipelineEngineConfigChanged((change) => {
-      if (change.pipelineName !== this.name) return;
-
       const entry = this.entries.find((item) => item.name === change.engineName);
       if (!entry) return;
 
@@ -72,27 +71,23 @@ export class EnginePipeline {
     });
 
     this.unsubscribeEnabled = this.mediator.onPipelineEngineEnabledChanged((change) => {
-      if (change.pipelineName !== this.name) return;
       this.setEnabled(change.engineName, change.enabled);
     });
   }
 
-  /** Возвращает человекочитаемое название pipeline. */
-  public get pipelineName(): string {
-    return this.name;
-  }
-
   /** Установить алгоритмы и их порядок. Повтор одного алгоритма разрешён. */
-  public setConfiguration(entries: EnginePipelineEntry[]): void {
+  public setConfiguration(entries: EnginePipelineEntry[], synchronization: EnginePipelineSynchronization | null = null): void {
     if (this.destroyed) return;
 
     this.stop();
+    this.synchronization = synchronization;
     this.entries = entries.map((entry) => ({
       name: entry.name,
       algorithm: entry.algorithm,
       enabled: entry.enabled ?? true,
     }));
     this.skipFrames.clear();
+    this.publishViewState();
   }
 
   /**
@@ -119,7 +114,7 @@ export class EnginePipeline {
   /** Установить способ агрегации температур physics. */
   public setTemperatureAggregation(mode: EnginePipelineTemperatureAggregation): void {
     this.temperatureAggregation = mode;
-    this.publishTemperature();
+    this.publishViewState();
   }
 
   /** Включить или выключить алгоритм по его имени. */
@@ -139,6 +134,7 @@ export class EnginePipeline {
     }
 
     if (this.running) this.rebuild();
+    this.publishViewState();
   }
 
   /** Запустить все включённые алгоритмы. */
@@ -159,10 +155,13 @@ export class EnginePipeline {
       return;
     }
 
+    this.synchronization?.load();
+
     this.running = true;
     this.lastPointsUpdatedAt = 0;
     this.startCheckpointTimer();
     this.rebuild();
+    this.publishViewState();
   }
 
   /**
@@ -181,6 +180,8 @@ export class EnginePipeline {
     for (const entry of this.entries) {
       entry.algorithm.stop();
     }
+
+    this.publishViewState();
   }
 
   /** Освободить все подписки и ресурсы pipeline. */
@@ -205,7 +206,7 @@ export class EnginePipeline {
     for (const entry of this.entries) {
       if (!entry.enabled) continue;
 
-      callbacks.push((deltaTime) => {
+      callbacks.push(async (deltaTime) => {
         if (!entry.algorithm.isRunning) return;
 
         const remainingSkipFrames = this.skipFrames.get(entry.algorithm) ?? 0;
@@ -214,12 +215,9 @@ export class EnginePipeline {
           return;
         }
 
-        entry.algorithm.step(deltaTime);
+        await entry.algorithm.stepAsync(deltaTime);
         didExecutePhysics = true;
-        this.skipFrames.set(
-          entry.algorithm,
-          this.calculateSkipFrames(entry.algorithm),
-        );
+        this.skipFrames.set(entry.algorithm, this.calculateSkipFrames(entry.algorithm));
       });
     }
 
@@ -229,18 +227,15 @@ export class EnginePipeline {
       return;
     }
 
-    callbacks.push(() => {
+    callbacks.push(async () => {
       if (!didExecutePhysics) return;
 
       this.publishTemperature();
       this.mediator.pointsUpdating();
 
       const activeEntries = this.entries.filter((entry) => entry.enabled);
-      if (
-        activeEntries.length > 0 &&
-        activeEntries.every((entry) => !entry.algorithm.isRunning)
-      ) {
-        this.finishRun();
+      if (activeEntries.length > 0 && activeEntries.every((entry) => !entry.algorithm.isRunning)) {
+        await this.finishRun();
       }
 
       didExecutePhysics = false;
@@ -260,45 +255,61 @@ export class EnginePipeline {
     const stopTemperature = algorithm.getStopTemperature();
     const temperature = algorithm.temperature;
 
-    if (
-      !Number.isFinite(stopTemperature) ||
-      !Number.isFinite(temperature) ||
-      stopTemperature <= 0 ||
-      temperature <= stopTemperature
-    ) {
+    if (!Number.isFinite(stopTemperature) || !Number.isFinite(temperature) || stopTemperature <= 0 || temperature <= stopTemperature) {
       return 0;
     }
 
-    const normalizedDistance =
-      (temperature - stopTemperature) /
-      (stopTemperature * TEMPERATURE_SKIP_RANGE);
+    const normalizedDistance = (temperature - stopTemperature) / (stopTemperature * TEMPERATURE_SKIP_RANGE);
 
     if (normalizedDistance >= 1) return 0;
 
-    const skip = Math.floor(
-      (1 - Math.max(0, normalizedDistance)) * MAX_SKIP_FRAMES,
-    );
+    const skip = Math.floor((1 - Math.max(0, normalizedDistance)) * MAX_SKIP_FRAMES);
 
     return Math.max(0, Math.min(MAX_SKIP_FRAMES, skip));
   }
 
-  /** Агрегировать температуры всех включённых physics и отправить их в UI. */
+  /** Агрегировать температуры всех включённых physics и обновить View DTO. */
   private publishTemperature(): void {
-    const temperatures = this.entries
-      .filter((entry) => entry.enabled)
-      .map((entry) => entry.algorithm.temperature);
+    const temperatures = this.entries.filter((entry) => entry.enabled).map((entry) => entry.algorithm.temperature);
 
     if (temperatures.length === 0) {
       this.temperatureCoagulator.push(0);
       return;
     }
 
-    const temperature =
-      this.temperatureAggregation === "average"
-        ? temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length
-        : Math.max(...temperatures);
+    this.temperatureCoagulator.push(this.calculatePipelineTemperature(temperatures));
+  }
 
-    this.temperatureCoagulator.push(temperature);
+  /** Рассчитать температуру Pipeline из температур включённых physics. */
+  private calculatePipelineTemperature(temperatures: number[]): number {
+    if (temperatures.length === 0) return 0;
+
+    return this.temperatureAggregation === "average"
+      ? temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length
+      : Math.max(...temperatures);
+  }
+
+  /** Создать UI snapshot Pipeline без ссылок на domain/runtime объекты. */
+  private createViewState(): PipelineViewState {
+    const temperatures = this.entries.filter((entry) => entry.enabled).map((entry) => entry.algorithm.temperature);
+
+    return {
+      running: this.running,
+      temperature: this.calculatePipelineTemperature(temperatures),
+      temperatureAggregation: this.temperatureAggregation,
+      engines: this.entries.map((entry) => ({
+        name: entry.name,
+        enabled: entry.enabled ?? true,
+        config: { ...entry.algorithm.config },
+        temperature: entry.algorithm.temperature,
+        skipFrames: this.skipFrames.get(entry.algorithm) ?? 0,
+      })),
+    };
+  }
+
+  /** Опубликовать актуальный UI snapshot Pipeline. */
+  private publishViewState(): void {
+    this.mediator.pipelineStateChanged(this.createViewState());
   }
 
   /** Запустить периодические checkpoints. */
@@ -328,13 +339,20 @@ export class EnginePipeline {
   }
 
   /** Завершить один фактический цикл физического расчёта. */
-  private finishRun(): void {
+  private async finishRun(): Promise<void> {
     if (!this.running) return;
+
+    this.running = false;
+    this.stopCheckpointTimer();
+
+    try {
+      await this.synchronization?.save();
+    } catch (error) {
+      console.error("EnginePipeline synchronization save failed", error);
+    }
 
     this.publishTemperature();
     this.temperatureCoagulator.flush();
-    this.running = false;
-    this.stopCheckpointTimer();
     this.emitPointsUpdated();
     this.disposeCallbacks?.();
     this.disposeCallbacks = null;

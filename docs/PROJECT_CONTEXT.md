@@ -38,16 +38,134 @@ deepseek-w/
 │  └─ shared/        # ТОЛЬКО src/utils/* — ОДНА canonical-копия утилит (НО не npm-пакет!)
 ├─ generators/
 │  ├─ dew/           # генерация API-клиента СЕРВЕРА (spec "API Documentation") → packages/client/src/clients/dew/{fetch,axios}
-│  └─ embedder/      # генерация клиента ЭМБЕДДИНГ-СЕРВИСА (spec "Embedding Service" 2.0.0) → packages/server/src/clients/embedder/{axios,fetch,node}
+│  └─ embedder/      # генерация клиента ЭМБЕДДИНГ-СЕРВИСА (spec "Embedding Service" 2.0.0) → packages/server/src/clients/embedder/axios
 ├─ .vscode/          # launch.json (compounds Debug/Release Fullstack) + tasks.json
 ├─ link-shared.cmd   # Windows-джанкшены packages/{server,client}/src/shared → packages/shared/src
 └─ xxx/, example/    # черновики/мусор (xxx/ — в git!, example/ — gitignored)
 ```
 
 **Путь имён (alias) — критично для сборки:**
-- Server `tsconfig.base.json`: `@embedder`→`src/clients/embedder/axios`, `@utils/*`→`src/shared/utils/*`, `@models/*`→`src/db/models/*`, `@shared/*`→`../shared/src/*`. Release-сборка: `tsc -p tsconfig.release.json && tsc-alias` (tsc сам alias'ы в JS не переписывает — **tsc-alias обязателен**).
+- Server `tsconfig.base.json`: `@embedder`→`src/clients/embedder/axios`, `@utils/*`→`src/shared/utils/*`, `@models/*`→`src/db/models/*`. Release-сборка: `tsc -p tsconfig.release.json && tsc-alias` (tsc сам alias'ы в JS не переписывает — **tsc-alias обязателен**).
 - Client `tsconfig.base.json`: `@utils/*`→`src/shared/utils/*`, `@clients/*`→`src/clients/*`; в рантайме резолвит `vite-tsconfig-paths`.
-- **НОВЫЙ alias надо прописывать во всех трёх местах:** tsconfig (server/client) + tsc-alias покрывает server автоматически, vite-tsconfig-paths — client автоматически; но если добавляется новый пакет — см. грабли по shared.
+
+**Принцип именования shared-утилит:** алиаса `@shared/*` в server/client/test-коде **не должно быть**. Shared-код подключается через алиас `@utils/*`, потому что имя алиаса описывает функциональную роль импортируемого кода, а не физическую структуру монорепозитория. Папка `shared` — деталь организации исходников (`packages/shared/src`), а `utils` — стабильная семантическая граница используемых утилит. Это принципиально: перенос, переименование или изменение физической структуры shared-слоя не должен заставлять менять смысл импортов. Поэтому для shared utilities везде используется `@utils/*`; `@shared/*` не добавлять даже для тестов.
+- **НОВЫЙ alias надо прописывать там, где он нужен:** для server/client — в соответствующем `tsconfig`; server release дополнительно обрабатывается `tsc-alias`, client — `vite-tsconfig-paths`. Для shared utilities новый alias не создавать: используется существующий `@utils/*`.
+
+
+### Shared: почему это source layer, а не библиотека
+
+~packages/shared~ **намеренно не является самостоятельной TypeScript/npm-библиотекой**. Это канонический исходный код, который одновременно потребляется клиентом и сервером через ссылки на ~packages/shared/src~.
+
+Ключевая архитектурная причина — **TypeScript compilation context принадлежит потребителю shared**.
+
+~~~
+                         shared source
+                              │
+                   ┌──────────┴──────────┐
+                   │                     │
+                   ▼                     ▼
+                CLIENT                SERVER
+                   │                     │
+             ESNext / bundler        CommonJS / Node
+             DOM-oriented types      Node-oriented types
+~~~
+
+Для shared нельзя заранее выбрать один универсальный контекст без изменения архитектуры. В частности, необходимо сохранять возможность определить на стороне потребителя:
+- доступен ли ~DOM~;
+- доступны ли типы Node.js;
+- какой ~module~ используется;
+- какой ~moduleResolution~ используется;
+- какие глобальные типы и библиотеки TypeScript доступны.
+
+Поэтому **отсутствие ~packages/shared/tsconfig.json~ не является пропуском конфигурации**. Production-код shared проверяется в составе TypeScript-проекта, который его потребляет.
+
+Аналогично, **отсутствие root ~tsconfig.json~ намеренно**: корень репозитория является orchestration/workspace layer, а не самостоятельным TypeScript-проектом. Корневой ~tsconfig.base.json~ — общая конфигурационная база, а не compilation project.
+
+#### Почему нельзя просто «сделать shared библиотекой»
+
+Предложение «в root нет ~tsconfig.json~, значит нужно превратить shared в библиотеку» является неверным архитектурным выводом.
+
+Сам файл ~tsconfig.json~ в ~shared~ добавить технически возможно. Невозможно без изменения архитектуры другое: одновременно оставить shared source layer, где compilation context задаётся client/server, и сделать его самостоятельной библиотекой с одним собственным compilation context.
+
+Если shared превратить в библиотеку, появится необходимость определить её собственную модель сборки и окружение: например, DOM/Node, module/moduleResolution, формат выходных файлов и границу публичного API. Это уже означает, что ответственность за compilation context переносится с потребителей на сам shared.
+
+Таким образом:
+
+~~~
+Текущая модель:
+
+          client ──────┐
+                       ▼
+                     shared
+                       ▲
+          server ──────┘
+
+client/server определяют compilation context.
+~~~
+
+~~~
+Модель самостоятельной библиотеки:
+
+             client
+                │
+                ▼
+          shared library
+                ▲
+                │
+             server
+
+shared должен иметь собственный compilation/build context.
+~~~
+
+Это не косметическая правка ~tsconfig~, а изменение архитектуры.
+
+### Generated embedding client: Axios only
+
+На сервере используется только сгенерированный `typescript-axios` клиент для внешнего Embedding Service: `packages/server/src/clients/embedder/axios` (alias `@embedder`).
+
+Ранее в репозитории также существовал сгенерированный `typescript-fetch` клиент (`packages/server/src/clients/embedder/fetch`). Он не является поддерживаемым клиентом проекта: его runtime использует DOM-oriented типы (`RequestCredentials`, `WindowOrWorkerGlobalScope` и связанные API), что несовместимо с серверным Node.js TypeScript context. Поэтому fetch-клиент удалён вместе с его generator config; server typecheck не должен возвращать DOM-типы только ради этого клиента.
+
+Для embedding service повторно генерируется только Axios-клиент. Это зафиксировано в `generators/embedder/generate.cmd`, `generate.ps1` и root `generate-api`.
+
+### Shared tests: отдельный test project
+
+Общие классы из ~packages/shared/src~ не должны получать собственный compilation context. **Тесты этих классов — другой вопрос**: тестовый код действительно является самостоятельным TypeScript project context.
+
+Тесты вынесены из ~packages/shared/src~ в корневой ~test/shared/~. Для них используется ~test/tsconfig.json~, который наследуется непосредственно от корневого ~tsconfig.base.json~:
+
+~~~
+                         tsconfig.base.json
+                                │
+                ┌───────────────┼───────────────┐
+                │               │               │
+                ▼               ▼               ▼
+       client/tsconfig.base  server/tsconfig.base  test/tsconfig.json
+                │               │               │
+                ▼               ▼               ▼
+             client           server        shared tests
+~~~
+
+Это **третье TypeScript project environment**. При этом оно не обязано совпадать с runtime-окружением server и не является «третьим приложением».
+
+Единая точка запуска тестов — `test/index.ts`. Тестовые модули подключаются в нём сверху вниз через последовательные `await import(...)`. Порядок импортов задаёт порядок регистрации верхнеуровневых тестов; поэтому при разработке новой фичи её тестовый модуль можно временно поставить первым в `test/index.ts), если он должен выполняться первым. Отдельная команда «fast» для этого не нужна.
+
+Корневой `package.json` содержит одну команду `npm test`, которая запускает только `test/index.ts`. По мере роста набора тестов новые test-модули добавляются в `test/index.ts`, а не отдельными длинными командами в `package.json`.
+
+
+Важно различать **project environment** и конкретную версию/реализацию runtime:
+- **Client** — браузерное окружение с DOM и своим набором библиотек/типов.
+- **Server** — серверное runtime-окружение; сейчас это Node.js, но его версия является отдельной характеристикой проекта. Теоретически сервер может работать и в другом runtime, например Bun или Deno.
+- **Tests** — самостоятельное test/runtime-окружение. Сейчас тесты используют Node.js test runner через ~node:test~ и запускаются через ~tsx --test~, но версия Node.js для тестов не обязана совпадать с версией Node.js сервера. Например, сервер может работать на Node.js 24, а тесты — на Node.js 22. Различия версий могут означать различия доступных API, встроенных возможностей и TypeScript typings; это одна из причин, почему тестовый context нельзя автоматически считать тем же самым, что server context.
+
+CI-платформа также является частью практического контекста тестирования. В проекте могут использоваться разные CI-платформы, например GitHub Actions и GitLab CI, и доступные на них runtime-окружения могут отличаться. Поэтому тестовая среда может быть выбрана как общий совместимый контекст для нескольких CI-платформ, а не как копия серверного окружения.
+
+При этом версия server runtime может намеренно двигаться отдельно: сервер может использовать более новую версию ради новых возможностей или, наоборот, более консервативную LTS-версию, тогда как тесты могут выполняться на другой версии, доступной и совместимой с CI-окружениями. Это ещё одна причина не связывать `test/tsconfig.json` с server TypeScript project напрямую.
+
+Сейчас workflow GitHub Actions запускает тесты на runner с Node.js 22. GitHub Actions при этом является CI-хостом, а не самостоятельным TypeScript-окружением.
+
+Поэтому `client`, `server` и `test` следует рассматривать как **три независимых compilation/runtime contexts**, каждый со своим набором доступных API, типов, зависимостей и потенциально своей версией runtime.
+
+Таким образом, production shared остаётся environment-neutral source layer, а тесты получают собственный конкретный context в ~test/tsconfig.json~.
 
 ### ⚠️ Грабли и «костыли» (знать ОБЯЗАТЕЛЬНО)
 
@@ -145,7 +263,7 @@ Schema of record: `**drizzle-schema.ts**` → `drizzle-kit generate` (скрип
 
 **Надо учитывать при правках:**
 - **`import "@utils/array-extensions";`** — сайд-эффект, без него нет `uniqueBy/groupBy/mapAsync` на прототипе (в `Map` встроенного `groupBy` Node 22+ конфликтует по сигнатуре — кастомный не ставится, если есть нативный).
-- Новый alias → в `tsconfig.base.json` (server И/или client); для server release обязателен `tsc-alias`.
+- Новый alias → в соответствующем `tsconfig.base.json` (server И/или client); для shared utilities всегда использовать существующий `@utils/*`; для server release обязателен `tsc-alias`.
 - `Embedding`-модель: `embedding` хранится как `number[]` в `jsonb`-колонке `embedding_vector`; `dimension` — длина.
 - `bytea` = hex-строка в JS-слое (customType **types.ts**); `MessageFile.content` — hex или `null`.
 - `deepseek.ts` — credentials из `user.credentials` расширяют «браузерные» заголовки; порядок spread важен.

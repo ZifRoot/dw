@@ -30,6 +30,12 @@ interface LmStudioModel {
   description?: string | null;
 }
 
+interface LmStudioEmbeddingResponse {
+  data: Array<{
+    embedding: number[];
+  }>;
+}
+
 interface LmStudioModelsResponse {
   models: LmStudioModel[];
 }
@@ -69,7 +75,7 @@ export class EmbedderLmStudio {
         throw new Error(`LM Studio API error: ${response.status} ${errorText}`);
       }
 
-      const data: LmStudioModelsResponse = await response.json();
+      const data: LmStudioModelsResponse = await response.json() as LmStudioModelsResponse;
 
       if (!data.models || !Array.isArray(data.models)) {
         throw new Error("Invalid response from LM Studio: no models data");
@@ -285,7 +291,7 @@ export class EmbedderLmStudio {
       throw new Error(`LM Studio API error: ${response.status} ${errorText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as LmStudioEmbeddingResponse;
 
     // LM Studio возвращает ответ в формате OpenAI: { data: [{ embedding: [...] }], ... }
     if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {

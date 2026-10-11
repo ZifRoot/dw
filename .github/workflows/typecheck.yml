@@ -1,11 +1,11 @@
-name: Typecheck
+name: CI
 
 on:
   push:
   pull_request:
 
 jobs:
-  typecheck:
+  verify:
     runs-on: ubuntu-latest
 
     steps:
@@ -27,5 +27,20 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Shared utils tests
-        run: npm run test:shared:utils
+      - name: Typecheck shared tests
+        run: npm run typecheck:tests:utils
+
+      - name: Typecheck server tests
+        run: npm run typecheck:tests:server
+
+      - name: Typecheck client tests
+        run: npm run typecheck:tests:client
+
+      - name: Shared tests
+        run: npm run test:utils
+
+      - name: Server tests
+        run: npm run test:server
+
+      - name: Client tests
+        run: npm run test:client

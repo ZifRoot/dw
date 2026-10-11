@@ -71,6 +71,7 @@ export class EdgesScene {
   }
 
   public destroy(): void {
+    if (this.unsubPointsUpdating) this.unsubPointsUpdating();
     if (this.unregisterSelectedPoint) this.unregisterSelectedPoint();
     if (this.unsubPointsGraphUpdated) this.unsubPointsGraphUpdated();
     if (this.unsubPointUpdated) this.unsubPointUpdated();

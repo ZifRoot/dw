@@ -191,9 +191,9 @@ targetDistSq вычисляется в constructor из config.targetDistance. �
 ### AUD-018 — Generated API clients дублируются
 Severity: Medium
 
-В client присутствуют dew/fetch и dew/axios; на server — embedder/fetch и embedder/axios. Основной application flow использует fetch.
+В client присутствуют dew/fetch и dew/axios; на server ранее присутствовали embedder/fetch и embedder/axios. Для server embedding service поддерживаемым транспортом выбран Axios: application flow использует `src/clients/embedder/axios`. Fetch-клиент требует DOM-oriented типы и несовместим с серверным Node.js TypeScript context, поэтому он удалён.
 
-Рекомендация: оставить один transport, если второй не является отдельным поддерживаемым продуктом/tooling API.
+Решение: для server embedding client оставлен только Axios.
 
 ### AUD-019 — Нет тестов и CI
 Severity: Critical

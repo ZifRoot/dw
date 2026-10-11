@@ -46,7 +46,7 @@ export class DataManager {
       this.pointsTransformer.setTables(points, embeddings, edges);
     }
   }
-  
+
   @LogSafe
   reloadTables() {
     return this.reloadTablesSingle();

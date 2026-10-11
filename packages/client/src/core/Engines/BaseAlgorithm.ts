@@ -1,5 +1,4 @@
 import { AppMediator } from "../AppMediator";
-import { PointGraphManager } from "../collections/PointGraphManager";
 
 /**
  * Базовый класс алгоритма, который выполняется как периодическая работа
@@ -12,10 +11,7 @@ export abstract class BaseAlgorithm {
   public temperature = 0;
   private running = false;
 
-  protected constructor(
-    protected readonly mediator: AppMediator,
-    protected readonly pointGraphManager: PointGraphManager,
-  ) {}
+  protected constructor(protected readonly mediator: AppMediator) {}
 
   /** Запустить алгоритм. */
   public start(): void {
@@ -36,10 +32,7 @@ export abstract class BaseAlgorithm {
   public abstract getStopTemperature(): number;
 
   /**
-   * Выполнить один шаг алгоритма.
-   *
-   * Температура вычисляется как часть этого же шага. Pipeline получает
-   * результат через состояние алгоритма и использует его для scheduling.
+   * Выполнить один синхронный шаг алгоритма.
    *
    * @returns true, если алгоритм должен продолжить работу.
    */
@@ -52,6 +45,27 @@ export abstract class BaseAlgorithm {
     return this.running;
   }
 
+  /**
+   * Выполнить один шаг алгоритма и дождаться его завершения.
+   *
+   * Синхронные algorithms используют тот же код через Promise.resolve().
+   * Backend algorithms с асинхронным исполнением могут переопределить
+   * applyStepAsync() без изменения общего Pipeline API.
+   */
+  public async stepAsync(deltaTime: number): Promise<boolean> {
+    if (!this.running) return false;
+
+    this.temperature = await this.applyStepAsync(deltaTime);
+
+    if (this.temperature < this.getStopTemperature()) this.stop();
+    return this.running;
+  }
+
   /** Выполнить один вычислительный шаг алгоритма. */
   protected abstract applyStep(deltaTime: number): number;
+
+  /** Выполнить один вычислительный шаг, допускающий async backend. */
+  protected async applyStepAsync(deltaTime: number): Promise<number> {
+    return this.applyStep(deltaTime);
+  }
 }

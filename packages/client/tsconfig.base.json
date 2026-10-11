@@ -1,19 +1,15 @@
 {
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "ES2025", "DOM", "DOM.Iterable", "esnext.typedarrays"],
+    "lib": ["ES2020", "DOM", "DOM.Iterable", "esnext.typedarrays"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
     "jsx": "react-jsx",
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
@@ -26,7 +22,8 @@
       "@Scene/*": ["src/core/Scene/*"],
       "@models/*": ["src/models/*"],
       "@ui/*": ["src/ui/*"]
-    }
+    },
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"]

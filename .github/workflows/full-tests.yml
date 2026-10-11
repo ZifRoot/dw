@@ -1,0 +1,48 @@
+name: Full Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Link shared sources
+        run: npm run link:shared
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Typecheck shared tests
+        run: npm run typecheck:tests:utils
+
+      - name: Typecheck server tests
+        run: npm run typecheck:tests:server
+
+      - name: Typecheck client tests
+        run: npm run typecheck:tests:client
+
+      - name: Shared tests
+        run: npm run test:utils
+
+      - name: Server tests
+        run: npm run test:server
+
+      - name: Client tests
+        run: npm run test:client
+
+      - name: Problematic client tests
+        run: npm run test:client:problematic

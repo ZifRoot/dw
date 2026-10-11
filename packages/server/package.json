@@ -13,11 +13,12 @@
     "debug": "tsx watch --inspect=5858 -r tsconfig-paths/register src/index.ts",
     "release": "npm run build:release && npm run run:release",
     "build:release": "tsc -p tsconfig.release.json && tsc-alias -p tsconfig.release.json",
-    "typecheck": "tsc --noEmit > build.log 2>&1",
+    "typecheck": "tsc --noEmit",
     "run:release": "node dist/index.js"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.4",
+    "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "^1.4.0",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
