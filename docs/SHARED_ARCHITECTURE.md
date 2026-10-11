@@ -29,7 +29,7 @@ Sometimes that is desirable. This pattern addresses a different requirement: sha
 Keep one canonical copy of the shared source in a dedicated directory. Each consumer exposes that source under its own source tree through a filesystem link (or an equivalent source-resolution mechanism). In the abstract model, A, B, and C each point to the same canonical source:
 
 ```text
-                         packages/shared/src
+                         shared/src
                          canonical source
                                   |
                     +-------------+-------------+
