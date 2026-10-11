@@ -50,15 +50,21 @@ The client and server still compile those files as part of their own TypeScript 
 
 ## Why filesystem links are used
 
-The link is the mechanism that makes the same source tree appear at the path expected by each consumer, without duplicating it.
+The primary reason for this design is a **TypeScript source-root constraint**, not merely convenience or reduced packaging overhead.
 
-This provides several properties:
+The client and server compile Shared code as part of their own projects. In the server configuration, `rootDir` is explicitly set to `./src`; the client also treats its own source tree as the compilation input. TypeScript expects files participating in that compilation to belong to the configured/inferred source root. If the canonical Shared files were imported directly from `packages/shared/src`, that path would sit outside the consumer's source root. TypeScript can reject such files with an error such as **TS6059** (“File is not under 'rootDir'”), because the compiler would have to compile source located outside the declared project root.
+
+The chosen solution is to keep the **canonical source** in `packages/shared/src`, while exposing it through a filesystem link at `packages/client/src/shared` and `packages/server/src/shared`. From the project structure's point of view, Shared is reachable under each consumer's `src` tree, where that consumer expects its compilation inputs to live. This preserves the intended boundary: each consumer compiles the same Shared source using its own TypeScript configuration, without moving the canonical files into either application or maintaining duplicate copies.
+
+This is the decisive reason for the link locations: **the links point inward, into each consumer's source tree, because the shared source must be included within the consumer's compilation root**. The design was chosen after considering alternatives. Under the current constraints—one canonical source tree, compilation by both consumers, and consumer-local source roots—directly importing the external Shared path does not work; a separate build/package or copied source would change the architecture rather than solve the same problem in the same way.
+
+The links also provide useful secondary properties:
 
 1. **One source of truth.** There is one editable copy of each shared implementation.
 2. **Consumer-owned compilation.** The client and server include the source in their own TypeScript projects.
 3. **Consumer-owned runtime assumptions.** The shared code is checked in each consuming context rather than being forced through one shared build.
-4. **Minimal packaging overhead.** There is no separate shared package build, emitted JavaScript, declaration pipeline, or package export map to maintain.
-5. **Immediate propagation.** Adding or editing a file in the canonical source tree is reflected through the links.
+4. **No duplicated source tree.** Both paths refer to the canonical source instead of requiring maintained copies.
+5. **Immediate propagation.** Changes in the canonical source are available through the links.
 
 The links are generated locally and are not committed as ordinary source directories. In DW, `.gitignore` excludes `packages/client/src/shared/*` and `packages/server/src/shared/*`; a fresh checkout must create the links before typechecking or building.
 
